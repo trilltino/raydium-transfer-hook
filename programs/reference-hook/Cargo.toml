@@ -1,0 +1,12 @@
+[package]
+name = "reference-hook-program"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+hook-policy-model = { path = "../../crates/hook-policy-model" }
+
+[dev-dependencies]

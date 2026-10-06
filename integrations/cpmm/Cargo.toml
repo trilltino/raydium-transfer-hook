@@ -1,0 +1,13 @@
+[package]
+name = "cpmm-hook-integration"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+hook-policy-model = { path = "../../crates/hook-policy-model" }
+transfer-hook-sdk = { path = "../../crates/transfer-hook-sdk" }
+
+[dev-dependencies]
