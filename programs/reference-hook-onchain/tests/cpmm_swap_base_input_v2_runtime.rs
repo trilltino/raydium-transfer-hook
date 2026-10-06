@@ -692,6 +692,13 @@ async fn cpmm_sbf_v2_executes_both_token_2022_hook_legs_and_rolls_back_output_re
         &[&context.payer],
         context.banks_client.get_latest_blockhash().await.unwrap(),
     );
+    let trace = trace_hook(&mut context, successful_tx.clone()).await;
+    assert!(trace.succeeded, "simulated swap must succeed");
+    assert_eq!(
+        trace.hook_invocations, 2,
+        "hook Execute must run once per hooked transfer leg (input then output)"
+    );
+    assert!(!trace.hook_failed_with_custom_1);
     context
         .banks_client
         .process_transaction(successful_tx)
@@ -712,6 +719,16 @@ async fn cpmm_sbf_v2_executes_both_token_2022_hook_legs_and_rolls_back_output_re
         Some(&context.payer.pubkey()),
         &[&context.payer],
         context.banks_client.get_latest_blockhash().await.unwrap(),
+    );
+    let trace = trace_hook(&mut context, rejected_tx.clone()).await;
+    assert!(!trace.succeeded);
+    assert_eq!(
+        trace.hook_invocations, 2,
+        "input leg passes its hook, output leg reaches its hook"
+    );
+    assert!(
+        trace.hook_failed_with_custom_1,
+        "rejection must originate in the hook program, not elsewhere"
     );
     assert!(context
         .banks_client
@@ -742,6 +759,13 @@ async fn cpmm_sbf_v2_executes_both_token_2022_hook_legs_and_rolls_back_output_re
         &[&context.payer],
         context.banks_client.get_latest_blockhash().await.unwrap(),
     );
+    let trace = trace_hook(&mut context, input_rejected_tx.clone()).await;
+    assert!(!trace.succeeded);
+    assert_eq!(
+        trace.hook_invocations, 1,
+        "input-leg rejection aborts before the output leg hook runs"
+    );
+    assert!(trace.hook_failed_with_custom_1);
     assert!(context
         .banks_client
         .process_transaction(input_rejected_tx)
@@ -779,4 +803,35 @@ async fn token_amount(
         .expect("unpack Token-2022 account")
         .base
         .amount
+}
+
+struct HookTrace {
+    succeeded: bool,
+    hook_invocations: usize,
+    hook_failed_with_custom_1: bool,
+}
+
+/// Simulates the transaction (no state change) and reads the hook program's invocations out of
+/// the runtime logs, so tests prove which hook legs executed and that a failure originated there.
+async fn trace_hook(
+    context: &mut solana_program_test::ProgramTestContext,
+    transaction: Transaction,
+) -> HookTrace {
+    let outcome = context
+        .banks_client
+        .simulate_transaction(transaction)
+        .await
+        .expect("simulation request");
+    let details = outcome.simulation_details.expect("simulation details");
+    let invoke = format!("Program {HOOK_PROGRAM_ID} invoke");
+    let failed = format!("Program {HOOK_PROGRAM_ID} failed: custom program error: 0x1");
+    HookTrace {
+        succeeded: outcome.result.expect("simulation result").is_ok(),
+        hook_invocations: details
+            .logs
+            .iter()
+            .filter(|l| l.starts_with(&invoke))
+            .count(),
+        hook_failed_with_custom_1: details.logs.iter().any(|l| l == &failed),
+    }
 }
