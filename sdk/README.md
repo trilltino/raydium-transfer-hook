@@ -1,5 +1,0 @@
-# SDK account resolution
-
-`crates/transfer-hook-sdk` includes both a testable typed resolver abstraction and a production SPL resolver that parses the current Token-2022 mint account and delegates ExtraAccountMeta resolution to `spl-transfer-hook-interface`. Each transfer fetches fresh mint/list/program state, and independent batch legs retain separate account ranges.
-
-The SDK also provides instruction framers to convert caller-built CPMM V1 swap instructions to `swap_base_input_v2` and CLMM SwapV2 instructions to `swap_v3`. They validate the legacy discriminator/data shape, fixed-account count, hook-slice minima, and CLMM tick/bitmap prefix size before mutating the instruction. Callers remain responsible for obtaining the base instruction and fresh transfer contexts from the same current state used for resolution. No RPC client is bundled; callers supply an account fetcher. See [`../docs/account-resolution.md`](../docs/account-resolution.md) and [`../docs/versioning.md`](../docs/versioning.md).
