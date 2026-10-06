@@ -6,6 +6,7 @@ members = [
     "integrations/clmm",
     "integrations/launchlab",
     "programs/reference-hook",
+    "programs/reference-hook-onchain",
     "tests/e2e",
 ]
 resolver = "2"

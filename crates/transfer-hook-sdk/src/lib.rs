@@ -1,11 +1,234 @@
 #![forbid(unsafe_code)]
 
-use std::{fmt, ops::Range};
+use std::{fmt, future::Future, ops::Range};
 
 use hook_policy_model::{AccountMeta, Pubkey, TransferContext};
+use solana_program::{instruction::Instruction, pubkey::Pubkey as SolanaPubkey};
+use spl_token_2022::{
+    extension::{transfer_hook::get_program_id, StateWithExtensions},
+    state::Mint as Token2022Mint,
+};
+use spl_transfer_hook_interface::{
+    get_extra_account_metas_address, offchain::add_extra_account_metas_for_execute,
+};
 
 const MINT_BASE_LEN: usize = 82;
 const VALIDATION_LIST_HEADER_LEN: usize = 12;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplAccount {
+    pub key: SolanaPubkey,
+    pub owner: SolanaPubkey,
+    pub data: Vec<u8>,
+    pub executable: bool,
+}
+
+#[derive(Debug)]
+pub enum SplResolveError {
+    AccountFetch(Box<dyn std::error::Error + Send + Sync>),
+    InvalidMintOwner(SolanaPubkey),
+    AccountKeyMismatch,
+    MissingMint,
+    InvalidMintData,
+    MissingHookProgram,
+    HookProgramNotExecutable,
+    MissingValidationList,
+    InvalidValidationListOwner,
+}
+
+impl fmt::Display for SplResolveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AccountFetch(error) => write!(f, "account fetch failed: {error}"),
+            Self::InvalidMintOwner(owner) => {
+                write!(f, "mint owner {owner} is not SPL Token or Token-2022")
+            }
+            Self::AccountKeyMismatch => f.write_str("fetched account key does not match request"),
+            Self::MissingMint => f.write_str("mint account was not found"),
+            Self::InvalidMintData => f.write_str("mint account data is invalid"),
+            Self::MissingHookProgram => f.write_str("hook program account was not found"),
+            Self::HookProgramNotExecutable => {
+                f.write_str("mint transfer-hook program account is not executable")
+            }
+            Self::MissingValidationList => {
+                f.write_str("hook validation ExtraAccountMetaList account was not found")
+            }
+            Self::InvalidValidationListOwner => {
+                f.write_str("validation ExtraAccountMetaList is not owned by the hook program")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SplResolveError {}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplResolvedTransferAccounts {
+    pub hook_program: SolanaPubkey,
+    pub validation_list: SolanaPubkey,
+    pub appended_accounts: Vec<solana_program::instruction::AccountMeta>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SplTransferLeg {
+    pub source: SolanaPubkey,
+    pub mint: SolanaPubkey,
+    pub destination: SolanaPubkey,
+    pub authority: SolanaPubkey,
+    pub amount: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplResolvedTransferLeg {
+    pub transfer: SplTransferLeg,
+    pub start: usize,
+    pub end: usize,
+    pub resolved: Option<SplResolvedTransferAccounts>,
+}
+
+/// Resolve and append the current SPL Transfer Hook account slice for one transfer.
+/// The fetcher is called for each invocation; no result is retained between transfers.
+pub async fn resolve_spl_transfer_hook_accounts<F, Fut>(
+    instruction: &mut Instruction,
+    source: SolanaPubkey,
+    mint: SolanaPubkey,
+    destination: SolanaPubkey,
+    authority: SolanaPubkey,
+    amount: u64,
+    fetch_account: F,
+) -> Result<Option<SplResolvedTransferAccounts>, SplResolveError>
+where
+    F: Fn(SolanaPubkey) -> Fut,
+    Fut: Future<Output = Result<Option<SplAccount>, Box<dyn std::error::Error + Send + Sync>>>,
+{
+    let mint_account = fetch_account(mint)
+        .await
+        .map_err(SplResolveError::AccountFetch)?
+        .ok_or(SplResolveError::MissingMint)?;
+    if mint_account.key != mint {
+        return Err(SplResolveError::AccountKeyMismatch);
+    }
+    let hook_program = if mint_account.owner == spl_token::id() {
+        return Ok(None);
+    } else if mint_account.owner == spl_token_2022::id() {
+        let state = StateWithExtensions::<Token2022Mint>::unpack(&mint_account.data)
+            .map_err(|_| SplResolveError::InvalidMintData)?;
+        get_program_id(&state)
+    } else {
+        return Err(SplResolveError::InvalidMintOwner(mint_account.owner));
+    };
+    let Some(hook_program) = hook_program else {
+        return Ok(None);
+    };
+
+    let hook_account = fetch_account(hook_program)
+        .await
+        .map_err(SplResolveError::AccountFetch)?
+        .ok_or(SplResolveError::MissingHookProgram)?;
+    if hook_account.key != hook_program {
+        return Err(SplResolveError::AccountKeyMismatch);
+    }
+    if !hook_account.executable {
+        return Err(SplResolveError::HookProgramNotExecutable);
+    }
+
+    let validation_list = get_extra_account_metas_address(&mint, &hook_program);
+    let validation_account = fetch_account(validation_list)
+        .await
+        .map_err(SplResolveError::AccountFetch)?
+        .ok_or(SplResolveError::MissingValidationList)?;
+    if validation_account.key != validation_list {
+        return Err(SplResolveError::AccountKeyMismatch);
+    }
+    if validation_account.owner != hook_program {
+        return Err(SplResolveError::InvalidValidationListOwner);
+    }
+    let validation_data = validation_account.data;
+
+    let original_account_count = instruction.accounts.len();
+    let mut resolved_instruction = instruction.clone();
+    add_extra_account_metas_for_execute(
+        &mut resolved_instruction,
+        &hook_program,
+        &source,
+        &mint,
+        &destination,
+        &authority,
+        amount,
+        |address| {
+            let fetch_account = &fetch_account;
+            let validation_data = &validation_data;
+            async move {
+                if address == validation_list {
+                    Ok(Some(validation_data.clone()))
+                } else {
+                    fetch_account(address)
+                        .await
+                        .and_then(|account| {
+                            account.map_or(Ok(None), |account| {
+                                if account.key == address {
+                                    Ok(Some(account.data))
+                                } else {
+                                    Err(Box::new(std::io::Error::other(
+                                        "account fetch returned a different key",
+                                    ))
+                                        as Box<dyn std::error::Error + Send + Sync>)
+                                }
+                            })
+                        })
+                        .map_err(|error| {
+                            Box::new(std::io::Error::other(error.to_string()))
+                                as Box<dyn std::error::Error + Send + Sync>
+                        })
+                }
+            }
+        },
+    )
+    .await
+    .map_err(SplResolveError::AccountFetch)?;
+
+    let appended_accounts = resolved_instruction.accounts[original_account_count..].to_vec();
+    instruction.accounts.extend_from_slice(&appended_accounts);
+    Ok(Some(SplResolvedTransferAccounts {
+        hook_program,
+        validation_list,
+        appended_accounts,
+    }))
+}
+
+/// Resolve hook accounts independently for each transfer and record its unmerged account range.
+pub async fn resolve_spl_transfer_hook_batch<F, Fut>(
+    instruction: &mut Instruction,
+    transfers: &[SplTransferLeg],
+    fetch_account: F,
+) -> Result<Vec<SplResolvedTransferLeg>, SplResolveError>
+where
+    F: Fn(SolanaPubkey) -> Fut,
+    Fut: Future<Output = Result<Option<SplAccount>, Box<dyn std::error::Error + Send + Sync>>>,
+{
+    let mut results = Vec::with_capacity(transfers.len());
+    for transfer in transfers {
+        let start = instruction.accounts.len();
+        let resolved = resolve_spl_transfer_hook_accounts(
+            instruction,
+            transfer.source,
+            transfer.mint,
+            transfer.destination,
+            transfer.authority,
+            transfer.amount,
+            &fetch_account,
+        )
+        .await?;
+        let end = instruction.accounts.len();
+        results.push(SplResolvedTransferLeg {
+            transfer: *transfer,
+            start,
+            end,
+            resolved,
+        });
+    }
+    Ok(results)
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MintAccount {
@@ -293,6 +516,7 @@ impl TransferHookResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{collections::HashMap, error::Error};
 
     fn key(byte: u8) -> Pubkey {
         [byte; 32]
@@ -375,6 +599,326 @@ mod tests {
             authority: key(6),
             amount: 42,
         }
+    }
+
+    fn token_2022_mint_data(hook_program: SolanaPubkey) -> Vec<u8> {
+        use solana_program::program_option::COption;
+        use spl_token_2022::{
+            extension::{
+                transfer_hook::TransferHook, BaseStateWithExtensionsMut, ExtensionType,
+                StateWithExtensionsMut,
+            },
+            state::Mint,
+        };
+
+        let size = ExtensionType::try_calculate_account_len::<Mint>(&[ExtensionType::TransferHook])
+            .unwrap();
+        let mut data = vec![0; size];
+        let mut state = StateWithExtensionsMut::<Mint>::unpack_uninitialized(&mut data).unwrap();
+        let extension = state.init_extension::<TransferHook>(true).unwrap();
+        extension.program_id = Some(hook_program).try_into().unwrap();
+        extension.authority = Some(SolanaPubkey::new_unique()).try_into().unwrap();
+        state.base.mint_authority = COption::Some(SolanaPubkey::new_unique());
+        state.base.decimals = 0;
+        state.base.is_initialized = true;
+        state.base.freeze_authority = COption::None;
+        state.pack_base();
+        state.init_account_type().unwrap();
+        data
+    }
+
+    fn empty_validation_list() -> Vec<u8> {
+        use spl_tlv_account_resolution::state::ExtraAccountMetaList;
+        use spl_transfer_hook_interface::instruction::ExecuteInstruction;
+
+        let mut data = vec![0; ExtraAccountMetaList::size_of(0).unwrap()];
+        ExtraAccountMetaList::init::<ExecuteInstruction>(&mut data, &[]).unwrap();
+        data
+    }
+
+    #[tokio::test]
+    async fn spl_resolver_uses_official_validation_pda_and_account_order() {
+        let hook_program = SolanaPubkey::new_unique();
+        let mint = SolanaPubkey::new_unique();
+        let source = SolanaPubkey::new_unique();
+        let destination = SolanaPubkey::new_unique();
+        let authority = SolanaPubkey::new_unique();
+        let validation_list = get_extra_account_metas_address(&mint, &hook_program);
+        let accounts = HashMap::from([
+            (
+                mint,
+                SplAccount {
+                    key: mint,
+                    owner: spl_token_2022::id(),
+                    data: token_2022_mint_data(hook_program),
+                    executable: false,
+                },
+            ),
+            (
+                hook_program,
+                SplAccount {
+                    key: hook_program,
+                    owner: SolanaPubkey::new_unique(),
+                    data: Vec::new(),
+                    executable: true,
+                },
+            ),
+            (
+                validation_list,
+                SplAccount {
+                    key: validation_list,
+                    owner: hook_program,
+                    data: empty_validation_list(),
+                    executable: false,
+                },
+            ),
+        ]);
+        let mut instruction = Instruction {
+            program_id: spl_token_2022::id(),
+            accounts: vec![
+                solana_program::instruction::AccountMeta::new(source, false),
+                solana_program::instruction::AccountMeta::new_readonly(mint, false),
+                solana_program::instruction::AccountMeta::new(destination, false),
+                solana_program::instruction::AccountMeta::new_readonly(authority, true),
+            ],
+            data: Vec::new(),
+        };
+        let fetch = |address| {
+            let account = accounts.get(&address).cloned();
+            async move { Ok::<_, Box<dyn Error + Send + Sync>>(account) }
+        };
+
+        let result = resolve_spl_transfer_hook_accounts(
+            &mut instruction,
+            source,
+            mint,
+            destination,
+            authority,
+            42,
+            fetch,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(result.validation_list, validation_list);
+        assert_eq!(
+            result
+                .appended_accounts
+                .iter()
+                .map(|meta| meta.pubkey)
+                .collect::<Vec<_>>(),
+            vec![hook_program, validation_list]
+        );
+    }
+
+    #[tokio::test]
+    async fn spl_resolver_rejects_wrong_validation_owner_without_mutating_instruction() {
+        let hook_program = SolanaPubkey::new_unique();
+        let mint = SolanaPubkey::new_unique();
+        let source = SolanaPubkey::new_unique();
+        let destination = SolanaPubkey::new_unique();
+        let authority = SolanaPubkey::new_unique();
+        let validation_list = get_extra_account_metas_address(&mint, &hook_program);
+        let accounts = HashMap::from([
+            (
+                mint,
+                SplAccount {
+                    key: mint,
+                    owner: spl_token_2022::id(),
+                    data: token_2022_mint_data(hook_program),
+                    executable: false,
+                },
+            ),
+            (
+                hook_program,
+                SplAccount {
+                    key: hook_program,
+                    owner: SolanaPubkey::new_unique(),
+                    data: Vec::new(),
+                    executable: true,
+                },
+            ),
+            (
+                validation_list,
+                SplAccount {
+                    key: validation_list,
+                    owner: SolanaPubkey::new_unique(),
+                    data: empty_validation_list(),
+                    executable: false,
+                },
+            ),
+        ]);
+        let mut instruction = Instruction {
+            program_id: spl_token_2022::id(),
+            accounts: vec![
+                solana_program::instruction::AccountMeta::new(source, false),
+                solana_program::instruction::AccountMeta::new_readonly(mint, false),
+                solana_program::instruction::AccountMeta::new(destination, false),
+                solana_program::instruction::AccountMeta::new_readonly(authority, true),
+            ],
+            data: Vec::new(),
+        };
+        let original = instruction.accounts.clone();
+        let fetch = |address| {
+            let account = accounts.get(&address).cloned();
+            async move { Ok::<_, Box<dyn Error + Send + Sync>>(account) }
+        };
+
+        let result = resolve_spl_transfer_hook_accounts(
+            &mut instruction,
+            source,
+            mint,
+            destination,
+            authority,
+            42,
+            fetch,
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(SplResolveError::InvalidValidationListOwner)
+        ));
+        assert_eq!(instruction.accounts, original);
+    }
+
+    #[tokio::test]
+    async fn spl_resolver_leaves_classic_token_instruction_unchanged() {
+        let mint = SolanaPubkey::new_unique();
+        let source = SolanaPubkey::new_unique();
+        let destination = SolanaPubkey::new_unique();
+        let authority = SolanaPubkey::new_unique();
+        let accounts = HashMap::from([(
+            mint,
+            SplAccount {
+                key: mint,
+                owner: spl_token::id(),
+                data: Vec::new(),
+                executable: false,
+            },
+        )]);
+        let mut instruction = Instruction {
+            program_id: spl_token_2022::id(),
+            accounts: vec![
+                solana_program::instruction::AccountMeta::new(source, false),
+                solana_program::instruction::AccountMeta::new_readonly(mint, false),
+                solana_program::instruction::AccountMeta::new(destination, false),
+                solana_program::instruction::AccountMeta::new_readonly(authority, true),
+            ],
+            data: Vec::new(),
+        };
+        let original = instruction.accounts.clone();
+        let fetch = |address| {
+            let account = accounts.get(&address).cloned();
+            async move { Ok::<_, Box<dyn Error + Send + Sync>>(account) }
+        };
+
+        let result = resolve_spl_transfer_hook_accounts(
+            &mut instruction,
+            source,
+            mint,
+            destination,
+            authority,
+            42,
+            fetch,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result, None);
+        assert_eq!(instruction.accounts, original);
+    }
+
+    #[tokio::test]
+    async fn spl_batch_keeps_two_hooked_transfer_slices_independent() {
+        let hook_program = SolanaPubkey::new_unique();
+        let mint = SolanaPubkey::new_unique();
+        let validation_list = get_extra_account_metas_address(&mint, &hook_program);
+        let source_a = SolanaPubkey::new_unique();
+        let source_b = SolanaPubkey::new_unique();
+        let destination_a = SolanaPubkey::new_unique();
+        let destination_b = SolanaPubkey::new_unique();
+        let authority = SolanaPubkey::new_unique();
+        let accounts = HashMap::from([
+            (
+                mint,
+                SplAccount {
+                    key: mint,
+                    owner: spl_token_2022::id(),
+                    data: token_2022_mint_data(hook_program),
+                    executable: false,
+                },
+            ),
+            (
+                hook_program,
+                SplAccount {
+                    key: hook_program,
+                    owner: SolanaPubkey::new_unique(),
+                    data: Vec::new(),
+                    executable: true,
+                },
+            ),
+            (
+                validation_list,
+                SplAccount {
+                    key: validation_list,
+                    owner: hook_program,
+                    data: empty_validation_list(),
+                    executable: false,
+                },
+            ),
+        ]);
+        let meta = solana_program::instruction::AccountMeta::new_readonly;
+        let mut instruction = Instruction {
+            program_id: spl_token_2022::id(),
+            accounts: vec![
+                solana_program::instruction::AccountMeta::new(source_a, false),
+                meta(mint, false),
+                solana_program::instruction::AccountMeta::new(destination_a, false),
+                meta(authority, true),
+                solana_program::instruction::AccountMeta::new(source_b, false),
+                meta(mint, false),
+                solana_program::instruction::AccountMeta::new(destination_b, false),
+                meta(authority, true),
+            ],
+            data: Vec::new(),
+        };
+        let base_len = instruction.accounts.len();
+        let transfers = [
+            SplTransferLeg {
+                source: source_a,
+                mint,
+                destination: destination_a,
+                authority,
+                amount: 1,
+            },
+            SplTransferLeg {
+                source: source_b,
+                mint,
+                destination: destination_b,
+                authority,
+                amount: 2,
+            },
+        ];
+        let fetch = |address| {
+            let account = accounts.get(&address).cloned();
+            async move { Ok::<_, Box<dyn Error + Send + Sync>>(account) }
+        };
+
+        let legs = resolve_spl_transfer_hook_batch(&mut instruction, &transfers, fetch)
+            .await
+            .unwrap();
+
+        assert_eq!(legs.len(), 2);
+        assert_eq!((legs[0].start, legs[0].end), (base_len, base_len + 2));
+        assert_eq!((legs[1].start, legs[1].end), (base_len + 2, base_len + 4));
+        assert_eq!(
+            instruction.accounts[legs[0].start..legs[0].end],
+            instruction.accounts[legs[1].start..legs[1].end]
+        );
+        assert_eq!(legs[0].transfer.amount, 1);
+        assert_eq!(legs[1].transfer.amount, 2);
     }
 
     #[test]

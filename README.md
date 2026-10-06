@@ -1,6 +1,6 @@
 # Raydium Transfer Hooks
 
-A local Rust reference harness for exploring Token-2022 Transfer Hook policy, per-transfer account resolution, and Raydium-style transfer paths.
+A Rust reference harness for Token-2022 Transfer Hook policy, real Token-2022 execution, account resolution, and Raydium-style transfer paths.
 
 ## Scope and status
 
@@ -8,16 +8,18 @@ The workspace now has:
 
 - A platform policy model for disabled, optional, and mandatory hook selection.
 - A modular per-mint reference hook engine with configuration validation, transfer rules, and authority-policy checks.
-- An SPL-order-aligned resolver boundary that validates typed mint and validation-list state on every transfer and emits ordered account slices.
+- A deployable reference hook program with an authority-checked per-mint transfer limit and SPL `Execute` account validation.
+- An SDK resolver that reads the current Token-2022 mint extension and uses the official SPL TLV/account-resolution helper for each transfer.
 - CPMM, CLMM, and LaunchLab flow models with local end-to-end tests.
+- A ProgramTest case using SBF Token-2022 and the built SBF hook to prove successful hook execution and atomic rollback after hook rejection.
 
-This is **not** a deployed Token-2022 hook program or a patch to Raydium's on-chain programs. The resolver's `TransferHookAccountSource` is an adapter boundary: a real client must use the current SPL interface to fetch and decode accounts and resolve the `ExtraAccountMetaList`. The integration crates model account flow but do not execute Raydium CPIs. See the [upstream ABI review](docs/transfer-surface-matrix.md) before treating any modeled path as production-ready.
+The runtime test uses ProgramTest's bundled Token-2022 8.0.0 SBF binary and loads the hook's SBF build. It proves real Token-2022 hook invocation and rollback. This is **not** a patch to Raydium's on-chain programs. The integration crates still model product account flow and do not execute Raydium CPIs. See the [source lock and implementation boundary](docs/source-lock.md) and [upstream ABI review](docs/transfer-surface-matrix.md) before treating any modeled path as production-ready.
 
 ## Workspace
 
 - `crates/hook-policy-model` contains platform selection and account metadata types.
 - `crates/transfer-hook-sdk` provides fresh per-transfer resolution, validation, and per-leg account ranges.
-- `programs/reference-hook` models a configurable per-mint engine; it is not an Anchor entrypoint.
+- `programs/reference-hook` is the policy model; `programs/reference-hook-onchain` is the deployable Solana program.
 - `integrations/` contains product-path models, not vendored Raydium programs.
 - `tests/e2e` exercises policy, resolver, transfer-path planning, lifecycle, and modeled atomic failure.
 - `docs/` and `benches/` record source facts, trust assumptions, and measurement guidance.
@@ -26,6 +28,10 @@ This is **not** a deployed Token-2022 hook program or a patch to Raydium's on-ch
 
 ```powershell
 cargo test --workspace
+cargo build-sbf --manifest-path programs\reference-hook-onchain\Cargo.toml
+$env:SBF_OUT_DIR = (Resolve-Path target\deploy).Path
+cargo test -p reference-hook-onchain --test token_2022_transfer
+Remove-Item Env:SBF_OUT_DIR
 ```
 
 The E2E model tests can also be run alone:
@@ -33,6 +39,8 @@ The E2E model tests can also be run alone:
 ```powershell
 cargo test -p transfer-hook-e2e
 ```
+
+The focused ProgramTest uses the SBF artifact when `SBF_OUT_DIR` points to `target\deploy`; without it, ProgramTest falls back to the native hook processor.
 
 ## Important ABI boundary
 
