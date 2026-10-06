@@ -1,0 +1,258 @@
+use crate::error::ErrorCode;
+use crate::instructions::create_customizable_pool::CreateCustomizableParams;
+use crate::states::*;
+use crate::util::create_token_vault_account;
+use crate::{libraries::tick_math, util};
+use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{Mint, TokenInterface};
+
+#[derive(Accounts)]
+#[instruction(customizable_params: CreateCustomizableParams, seed_index: u16)]
+pub struct CreatePermissionedPool<'info> {
+    /// Address paying to create the pool. Must hold a permission PDA.
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    /// CHECK: creator of pool
+    pub pool_creator: UncheckedAccount<'info>,
+
+    /// Permission granting `pool_creator` the right to create permissioned pools.
+    /// Anchor rejects if this PDA does not exist / is not owned by this program.
+    #[account(
+        seeds = [
+            PERMISSION_SEED.as_bytes(),
+            payer.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub permission: Account<'info, Permission>,
+
+    /// Which config the pool belongs to.
+    pub amm_config: Box<Account<'info, AmmConfig>>,
+
+    /// Initialize an account to store the pool state
+    #[account(
+        init,
+        seeds = [
+            POOL_SEED.as_bytes(),
+            amm_config.key().as_ref(),
+            token_mint_0.key().as_ref(),
+            token_mint_1.key().as_ref(),
+            &seed_index.to_le_bytes(),
+        ],
+        bump,
+        payer = payer,
+        space = PoolState::LEN
+    )]
+    pub pool_state: AccountLoader<'info, PoolState>,
+
+    /// Token_0 mint, the key must be smaller then token_1 mint.
+    #[account(
+        constraint = token_mint_0.key() < token_mint_1.key(),
+        mint::token_program = token_program_0
+    )]
+    pub token_mint_0: Box<InterfaceAccount<'info, Mint>>,
+
+    /// Token_1 mint
+    #[account(
+        mint::token_program = token_program_1
+    )]
+    pub token_mint_1: Box<InterfaceAccount<'info, Mint>>,
+
+    /// CHECK: Token_0 vault for the pool, initialized in contract
+    #[account(
+        mut,
+        seeds =[
+            POOL_VAULT_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            token_mint_0.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub token_vault_0: UncheckedAccount<'info>,
+
+    /// CHECK: Token_1 vault for the pool, initialized in contract
+    #[account(
+        mut,
+        seeds =[
+            POOL_VAULT_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            token_mint_1.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub token_vault_1: UncheckedAccount<'info>,
+
+    /// Initialize an account to store oracle observations
+    #[account(
+        init,
+        seeds = [
+            OBSERVATION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+        ],
+        bump,
+        payer = payer,
+        space = ObservationState::LEN
+    )]
+    pub observation_state: AccountLoader<'info, ObservationState>,
+
+    /// Initialize an account to store if a tick array is initialized.
+    #[account(
+        init,
+        seeds = [
+            POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+        ],
+        bump,
+        payer = payer,
+        space = TickArrayBitmapExtension::LEN
+    )]
+    pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
+
+    /// Spl token program or token program 2022
+    pub token_program_0: Interface<'info, TokenInterface>,
+    /// Spl token program or token program 2022
+    pub token_program_1: Interface<'info, TokenInterface>,
+    /// To create a new program account
+    pub system_program: Program<'info, System>,
+    /// Sysvar for program account
+    pub rent: Sysvar<'info, Rent>,
+    // remaining account if needed
+    // #[account(
+    //     seeds = [
+    //     SUPPORT_MINT_SEED.as_bytes(),
+    //     token_mint_0.key().as_ref(),
+    // ],
+    //     bump
+    // )]
+    // pub support_mint0_associated: Account<'info, SupportMintAssociated>,
+
+    // #[account(
+    //     seeds = [
+    //     SUPPORT_MINT_SEED.as_bytes(),
+    //     token_mint_1.key().as_ref(),
+    // ],
+    //     bump
+    // )]
+    // pub support_mint1_associated: Account<'info, SupportMintAssociated>,
+
+    // pub dynamic_fee_config: Box<Account<'info, DynamicFeeConfig>>,
+}
+
+pub fn create_permissioned_pool(
+    ctx: Context<CreatePermissionedPool>,
+    customizable_params: CreateCustomizableParams,
+    seed_index: u16,
+) -> Result<()> {
+    require_gt!(seed_index, 0);
+
+    let mint0_associated_is_initialized = util::support_mint_associated_is_initialized(
+        &ctx.remaining_accounts,
+        &ctx.accounts.token_mint_0,
+    )?;
+    let mint1_associated_is_initialized = util::support_mint_associated_is_initialized(
+        &ctx.remaining_accounts,
+        &ctx.accounts.token_mint_1,
+    )?;
+    if !(util::is_supported_mint(&ctx.accounts.token_mint_0, mint0_associated_is_initialized)?
+        && util::is_supported_mint(&ctx.accounts.token_mint_1, mint1_associated_is_initialized)?)
+    {
+        return err!(ErrorCode::NotSupportMint);
+    }
+    let pool_id = ctx.accounts.pool_state.key();
+    let mut pool_state = ctx.accounts.pool_state.load_init()?;
+
+    let tick = tick_math::get_tick_at_sqrt_price(customizable_params.sqrt_price_x64)?;
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "create permissioned pool, init_price: {}, init_tick:{}",
+        customizable_params.sqrt_price_x64,
+        tick
+    );
+
+    create_token_vault_account(
+        &ctx.accounts.payer,
+        &ctx.accounts.pool_state.to_account_info(),
+        &ctx.accounts.token_vault_0,
+        &ctx.accounts.token_mint_0,
+        &ctx.accounts.system_program,
+        &ctx.accounts.token_program_0,
+        &[
+            POOL_VAULT_SEED.as_bytes(),
+            ctx.accounts.pool_state.key().as_ref(),
+            ctx.accounts.token_mint_0.key().as_ref(),
+            &[ctx.bumps.token_vault_0][..],
+        ],
+    )?;
+
+    create_token_vault_account(
+        &ctx.accounts.payer,
+        &ctx.accounts.pool_state.to_account_info(),
+        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_mint_1,
+        &ctx.accounts.system_program,
+        &ctx.accounts.token_program_1,
+        &[
+            POOL_VAULT_SEED.as_bytes(),
+            ctx.accounts.pool_state.key().as_ref(),
+            ctx.accounts.token_mint_1.key().as_ref(),
+            &[ctx.bumps.token_vault_1][..],
+        ],
+    )?;
+
+    ctx.accounts
+        .observation_state
+        .load_init()?
+        .initialize(pool_id)?;
+
+    let bump = ctx.bumps.pool_state;
+    pool_state.initialize(
+        bump,
+        customizable_params.sqrt_price_x64,
+        0,
+        tick,
+        ctx.accounts.pool_creator.key(),
+        ctx.accounts.token_vault_0.key(),
+        ctx.accounts.token_vault_1.key(),
+        ctx.accounts.amm_config.as_ref(),
+        ctx.accounts.token_mint_0.as_ref(),
+        ctx.accounts.token_mint_1.as_ref(),
+        ctx.accounts.observation_state.key(),
+        customizable_params.collect_fee_on,
+    )?;
+    pool_state.set_seed_index(seed_index);
+
+    if customizable_params.enable_dynamic_fee {
+        let dynamic_fee_config_info = ctx
+            .remaining_accounts
+            .last()
+            .ok_or_else(|| error!(ErrorCode::AccountLack))?;
+        let dynamic_fee_config: Account<DynamicFeeConfig> =
+            Account::try_from(dynamic_fee_config_info)?;
+        pool_state.initialize_dynamic_fee_info(
+            tick,
+            dynamic_fee_config.filter_period,
+            dynamic_fee_config.decay_period,
+            dynamic_fee_config.reduction_factor,
+            dynamic_fee_config.dynamic_fee_control,
+            dynamic_fee_config.max_volatility_accumulator,
+        )?;
+    }
+
+    ctx.accounts
+        .tick_array_bitmap
+        .load_init()?
+        .initialize(pool_id);
+
+    emit!(PoolCreatedEvent {
+        token_mint_0: ctx.accounts.token_mint_0.key(),
+        token_mint_1: ctx.accounts.token_mint_1.key(),
+        tick_spacing: ctx.accounts.amm_config.tick_spacing,
+        pool_state: ctx.accounts.pool_state.key(),
+        sqrt_price_x64: customizable_params.sqrt_price_x64,
+        tick,
+        token_vault_0: ctx.accounts.token_vault_0.key(),
+        token_vault_1: ctx.accounts.token_vault_1.key(),
+    });
+    Ok(())
+}

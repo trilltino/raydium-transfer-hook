@@ -86,6 +86,131 @@ pub struct SplResolvedTransferLeg {
     pub resolved: Option<SplResolvedTransferAccounts>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RaydiumInstructionBuildError {
+    InvalidInstructionData,
+    InvalidFixedAccountCount,
+    InvalidRemainingAccountSections,
+    InvalidHookAccountCount,
+    AccountCountOverflow,
+}
+
+impl fmt::Display for RaydiumInstructionBuildError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidInstructionData => f.write_str("unexpected Raydium instruction data"),
+            Self::InvalidFixedAccountCount => {
+                f.write_str("Raydium instruction does not contain the expected fixed accounts")
+            }
+            Self::InvalidRemainingAccountSections => {
+                f.write_str("CLMM tick and bitmap sections do not match remaining accounts")
+            }
+            Self::InvalidHookAccountCount => {
+                f.write_str("hook account slices must be empty or include at least two accounts")
+            }
+            Self::AccountCountOverflow => {
+                f.write_str("Raydium remaining-account count exceeds the u16 framing limit")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RaydiumInstructionBuildError {}
+
+const CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR: [u8; 8] = [143, 190, 90, 218, 196, 30, 51, 222];
+const CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR: [u8; 8] = [179, 135, 209, 217, 135, 75, 40, 58];
+const CLMM_SWAP_V2_DISCRIMINATOR: [u8; 8] = [43, 4, 237, 11, 26, 201, 30, 98];
+const CLMM_SWAP_V3_DISCRIMINATOR: [u8; 8] = [240, 224, 38, 33, 176, 31, 241, 175];
+const CPMM_SWAP_FIXED_ACCOUNTS: usize = 13;
+const CLMM_SWAP_FIXED_ACCOUNTS: usize = 13;
+
+fn hook_account_count(
+    accounts: &[solana_program::instruction::AccountMeta],
+) -> Result<u16, RaydiumInstructionBuildError> {
+    if !accounts.is_empty() && accounts.len() < 2 {
+        return Err(RaydiumInstructionBuildError::InvalidHookAccountCount);
+    }
+    u16::try_from(accounts.len()).map_err(|_| RaydiumInstructionBuildError::AccountCountOverflow)
+}
+
+/// Converts a CPMM V1 swap instruction to the explicitly framed V2 form.
+/// The hook slices must be ordered SPL resolver results, including the hook program and validation list.
+pub fn frame_cpmm_swap_base_input_v2(
+    instruction: &mut Instruction,
+    input_hook_accounts: &[solana_program::instruction::AccountMeta],
+    output_hook_accounts: &[solana_program::instruction::AccountMeta],
+) -> Result<(), RaydiumInstructionBuildError> {
+    if instruction.data.len() != 24
+        || instruction.data[..8] != CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR
+    {
+        return Err(RaydiumInstructionBuildError::InvalidInstructionData);
+    }
+    if instruction.accounts.len() != CPMM_SWAP_FIXED_ACCOUNTS {
+        return Err(RaydiumInstructionBuildError::InvalidFixedAccountCount);
+    }
+    let input_count = hook_account_count(input_hook_accounts)?;
+    let output_count = hook_account_count(output_hook_accounts)?;
+
+    instruction.data[..8].copy_from_slice(&CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR);
+    instruction
+        .data
+        .extend_from_slice(&input_count.to_le_bytes());
+    instruction
+        .data
+        .extend_from_slice(&output_count.to_le_bytes());
+    instruction.accounts.extend_from_slice(input_hook_accounts);
+    instruction.accounts.extend_from_slice(output_hook_accounts);
+    Ok(())
+}
+
+/// Converts a CLMM SwapV2 instruction to the explicitly framed SwapV3 form.
+/// Existing remaining accounts must consist only of the declared tick-array and bitmap prefix.
+pub fn frame_clmm_swap_v3(
+    instruction: &mut Instruction,
+    tick_array_count: u16,
+    bitmap_count: u16,
+    input_hook_accounts: &[solana_program::instruction::AccountMeta],
+    output_hook_accounts: &[solana_program::instruction::AccountMeta],
+) -> Result<(), RaydiumInstructionBuildError> {
+    if instruction.data.len() != 41 || instruction.data[..8] != CLMM_SWAP_V2_DISCRIMINATOR {
+        return Err(RaydiumInstructionBuildError::InvalidInstructionData);
+    }
+    if instruction.accounts.len() < CLMM_SWAP_FIXED_ACCOUNTS {
+        return Err(RaydiumInstructionBuildError::InvalidFixedAccountCount);
+    }
+    let framed_tick_array_count = tick_array_count;
+    let framed_bitmap_count = bitmap_count;
+    let bitmap_count = usize::from(bitmap_count);
+    let tick_array_count = usize::from(tick_array_count);
+    if bitmap_count > 1
+        || CLMM_SWAP_FIXED_ACCOUNTS
+            .checked_add(tick_array_count)
+            .and_then(|count| count.checked_add(bitmap_count))
+            != Some(instruction.accounts.len())
+    {
+        return Err(RaydiumInstructionBuildError::InvalidRemainingAccountSections);
+    }
+    let input_count = hook_account_count(input_hook_accounts)?;
+    let output_count = hook_account_count(output_hook_accounts)?;
+
+    instruction.data[..8].copy_from_slice(&CLMM_SWAP_V3_DISCRIMINATOR);
+    instruction
+        .data
+        .extend_from_slice(&framed_tick_array_count.to_le_bytes());
+    instruction
+        .data
+        .extend_from_slice(&framed_bitmap_count.to_le_bytes());
+    instruction
+        .data
+        .extend_from_slice(&input_count.to_le_bytes());
+    instruction
+        .data
+        .extend_from_slice(&output_count.to_le_bytes());
+    instruction.accounts.extend_from_slice(input_hook_accounts);
+    instruction.accounts.extend_from_slice(output_hook_accounts);
+    Ok(())
+}
+
 /// Resolve and append the current SPL Transfer Hook account slice for one transfer.
 /// The fetcher is called for each invocation; no result is retained between transfers.
 pub async fn resolve_spl_transfer_hook_accounts<F, Fut>(
@@ -520,6 +645,80 @@ mod tests {
 
     fn key(byte: u8) -> Pubkey {
         [byte; 32]
+    }
+
+    #[cfg(test)]
+    mod raydium_instruction_builder_tests {
+        use super::*;
+        use solana_program::instruction::AccountMeta;
+
+        fn instruction(
+            discriminator: [u8; 8],
+            data_len: usize,
+            account_count: usize,
+        ) -> Instruction {
+            Instruction {
+                program_id: SolanaPubkey::new_unique(),
+                accounts: (0..account_count)
+                    .map(|_| AccountMeta::new(SolanaPubkey::new_unique(), false))
+                    .collect(),
+                data: [discriminator.as_slice(), &vec![0; data_len - 8]].concat(),
+            }
+        }
+
+        fn metas(count: usize) -> Vec<AccountMeta> {
+            (0..count)
+                .map(|_| AccountMeta::new_readonly(SolanaPubkey::new_unique(), false))
+                .collect()
+        }
+
+        #[test]
+        fn cpmm_builder_reframes_v1_and_appends_distinct_hook_slices() {
+            let mut instruction = instruction(CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR, 24, 13);
+            let input = metas(3);
+            let output = metas(2);
+
+            frame_cpmm_swap_base_input_v2(&mut instruction, &input, &output).unwrap();
+
+            assert_eq!(
+                &instruction.data[..8],
+                &CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR
+            );
+            assert_eq!(&instruction.data[24..], &[3, 0, 2, 0]);
+            assert_eq!(&instruction.accounts[13..16], input);
+            assert_eq!(&instruction.accounts[16..], output);
+        }
+
+        #[test]
+        fn clmm_builder_frames_tick_bitmap_and_hook_sections() {
+            let mut instruction = instruction(CLMM_SWAP_V2_DISCRIMINATOR, 41, 18);
+            let input = metas(2);
+            let output = metas(3);
+
+            frame_clmm_swap_v3(&mut instruction, 4, 1, &input, &output).unwrap();
+
+            assert_eq!(&instruction.data[..8], &CLMM_SWAP_V3_DISCRIMINATOR);
+            assert_eq!(&instruction.data[41..], &[4, 0, 1, 0, 2, 0, 3, 0]);
+            assert_eq!(&instruction.accounts[18..23], [input, output].concat());
+        }
+
+        #[test]
+        fn framing_errors_do_not_partially_mutate_instruction() {
+            let mut instruction = instruction(CLMM_SWAP_V2_DISCRIMINATOR, 41, 13);
+            let original = instruction.clone();
+
+            assert_eq!(
+                frame_clmm_swap_v3(&mut instruction, 0, 0, &metas(1), &[]),
+                Err(RaydiumInstructionBuildError::InvalidHookAccountCount)
+            );
+            assert_eq!(instruction, original);
+
+            assert_eq!(
+                frame_cpmm_swap_base_input_v2(&mut instruction, &[], &[]),
+                Err(RaydiumInstructionBuildError::InvalidInstructionData)
+            );
+            assert_eq!(instruction, original);
+        }
     }
 
     #[derive(Clone)]

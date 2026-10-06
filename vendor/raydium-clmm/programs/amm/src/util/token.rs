@@ -1,0 +1,787 @@
+use super::{create_or_allocate_account, get_recent_epoch};
+use crate::error::ErrorCode;
+use crate::states::*;
+use anchor_lang::system_program::{transfer, Transfer};
+use anchor_lang::{
+    prelude::*,
+    solana_program::{self, program_option::COption},
+    system_program::{create_account, CreateAccount},
+};
+use anchor_spl::memo::spl_memo;
+use anchor_spl::token::{self, Token};
+use anchor_spl::token_2022::spl_token_2022::{
+    self,
+    extension::{
+        metadata_pointer, transfer_fee::TransferFeeConfig, BaseStateWithExtensions, ExtensionType,
+        StateWithExtensions,
+    },
+};
+use anchor_spl::token_2022::{
+    self, get_account_data_size, GetAccountDataSize, InitializeAccount3, InitializeImmutableOwner,
+    Token2022,
+};
+use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
+use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint, TokenInterface};
+
+pub mod frozen_position_nft_authorities {
+    use super::{pubkey, Pubkey};
+    /// Position NFTs minted in a pool whose token mint has one of these freeze
+    /// authorities must be frozen at mint time.
+    #[cfg(feature = "devnet")]
+    pub const IDS: [Pubkey; 1] = [pubkey!("3TRuL3MFvzHaUfQAb6EsSAbQhWdhmYrKxEiViVkdQfXu")];
+    #[cfg(not(feature = "devnet"))]
+    pub const IDS: [Pubkey; 1] = [pubkey!("2Yq4T3mPNfjtEyTxSbRjRKqLf1pwbTasuCQrWe6QpM7x")];
+}
+
+pub fn invoke_memo_instruction<'info>(
+    memo_msg: &[u8],
+    memo_program: AccountInfo<'info>,
+) -> solana_program::entrypoint::ProgramResult {
+    let ix = spl_memo::build_memo(&anchor_spl::memo::ID, memo_msg, &[]);
+    let accounts = vec![memo_program];
+    solana_program::program::invoke(&ix, &accounts[..])
+}
+
+pub fn transfer_from_user_to_pool_vault<'info>(
+    signer: &Signer<'info>,
+    from: &AccountInfo<'info>,
+    to_vault: &AccountInfo<'info>,
+    mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    token_program: &AccountInfo<'info>,
+    token_program_2022: Option<AccountInfo<'info>>,
+    amount: u64,
+) -> Result<()> {
+    transfer_from_user_to_pool_vault_with_hook_accounts(
+        signer,
+        from,
+        to_vault,
+        mint,
+        token_program,
+        token_program_2022,
+        amount,
+        &[],
+    )
+}
+
+pub fn transfer_from_user_to_pool_vault_with_hook_accounts<'info>(
+    signer: &Signer<'info>,
+    from: &AccountInfo<'info>,
+    to_vault: &AccountInfo<'info>,
+    mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    token_program: &AccountInfo<'info>,
+    token_program_2022: Option<AccountInfo<'info>>,
+    amount: u64,
+    hook_accounts: &[AccountInfo<'info>],
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    if let Some(mint) = mint.as_ref() {
+        validate_transfer_hook_accounts(&mint.to_account_info(), hook_accounts)?;
+    } else {
+        require!(
+            hook_accounts.is_empty(),
+            ErrorCode::InvalidHookAccountFraming
+        );
+    }
+    let mut token_program_info = token_program.to_account_info();
+    let from_token_info = from.to_account_info();
+    match (mint, token_program_2022) {
+        (Some(mint), Some(token_program_2022)) => {
+            if from_token_info.owner == token_program_2022.key {
+                token_program_info = token_program_2022.to_account_info()
+            }
+            token_2022::transfer_checked(
+                CpiContext::new(
+                    token_program_info.key(),
+                    token_2022::TransferChecked {
+                        from: from_token_info,
+                        to: to_vault.to_account_info(),
+                        authority: signer.to_account_info(),
+                        mint: mint.to_account_info(),
+                    },
+                )
+                .with_remaining_accounts(hook_accounts.to_vec()),
+                amount,
+                mint.decimals,
+            )
+        }
+        _ => token::transfer(
+            CpiContext::new(
+                token_program_info.key(),
+                token::Transfer {
+                    from: from_token_info,
+                    to: to_vault.to_account_info(),
+                    authority: signer.to_account_info(),
+                },
+            ),
+            amount,
+        ),
+    }
+}
+
+pub fn transfer_from_pool_vault_to_user<'info>(
+    pool_state_loader: &AccountLoader<'info, PoolState>,
+    from_vault: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    token_program: &AccountInfo<'info>,
+    token_program_2022: Option<AccountInfo<'info>>,
+    amount: u64,
+) -> Result<()> {
+    transfer_from_pool_vault_to_user_with_hook_accounts(
+        pool_state_loader,
+        from_vault,
+        to,
+        mint,
+        token_program,
+        token_program_2022,
+        amount,
+        &[],
+    )
+}
+
+pub fn transfer_from_pool_vault_to_user_with_hook_accounts<'info>(
+    pool_state_loader: &AccountLoader<'info, PoolState>,
+    from_vault: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    token_program: &AccountInfo<'info>,
+    token_program_2022: Option<AccountInfo<'info>>,
+    amount: u64,
+    hook_accounts: &[AccountInfo<'info>],
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    if let Some(mint) = mint.as_ref() {
+        validate_transfer_hook_accounts(&mint.to_account_info(), hook_accounts)?;
+    } else {
+        require!(
+            hook_accounts.is_empty(),
+            ErrorCode::InvalidHookAccountFraming
+        );
+    }
+    let mut token_program_info = token_program.to_account_info();
+    let from_vault_info = from_vault.to_account_info();
+    match (mint, token_program_2022) {
+        (Some(mint), Some(token_program_2022)) => {
+            if from_vault_info.owner == token_program_2022.key {
+                token_program_info = token_program_2022.to_account_info()
+            }
+            token_2022::transfer_checked(
+                CpiContext::new_with_signer(
+                    token_program_info.key(),
+                    token_2022::TransferChecked {
+                        from: from_vault_info,
+                        to: to.to_account_info(),
+                        authority: pool_state_loader.to_account_info(),
+                        mint: mint.to_account_info(),
+                    },
+                    &[&pool_state_loader.load()?.seeds()],
+                )
+                .with_remaining_accounts(hook_accounts.to_vec()),
+                amount,
+                mint.decimals,
+            )
+        }
+        _ => token::transfer(
+            CpiContext::new_with_signer(
+                token_program_info.key(),
+                token::Transfer {
+                    from: from_vault_info,
+                    to: to.to_account_info(),
+                    authority: pool_state_loader.to_account_info(),
+                },
+                &[&pool_state_loader.load()?.seeds()],
+            ),
+            amount,
+        ),
+    }
+}
+
+pub fn ensure_no_transfer_hook(mint: &AccountInfo) -> Result<()> {
+    validate_transfer_hook_accounts(mint, &[])
+}
+
+fn validate_transfer_hook_accounts(
+    mint: &AccountInfo,
+    hook_accounts: &[AccountInfo],
+) -> Result<()> {
+    if *mint.owner == anchor_spl::token::ID {
+        require!(
+            hook_accounts.is_empty(),
+            ErrorCode::InvalidHookAccountFraming
+        );
+        return Ok(());
+    }
+    require!(
+        *mint.owner == anchor_spl::token_2022::ID,
+        ErrorCode::InvalidHookAccountFraming
+    );
+    let mint_data = mint.try_borrow_data()?;
+    let mint_state =
+        StateWithExtensions::<anchor_spl::token_2022::spl_token_2022::state::Mint>::unpack(
+            &mint_data,
+        )
+        .map_err(|_| error!(ErrorCode::InvalidHookAccountFraming))?;
+    let hook_program =
+        anchor_spl::token_2022::spl_token_2022::extension::transfer_hook::get_program_id(
+            &mint_state,
+        );
+    match hook_program {
+        Some(_) => require!(
+            hook_accounts.len() >= 2,
+            ErrorCode::InvalidHookAccountFraming
+        ),
+        None => require!(
+            hook_accounts.is_empty(),
+            ErrorCode::InvalidHookAccountFraming
+        ),
+    }
+    Ok(())
+}
+
+pub fn close_spl_account<'info>(
+    owner: &AccountInfo<'info>,
+    destination: &AccountInfo<'info>,
+    close_account: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    token_2022::close_account(CpiContext::new_with_signer(
+        token_program.key(),
+        token_2022::CloseAccount {
+            account: close_account.to_account_info(),
+            destination: destination.to_account_info(),
+            authority: owner.to_account_info(),
+        },
+        signers_seeds,
+    ))
+}
+
+pub fn burn<'info>(
+    owner: &Signer<'info>,
+    mint: &AccountInfo<'info>,
+    burn_account: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    signers_seeds: &[&[&[u8]]],
+    amount: u64,
+) -> Result<()> {
+    let mint_info = mint.to_account_info();
+    let token_program_info: AccountInfo<'_> = token_program.to_account_info();
+    token_2022::burn(
+        CpiContext::new_with_signer(
+            token_program_info.key(),
+            token_2022::Burn {
+                mint: mint_info,
+                from: burn_account.to_account_info(),
+                authority: owner.to_account_info(),
+            },
+            signers_seeds,
+        ),
+        amount,
+    )
+}
+
+pub fn freeze_token_account<'info>(
+    freeze_authority: &AccountInfo<'info>,
+    token_account: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    token_2022::freeze_account(CpiContext::new_with_signer(
+        token_program.key(),
+        token_2022::FreezeAccount {
+            account: token_account.to_account_info(),
+            mint: mint.to_account_info(),
+            authority: freeze_authority.to_account_info(),
+        },
+        signers_seeds,
+    ))
+}
+
+pub fn thaw_token_account<'info>(
+    freeze_authority: &AccountInfo<'info>,
+    token_account: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    token_2022::thaw_account(CpiContext::new_with_signer(
+        token_program.key(),
+        token_2022::ThawAccount {
+            account: token_account.to_account_info(),
+            mint: mint.to_account_info(),
+            authority: freeze_authority.to_account_info(),
+        },
+        signers_seeds,
+    ))
+}
+
+pub fn withdraw_excess_lamports<'a>(
+    token_program: AccountInfo<'a>,
+    source: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let ix = instruction::Instruction {
+        program_id: *token_program.key,
+        accounts: vec![
+            AccountMeta::new(*source.key, false),
+            AccountMeta::new(*destination.key, false),
+            AccountMeta::new_readonly(*authority.key, true),
+        ],
+        data: vec![38], // TokenInstruction::WithdrawExcessLamports = 38
+    };
+    anchor_lang::solana_program::program::invoke_signed(
+        &ix,
+        &[source, destination, authority, token_program],
+        signers_seeds,
+    )
+    .map_err(Into::into)
+}
+
+pub fn unwrap_lamports<'a>(
+    token_program: AccountInfo<'a>,
+    source: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    signers_seeds: &[&[&[u8]]],
+    amount: Option<u64>,
+) -> Result<()> {
+    // TokenInstruction::UnwrapLamports = 45, followed by a COption<u64>
+    let mut data = vec![45];
+    match amount {
+        Some(amount) => {
+            data.push(1); // COption::Some
+            data.extend_from_slice(&amount.to_le_bytes());
+        }
+        None => data.push(0), // COption::None
+    }
+    let ix = instruction::Instruction {
+        program_id: *token_program.key,
+        accounts: vec![
+            AccountMeta::new(*source.key, false),
+            AccountMeta::new(*destination.key, false),
+            AccountMeta::new_readonly(*authority.key, true),
+        ],
+        data,
+    };
+    anchor_lang::solana_program::program::invoke_signed(
+        &ix,
+        &[source, destination, authority, token_program],
+        signers_seeds,
+    )
+    .map_err(Into::into)
+}
+
+/// Read (is_native, amount) from a token account, parsing extensions so it
+/// works for both legacy accounts and Token-2022 accounts that carry extensions.
+fn token_account_native_and_amount(account: &AccountInfo) -> Result<(bool, u64)> {
+    let data = account.try_borrow_data()?;
+    if let Ok(state) = StateWithExtensions::<spl_token_2022::state::Account>::unpack(&data) {
+        return Ok((state.base.is_native.is_some(), state.base.amount));
+    } else {
+        // process token mint account
+        return Ok((false, 0));
+    }
+}
+
+/// Collect the excess lamports sitting on a token account owned by `authority`.
+///
+/// A native (WSOL) account cannot use `WithdrawExcessLamports` (the token
+/// program rejects native accounts). Instead `SyncNative` folds the donated
+/// excess lamports into the wrapped `amount`, the delta is measured, and
+/// `UnwrapLamports` pulls exactly that delta back out — leaving the wrapped
+/// balance unchanged, which is asserted afterwards.
+pub fn withdraw_excess_lamports_from_token<'a>(
+    token_program: AccountInfo<'a>,
+    source: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let (is_native, amount_before_sync) = token_account_native_and_amount(&source)?;
+
+    if !is_native {
+        return withdraw_excess_lamports(
+            token_program,
+            source,
+            destination,
+            authority,
+            signers_seeds,
+        );
+    }
+
+    // SyncNative (ix 17) folds the donated excess lamports into the wrapped amount.
+    let sync_ix = spl_token_2022::instruction::sync_native(token_program.key, source.key)?;
+    anchor_lang::solana_program::program::invoke(
+        &sync_ix,
+        &[source.clone(), token_program.clone()],
+    )?;
+
+    let (_, amount_after_sync) = token_account_native_and_amount(&source)?;
+    let excess_lamports = amount_after_sync
+        .checked_sub(amount_before_sync)
+        .ok_or(ErrorCode::LamportsCalculateError)?;
+    if excess_lamports == 0 {
+        return Ok(());
+    }
+
+    unwrap_lamports(
+        token_program,
+        source.clone(),
+        destination,
+        authority,
+        signers_seeds,
+        Some(excess_lamports),
+    )?;
+
+    // The wrapped balance must be exactly what it was before sync + unwrap.
+    let (_, amount_after_unwrap) = token_account_native_and_amount(&source)?;
+    require_eq!(
+        amount_before_sync,
+        amount_after_unwrap,
+        ErrorCode::LamportsCalculateError
+    );
+    Ok(())
+}
+
+/// Calculate the fee for output amount
+pub fn get_transfer_inverse_fee(
+    mint_account: Box<InterfaceAccount<Mint>>,
+    post_fee_amount: u64,
+) -> Result<u64> {
+    let mint_info = mint_account.to_account_info();
+    if *mint_info.owner == Token::id() {
+        return Ok(0);
+    }
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+
+    let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
+        let epoch = get_recent_epoch()?;
+
+        let transfer_fee = transfer_fee_config
+            .calculate_inverse_epoch_fee(epoch, post_fee_amount)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        let transfer_fee_for_check = transfer_fee_config
+            .calculate_epoch_fee(
+                epoch,
+                post_fee_amount
+                    .checked_add(transfer_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?,
+            )
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        if transfer_fee != transfer_fee_for_check {
+            return err!(ErrorCode::TransferFeeCalculateNotMatch);
+        }
+        transfer_fee
+    } else {
+        0
+    };
+    Ok(fee)
+}
+
+/// Calculate the fee for input amount
+pub fn get_transfer_fee(
+    mint_account: Box<InterfaceAccount<Mint>>,
+    pre_fee_amount: u64,
+) -> Result<u64> {
+    let mint_info = mint_account.to_account_info();
+    if *mint_info.owner == Token::id() {
+        return Ok(0);
+    }
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+
+    let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
+        transfer_fee_config
+            .calculate_epoch_fee(get_recent_epoch()?, pre_fee_amount)
+            .ok_or(ErrorCode::CalculateOverflow)?
+    } else {
+        0
+    };
+    Ok(fee)
+}
+
+pub fn support_mint_associated_is_initialized(
+    remaining_accounts: &[AccountInfo],
+    token_mint: &InterfaceAccount<Mint>,
+) -> Result<bool> {
+    if remaining_accounts.len() == 0 {
+        return Ok(false);
+    }
+    let (expect_mint_associated, __bump) = Pubkey::find_program_address(
+        &[SUPPORT_MINT_SEED.as_bytes(), token_mint.key().as_ref()],
+        &crate::id(),
+    );
+    let mut mint_associated_is_initialized = false;
+    for mint_associated_info in remaining_accounts.into_iter() {
+        if *mint_associated_info.owner != crate::id()
+            || mint_associated_info.key() != expect_mint_associated
+        {
+            continue;
+        }
+        let mint_associated = SupportMintAssociated::try_deserialize(
+            &mut mint_associated_info.data.borrow().as_ref(),
+        )?;
+        if mint_associated.mint == token_mint.key() {
+            mint_associated_is_initialized = true;
+            break;
+        }
+    }
+    return Ok(mint_associated_is_initialized);
+}
+
+pub fn is_supported_mint(
+    mint_account: &InterfaceAccount<Mint>,
+    mint_associated_is_initialized: bool,
+) -> Result<bool> {
+    let mint_info = mint_account.to_account_info();
+    if *mint_info.owner == Token::id() {
+        return Ok(true);
+    }
+    if mint_associated_is_initialized {
+        return Ok(true);
+    }
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+    let extensions = mint.get_extension_types()?;
+    for e in extensions {
+        if e != ExtensionType::TransferFeeConfig
+            && e != ExtensionType::MetadataPointer
+            && e != ExtensionType::TokenMetadata
+            && e != ExtensionType::InterestBearingConfig
+            && e != ExtensionType::ScaledUiAmount
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+pub fn create_nft_mint_with_extensions<'info>(
+    payer: &Signer<'info>,
+    nft_mint: &AccountInfo<'info>,
+    mint_authority: &AccountInfo<'info>,
+    mint_close_authority: &AccountInfo<'info>,
+    freeze_authority: &AccountInfo<'info>,
+    system_program: &Program<'info, System>,
+    token_2022_program: &Program<'info, Token2022>,
+    with_matedata: bool,
+) -> Result<()> {
+    let extensions = if with_matedata {
+        [
+            ExtensionType::MintCloseAuthority,
+            ExtensionType::MetadataPointer,
+        ]
+        .to_vec()
+    } else {
+        [ExtensionType::MintCloseAuthority].to_vec()
+    };
+    let space =
+        ExtensionType::try_calculate_account_len::<spl_token_2022::state::Mint>(&extensions)?;
+
+    let lamports = Rent::get()?.minimum_balance(space);
+
+    // create mint account
+    create_account(
+        CpiContext::new(
+            system_program.key(),
+            CreateAccount {
+                from: payer.to_account_info(),
+                to: nft_mint.to_account_info(),
+            },
+        ),
+        lamports,
+        space as u64,
+        token_2022_program.key,
+    )?;
+
+    // initialize token extensions
+    for e in extensions {
+        match e {
+            ExtensionType::MetadataPointer => {
+                let ix = metadata_pointer::instruction::initialize(
+                    token_2022_program.key,
+                    nft_mint.key,
+                    None,
+                    Some(nft_mint.key()),
+                )?;
+                solana_program::program::invoke(
+                    &ix,
+                    &[
+                        token_2022_program.to_account_info(),
+                        nft_mint.to_account_info(),
+                    ],
+                )?;
+            }
+            ExtensionType::MintCloseAuthority => {
+                let ix = spl_token_2022::instruction::initialize_mint_close_authority(
+                    token_2022_program.key,
+                    nft_mint.key,
+                    Some(mint_close_authority.key),
+                )?;
+                solana_program::program::invoke(
+                    &ix,
+                    &[
+                        token_2022_program.to_account_info(),
+                        nft_mint.to_account_info(),
+                    ],
+                )?;
+            }
+            _ => {
+                return err!(ErrorCode::NotSupportMint);
+            }
+        }
+    }
+
+    // initialize mint account
+    initialize_mint2(
+        CpiContext::new(
+            token_2022_program.key(),
+            InitializeMint2 {
+                mint: nft_mint.to_account_info(),
+            },
+        ),
+        0,
+        &mint_authority.key(),
+        Some(&freeze_authority.key()),
+    )
+}
+
+pub fn initialize_token_metadata_extension<'info>(
+    payer: &Signer<'info>,
+    nft_mint: &AccountInfo<'info>,
+    mint_authority: &AccountInfo<'info>,
+    metadata_update_authority: &AccountInfo<'info>,
+    token_2022_program: &Program<'info, Token2022>,
+    name: String,
+    symbol: String,
+    uri: String,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let metadata = spl_token_metadata_interface::state::TokenMetadata {
+        name,
+        symbol,
+        uri,
+        ..Default::default()
+    };
+
+    let mint_data = nft_mint.try_borrow_data()?;
+    let mint_state_unpacked =
+        StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+    let new_account_len =
+        mint_state_unpacked.try_get_new_account_len_for_variable_len_extension(&metadata)?;
+    let new_rent_exempt_lamports = Rent::get()?.minimum_balance(new_account_len);
+    let additional_lamports = new_rent_exempt_lamports.saturating_sub(nft_mint.lamports());
+    // CPI call will borrow the account data
+    drop(mint_data);
+
+    let cpi_context = CpiContext::new(
+        anchor_lang::system_program::ID,
+        Transfer {
+            from: payer.to_account_info(),
+            to: nft_mint.to_account_info(),
+        },
+    );
+    transfer(cpi_context, additional_lamports)?;
+
+    solana_program::program::invoke_signed(
+        &spl_token_metadata_interface::instruction::initialize(
+            token_2022_program.key,
+            nft_mint.key,
+            metadata_update_authority.key,
+            nft_mint.key,
+            &mint_authority.key(),
+            metadata.name,
+            metadata.symbol,
+            metadata.uri,
+        ),
+        &[
+            nft_mint.to_account_info(),
+            mint_authority.to_account_info(),
+            metadata_update_authority.to_account_info(),
+            token_2022_program.to_account_info(),
+        ],
+        signers_seeds,
+    )?;
+
+    Ok(())
+}
+
+pub fn create_token_vault_account<'info>(
+    payer: &Signer<'info>,
+    pool_state: &AccountInfo<'info>,
+    token_account: &AccountInfo<'info>,
+    token_mint: &InterfaceAccount<'info, Mint>,
+    system_program: &Program<'info, System>,
+    token_2022_program: &Interface<'info, TokenInterface>,
+    signer_seeds: &[&[u8]],
+) -> Result<()> {
+    // support both spl_token_program & token_program_2022
+    let space = get_account_data_size(
+        CpiContext::new(
+            token_2022_program.key(),
+            GetAccountDataSize {
+                mint: token_mint.to_account_info(),
+            },
+        ),
+        &[anchor_spl::token_2022::spl_token_2022::extension::ExtensionType::ImmutableOwner],
+    )?;
+
+    // create account with or without lamports
+    create_or_allocate_account(
+        token_2022_program.key,
+        payer.to_account_info(),
+        system_program.to_account_info(),
+        token_account.to_account_info(),
+        signer_seeds,
+        space.try_into().unwrap(),
+    )?;
+
+    // Call initializeImmutableOwner
+    token_2022::initialize_immutable_owner(CpiContext::new(
+        token_2022_program.key(),
+        InitializeImmutableOwner {
+            account: token_account.to_account_info(),
+        },
+    ))?;
+
+    // Call initializeAccount3
+    token_2022::initialize_account3(CpiContext::new(
+        token_2022_program.key(),
+        InitializeAccount3 {
+            account: token_account.to_account_info(),
+            mint: token_mint.to_account_info(),
+            authority: pool_state.to_account_info(),
+        },
+    ))?;
+
+    Ok(())
+}
+
+/// A position NFT must be frozen when either of the pool's vault mints carries
+/// a freeze authority from the hardcoded issuer list.
+///
+/// `None` means the caller had no mint account to inspect, which only happens on
+/// the `open_position` v1 path. That path deserializes its vaults as classic
+/// `anchor_spl::token::TokenAccount`, so Anchor's owner check makes it unable to
+/// serve any pool holding a Token-2022 mint — and every restricted issuer asset
+/// is Token-2022. v1 therefore never reaches a pool that needs freezing.
+pub fn position_nft_must_freeze(
+    vault_0_mint: Option<&InterfaceAccount<Mint>>,
+    vault_1_mint: Option<&InterfaceAccount<Mint>>,
+) -> bool {
+    let ids = &frozen_position_nft_authorities::IDS;
+    let is_restricted_mint =
+        |mint: Option<&InterfaceAccount<Mint>>| match mint.map(|mint| mint.freeze_authority) {
+            Some(COption::Some(authority)) => ids.contains(&authority),
+            _ => false,
+        };
+    is_restricted_mint(vault_0_mint) || is_restricted_mint(vault_1_mint)
+}

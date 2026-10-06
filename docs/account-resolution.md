@@ -4,7 +4,7 @@
 
 `TransferHookResolver` processes each `TransferContext` separately:
 
-1. Fetch the mint again; verify the requested key, Token-2022 owner, and base mint length.
+1. Fetch the mint again; verify the requested key, Token-2022 owner, and base mint layout.
 2. If there is no Transfer Hook program in the typed mint state, return an empty account slice without fetching a validation list.
 3. Derive the validation-list PDA for the hook program and mint. A production `TransferHookAccountSource` must use `spl_transfer_hook_interface::get_extra_account_metas_address`; the local test provider uses a deterministic fake key and is not a Solana PDA implementation.
 4. Fetch and validate the validation-list key, owner (hook program), mint, minimum TLV header length, and Execute discriminator.
@@ -19,10 +19,10 @@ The SPL `spl-transfer-hook-interface` off-chain helper (reviewed at commit `ec70
 
 The Token-2022 transfer processor reads the hook program from the mint extension and invokes it with the current transfer accounts plus caller-supplied additional accounts. Its on-chain helper locates the hook program and validation PDA among those supplied accounts and resolves the TLV list for Execute.
 
-The local provider boundary supplies already-decoded typed views. Production implementations still need to validate account owner/data before decoding, use the exact SPL Execute discriminator and TLV parser, check account executability, handle RPC errors, and produce `AccountMeta` privileges exactly as encoded/resolved.
+The crate has two provider boundaries. `TransferHookAccountSource` supplies typed views for deterministic model tests and intentionally uses a fake PDA derivation. `resolve_spl_transfer_hook_accounts` accepts raw `SplAccount` values from a caller-supplied fetcher, unpacks the actual Token-2022 mint extension, verifies account keys and owners, requires an executable hook program, derives the canonical validation-list PDA, and delegates Execute TLV/account resolution to the pinned SPL helper. Fetch and resolution errors are returned; the crate does not bundle an RPC client or cache account state.
 
 ## Per-transfer slices
 
-Do not flatten transfers into a global union unless the target program defines unambiguous framing and the CPI helper consumes the exact corresponding subset. The CPMM and CLMM reference adapters preserve one range per transfer; CLMM additionally leaves tick/bitmap accounts in a separate prefix.
+Do not flatten transfers into a global union unless the target program defines unambiguous framing and the CPI helper consumes the exact corresponding subset. The CPMM and CLMM reference adapters preserve one range per transfer; CLMM additionally leaves tick/bitmap accounts in a separate prefix. The SDK instruction framers convert legacy CPMM swap and CLMM SwapV2 instruction data into the documented V2/V3 layouts, validating existing discriminator/data and remaining-account sections before appending the individual hook slices.
 
 See [`builder-pseudocode.ts`](builder-pseudocode.ts) for the still-generic client construction sketch and the [ABI matrix](transfer-surface-matrix.md) for why it is not yet a live Raydium builder.
