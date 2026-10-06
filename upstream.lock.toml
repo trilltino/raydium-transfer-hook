@@ -1,0 +1,49 @@
+# Machine-readable upstream source locks. See docs/source-lock.md.
+#
+# Raydium source is NOT vendored in this repository. `cargo xtask upstream fetch`
+# clones these repositories into the git-ignored `target/upstream/` directory and
+# checks out the exact revisions below; `cargo xtask upstream verify` checks them.
+#
+# `base_revision`  - the reviewed upstream commit (source-review lock).
+# `hook_*`         - the external branch carrying the Transfer Hook support change on
+#                    top of `base_revision`. Populated only from real, pushed commits;
+#                    never fabricated. The hook change lives in that external repository,
+#                    not in this one.
+#
+# These source-review revisions are independent of the Rust crate versions in this
+# workspace (see [executable_line] in docs/source-lock.md).
+
+[cpmm]
+repository = "https://github.com/raydium-io/raydium-cp-swap"
+base_revision = "b3187ae53a1b95a201f855a59024a12ca8f5b51a"
+package = "raydium-cp-swap"
+program_dir = "programs/cp-swap"
+hook_repository = "https://github.com/trilltino/raydium-cp-swap"
+hook_branch = "transfer-hook-support"
+hook_revision = "ec5862d8c735311d6fe88d3d19bd5f3637173db7"
+
+[clmm]
+repository = "https://github.com/raydium-io/raydium-clmm"
+base_revision = "ed1eb41519d5355755f7df52b43fa9610938b60b"
+package = "raydium-clmm"
+program_dir = "programs/amm"
+hook_repository = "https://github.com/trilltino/raydium-clmm"
+hook_branch = "transfer-hook-support"
+hook_revision = "b04b6ec85a7e85457cafca3fc56511d81beaba06"
+
+[sdk]
+repository = "https://github.com/raydium-io/raydium-sdk-V2"
+base_revision = "cc33ec28a8921a35609e83293e9e07ad830b0779"
+note = "GPL-3.0 reference only; never copied into this repository"
+
+[cpi]
+repository = "https://github.com/raydium-io/raydium-cpi"
+base_revision = "115df2779d53bacc7db9d0be2773a4b48a6d372b"
+
+[transfer_hook]
+repository = "https://github.com/solana-program/transfer-hook"
+base_revision = "ec7063291e968f4b0064e4df0324ff49dcf320df"
+
+[token_2022]
+repository = "https://github.com/solana-program/token-2022"
+base_revision = "b5b7511e5d4f19a6a118b858d83a7fe3b0017b1e"

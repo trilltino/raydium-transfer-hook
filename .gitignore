@@ -1,3 +1,9 @@
 /target/
 .DS_Store
 Thumbs.db
+
+# Fetched upstream trees and caches (never tracked)
+/.cache/
+
+# Fetched upstream trees and caches (never tracked)
+/.cache/

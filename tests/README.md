@@ -16,4 +16,4 @@ cargo test --workspace
 - LaunchLab setup-before-trading and same-mint graduation persistence.
 - Hook rejection before the model commits any transfer effects.
 
-The SDK also tests the real SPL off-chain resolver and CPMM/CLMM instruction framing, including independent transfer slices and invalid frame rejection. These tests do not load Raydium programs. The reference-hook ProgramTest verifies Token-2022 invokes the hook and rolls back a rejected transfer, but runtime tests of the vendored CPMM/CLMM handlers with hooked mints are still required to prove their CPI forwarding and full transaction behavior.
+The SDK also tests the real SPL off-chain resolver and CPMM/CLMM instruction framing, including independent transfer slices and invalid frame rejection. These tests do not load Raydium programs. The reference-hook ProgramTest verifies Token-2022 invokes the hook and rolls back a rejected transfer, but runtime tests of the external hook-support CPMM/CLMM builds with hooked mints are still required to prove their CPI forwarding and full transaction behavior.

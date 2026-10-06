@@ -182,58 +182,6 @@ pub struct TransferContext {
     pub amount: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TransferAccountPlan {
-    pub accounts: Vec<AccountMeta>,
-}
-
-impl TransferAccountPlan {
-    pub fn new() -> Self {
-        Self {
-            accounts: Vec::new(),
-        }
-    }
-
-    pub fn from_account(account: AccountMeta) -> Self {
-        Self {
-            accounts: vec![account],
-        }
-    }
-
-    pub fn push(&mut self, account: AccountMeta) {
-        if let Some(existing) = self
-            .accounts
-            .iter_mut()
-            .find(|item| item.key == account.key)
-        {
-            existing.is_signer |= account.is_signer;
-            existing.is_writable |= account.is_writable;
-        } else {
-            self.accounts.push(account);
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.accounts.is_empty()
-    }
-
-    pub fn union(plans: &[Self]) -> Self {
-        let mut combined = Self::new();
-        for plan in plans {
-            for account in &plan.accounts {
-                combined.push(*account);
-            }
-        }
-        combined
-    }
-}
-
-impl Default for TransferAccountPlan {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,61 +268,6 @@ mod tests {
         assert_eq!(
             config.validate_launch(LaunchConfig { preset: None }),
             Ok(None)
-        );
-    }
-
-    #[test]
-    fn account_union_deduplicates_keys_and_escalates_privileges() {
-        let plan = TransferAccountPlan::union(&[
-            TransferAccountPlan {
-                accounts: vec![
-                    AccountMeta {
-                        key: key(1),
-                        is_signer: false,
-                        is_writable: false,
-                    },
-                    AccountMeta {
-                        key: key(2),
-                        is_signer: false,
-                        is_writable: true,
-                    },
-                ],
-            },
-            TransferAccountPlan {
-                accounts: vec![
-                    AccountMeta {
-                        key: key(1),
-                        is_signer: true,
-                        is_writable: true,
-                    },
-                    AccountMeta {
-                        key: key(3),
-                        is_signer: false,
-                        is_writable: false,
-                    },
-                ],
-            },
-        ]);
-
-        assert_eq!(
-            plan.accounts,
-            vec![
-                AccountMeta {
-                    key: key(1),
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    key: key(2),
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    key: key(3),
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
         );
     }
 }

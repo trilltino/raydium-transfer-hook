@@ -8,6 +8,7 @@ members = [
     "programs/reference-hook",
     "programs/reference-hook-onchain",
     "tests/e2e",
+    "xtask",
 ]
 resolver = "2"
 

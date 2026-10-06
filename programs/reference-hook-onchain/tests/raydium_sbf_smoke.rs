@@ -8,7 +8,7 @@ const CLMM_PROGRAM_ID: solana_sdk::pubkey::Pubkey =
 
 #[tokio::test]
 #[ignore = "requires CP-Swap and CLMM SBF artifacts in SBF_OUT_DIR"]
-async fn loads_vendored_cpmm_and_clmm_sbf_programs() {
+async fn loads_external_hook_aware_cpmm_and_clmm_sbf_programs() {
     let mut program_test = ProgramTest::default();
     program_test.add_program("raydium_cp_swap", CPMM_PROGRAM_ID, None);
     program_test.add_program("raydium_clmm", CLMM_PROGRAM_ID, None);
