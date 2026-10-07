@@ -18,6 +18,7 @@ members = [
     "templates/parent-spin-off",
     "tests/models",
     "tests/program-test",
+    "tests/third-party-hook",
     "xtask",
 ]
 exclude = ["templates/transfer-hook-starter"]

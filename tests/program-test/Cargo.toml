@@ -7,9 +7,10 @@ rust-version.workspace = true
 publish = false
 description = "The Raydium + Transfer Hook end-to-end flows, run in-process against the real SBF programs"
 
-# Only tests live here: see tests/local_flows.rs.
+# `src/lib.rs` is the shared scaffolding; the tests are `tests/local_flows.rs` (every hook through
+# both AMMs) and the third-party acceptance tests in `tests/third-party-hook`.
 
-[dev-dependencies]
+[dependencies]
 raydium-hook-driver = { path = "../../crates/raydium-hook-driver", features = ["local"] }
 solana-program-test = "=2.2.7"
 solana-sdk = "=2.2.2"
