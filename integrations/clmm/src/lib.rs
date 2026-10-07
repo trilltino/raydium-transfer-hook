@@ -7,6 +7,9 @@
 //! slices and are only counted here.
 
 #![forbid(unsafe_code)]
+// These return the SDK's rich `LegError` (it names the leg, mint and cause), which is larger than
+// clippy's default for an `Err` variant. See `transfer-hook-sdk` for why it is not boxed.
+#![allow(clippy::result_large_err)]
 
 mod legs;
 mod plan;

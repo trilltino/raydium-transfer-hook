@@ -16,6 +16,11 @@
 //! `spl_transfer_hook_interface::get_extra_account_metas_address`.
 
 #![forbid(unsafe_code)]
+// `LegError` and `SplResolveError` are deliberately rich: they name the leg, the mint and the exact
+// cause so an integrator can tell a user what went wrong. That makes them larger than clippy's
+// default threshold for an `Err` variant. Boxing them would change the public API for no gain on
+// a path that runs once per swap, so the lint is allowed here.
+#![allow(clippy::result_large_err)]
 
 pub mod abi;
 pub mod error;
