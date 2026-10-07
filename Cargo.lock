@@ -811,14 +811,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clmm-hook-integration"
-version = "0.1.0"
-dependencies = [
- "hook-policy-model",
- "transfer-hook-sdk",
-]
-
-[[package]]
 name = "cmov"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -944,14 +936,6 @@ name = "core_detect"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
-
-[[package]]
-name = "cpmm-hook-integration"
-version = "0.1.0"
-dependencies = [
- "hook-policy-model",
- "transfer-hook-sdk",
-]
 
 [[package]]
 name = "cpufeatures"
@@ -1935,17 +1919,6 @@ dependencies = [
 [[package]]
 name = "hook-policy-model"
 version = "0.1.0"
-
-[[package]]
-name = "hook-template-registry"
-version = "0.1.0"
-dependencies = [
- "hook-kit",
- "solana-program",
- "solana-program-test",
- "solana-sdk",
- "tokio",
-]
 
 [[package]]
 name = "http"

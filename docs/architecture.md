@@ -31,7 +31,6 @@ any Transfer Hook program                   one of the examples, or yours
 | `templates/` | The five example hooks and the starter. The rule of each is `src/rule.rs`. |
 | `programs/` | The reference hook and the arbitrary test hook. |
 | `crates/hook-policy-model` | A pure-Rust model of platform policy. Not on-chain. |
-| `integrations/{cpmm,clmm}` | Plan a swap's two legs and delegate framing to the SDK. Model only. |
 | `environments/` | Cluster manifests: program ids, deployments, recorded evidence. |
 | `xtask` | `cargo xtask upstream {list,verify,fetch}` and `cargo xtask devnet-doc`. |
 
@@ -107,4 +106,4 @@ Program ids are never constants in code. Each environment is a manifest in `envi
 * `cargo xtask localnet e2e` runs the same flows on a real `solana-test-validator` over RPC, from a
   clean checkout; CI runs it on every change.
 * A devnet run ([devnet.md](devnet.md)) is the public-cluster evidence.
-* The `integrations/` and model crates assert design facts only; they are not runtime evidence.
+* The model crate (`hook-policy-model`) asserts design facts only; it is not runtime evidence.

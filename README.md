@@ -123,9 +123,8 @@ third-party-hook-acceptance -- --ignored` after `cargo xtask localnet build`
 | `crates/raydium-hook-cli` | `raydium-hook` |
 | `crates/hook-kit` | Shared hook plumbing and an in-process test world |
 | `crates/hook-policy-model` | Platform policy model (types the SDK turns into resolution options) |
-| `programs/` | The reference hook, the unrelated arbitrary hook, the template descriptor registry |
+| `programs/` | The reference hook, the unrelated arbitrary hook, and the benchmark hook |
 | `templates/` | The starter and the five example hooks |
-| `integrations/` | CPMM and CLMM swap planners (models) |
 | `environments/` | Cluster manifests: `localnet.json` (keyless), `devnet.json` (integration), `raydium-devnet.json` (official) |
 | `tests/` | In-process flows, third-party acceptance tests, the localnet fixtures |
 | `xtask` | Upstream locks, localnet, devnet deployment, evidence page |

@@ -78,6 +78,5 @@ measurement on the runtime and toolchain recorded at the top of `results.md`, wi
 each artifact, so it can be reproduced or distrusted. They are not protocol constants: change the
 Agave version and they move.
 
-Do not publish model timings (anything from `hook-policy-model` or
-`integrations/*`) as on-chain overhead. Only these runs, executing the real binaries, are
+Do not publish model timings (anything from `hook-policy-model`) as on-chain overhead. Only these runs, executing the real binaries, are
 measurements.

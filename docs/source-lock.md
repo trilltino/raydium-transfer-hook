@@ -93,7 +93,7 @@ Deployed artifacts are recorded with their SHA-256, size and source revision in
 * The local profile builds the forks with their `localnet` feature (upstream program ids, a
   throwaway admin); devnet uses their `integration` feature (our ids and keys). Both are built from
   the same locked commits.
-* The model crates (`hook-policy-model`, `integrations/*`) assert design
-  facts only and are not runtime evidence.
+* The model crate (`hook-policy-model`) asserts design
+  facts only and is not runtime evidence.
 * LaunchLab: the deployed handler is not public. Real integration is **blocked**.
 * Official Raydium (including its devnet) does not contain the hook-aware instructions.

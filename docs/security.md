@@ -51,7 +51,6 @@ Display these separately; do not collapse them into one "owner".
 | Replace the hook program's code (upgrade authority) | `inspect_readiness` → `program.upgrade`; `raydium-hook inspect` |
 | Re-point the mint at a different hook | the mint's TransferHook extension authority (`hook_authority`; `None` once revoked) |
 | Change the hook's per-mint settings | the hook's own config authority; each template's README says who |
-| Publish metadata about a template | the descriptor's `template_authority` in the template registry (never implies approval) |
 
 ## Malicious-hook tests
 

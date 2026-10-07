@@ -8,7 +8,7 @@ if every row below holds; each row says how it is shown and where it is not.
 | 1 | A platform can select an arbitrary valid Transfer Hook program | `hook-policy-model`: a platform's hook program is any key; the SDK pins the expected program by key, never by a list. Model only; see [security.md](security.md). |
 | 2 | Raydium does not require a hook allowlist | There is no list of hook programs anywhere: the hook-aware instructions forward whatever slice they are given. **But Raydium does gate hooked *mints* at pool creation, and that gate is upstream, not ours:** see "Raydium's mint admission" below. |
 | 3 | This repository does not require a hook allowlist | Nothing in `transfer-hook-sdk` or the driver consults a list of hook programs. Search for one: there is none. |
-| 4 | Template registration is optional | The registry ([`programs/hook-template-registry`](../programs/hook-template-registry)) is a side table. No flow, no resolver and no builder reads it. |
+| 4 | Template registration is optional | There is no template registry in this repository, so there is nothing to register and nothing that could require it. |
 | 5 | A custom hook may have its own PDA architecture | The five hooks differ: `["config", mint]`, `["holder", token_account]`, `["rewards", mint]`, `["arb-stats", mint]`, ... The SDK resolves them from each hook's own validation list. |
 | 6 | A custom hook may have its own initialisation instructions | Each hook has its own setup instruction layout, run through a `HookSetup` provider or a JSON description. |
 | 7 | A custom hook may have its own rule engine | Reference hook, arbitrary hook and the five templates are unrelated rules. |
