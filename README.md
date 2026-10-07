@@ -56,6 +56,7 @@ follow is in [`docs/writing-a-hook.md`](docs/writing-a-hook.md).
 | Integration devnet | **Deployed** | Our hook-aware builds under our own program ids; see [`docs/devnet.md`](docs/devnet.md) |
 | Official Raydium (including its devnet) | **Not supported** | Their programs do not contain `swap_base_input_v2` / `swap_v3`. No upstream PR has been opened |
 | Liquidity deposit / withdraw, fee collection, pool creation with a hooked mint | **Rejected** | Those paths reject hooked mints with a clear error; the hook goes on after a pool has liquidity |
+| Creating a pool with a hooked mint | **Needs Raydium's per-mint approval** | Upstream's own mint admission requires a `SupportMintAssociated` record from the pool admin for any mint with a TransferHook. It is per mint, not per hook program: [`docs/permissionless-hooks.md`](docs/permissionless-hooks.md) |
 | LaunchLab | **Blocked** | Its on-chain handler is not public; `integrations/launchlab` is a simulator, not an integration |
 | Benchmarks of how heavy a hook can be, TypeScript client, commercial templates | **Not done** | |
 
@@ -78,7 +79,7 @@ is no `solana-test-validator` on this Windows setup, so devnet is the real-clust
 | `integrations/` | CPMM and CLMM swap planners and a LaunchLab simulator (models) |
 | `environments/` | Cluster manifests: program ids, deployments, evidence |
 | `xtask` | `cargo xtask upstream list | verify | fetch` |
-| `docs/` | Start at [docs/README.md](docs/README.md): [writing a hook](docs/writing-a-hook.md), [forking](docs/forking.md), [how it works](docs/how-it-works.md), [Raydium instructions](docs/raydium-instructions.md), [limits](docs/hook-limits.md), [trust](docs/trust-model.md), [upstream sources](docs/upstream-sources.md), [devnet evidence](docs/devnet.md) |
+| `docs/` | Start at [docs/README.md](docs/README.md): [writing a hook](docs/writing-a-hook.md), [forking](docs/forking.md), [how it works](docs/how-it-works.md), [Raydium instructions](docs/raydium-instructions.md), [limits](docs/hook-limits.md), [security](docs/security.md), [upstream sources](docs/upstream-sources.md), [devnet evidence](docs/devnet.md) |
 
 ## Run it
 
@@ -110,4 +111,4 @@ A hook is an untrusted program and can refuse any transfer. The SDK checks trans
 (the mint points at the expected program, the validation list is owned by it and parses, the
 resolved accounts carry no unexpected privileges). It cannot judge a hook's economics, who can
 change its settings, or whether its program can be upgraded. See
-[`docs/trust-model.md`](docs/trust-model.md).
+[`docs/security.md`](docs/security.md).

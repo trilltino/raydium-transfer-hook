@@ -755,3 +755,33 @@ async fn clmm_output_leg_is_authorized_by_the_pool_state() {
     );
     assert_eq!(instruction, snapshot);
 }
+
+/// Two hooks with large account lists on the two legs of one swap: each leg keeps its own slice,
+/// none of the accounts are merged, and the framed counts are the full slice lengths (N + 2).
+#[tokio::test]
+async fn two_large_slices_in_one_swap_stay_separate_and_are_framed_by_their_full_lengths() {
+    let metas_a: Vec<ExtraAccountMeta> = (0..30).map(|_| extra(&Pubkey::new_unique())).collect();
+    let metas_b: Vec<ExtraAccountMeta> = (0..20).map(|_| extra(&Pubkey::new_unique())).collect();
+    let fixture = cpmm(Some(&metas_a), Some(&metas_b));
+    let (input, output) = fixture.legs().await;
+    assert_eq!(input.account_count(), 32);
+    assert_eq!(output.account_count(), 22);
+
+    let mut instruction = fixture.instruction();
+    let fixed = instruction.accounts.len();
+    frame_cpmm_swap_base_input_v2(&mut instruction, &input, &output).unwrap();
+    // The two u16 counts follow the discriminator, amount_in and minimum_amount_out.
+    let data = &instruction.data;
+    assert_eq!(&data[24..26], &32u16.to_le_bytes());
+    assert_eq!(&data[26..28], &22u16.to_le_bytes());
+    assert_eq!(instruction.accounts.len(), fixed + 32 + 22);
+    // The input slice comes first, then the output slice, exactly as resolved.
+    assert_eq!(
+        &instruction.accounts[fixed..fixed + 32],
+        input.slice().unwrap().metas()
+    );
+    assert_eq!(
+        &instruction.accounts[fixed + 32..],
+        output.slice().unwrap().metas()
+    );
+}

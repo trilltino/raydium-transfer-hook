@@ -10,7 +10,8 @@ what you are doing.
 | **fork this repo** and run it on my own program ids, or with my own hook | [forking.md](forking.md) |
 | **integrate hooked swaps** into an app, wallet or aggregator | [how-it-works.md](how-it-works.md), then [raydium-instructions.md](raydium-instructions.md) |
 | **judge how heavy a hook can be** (accounts, compute, transaction size) | [hook-limits.md](hook-limits.md) |
-| **assess the risk** of a hook or of this stack | [trust-model.md](trust-model.md) |
+| **assess the risk** of a hook or of this stack | [security.md](security.md) |
+| **check what "permissionless" means** and what proves it | [permissionless-hooks.md](permissionless-hooks.md) |
 | **see what is proven**, with transactions | [devnet.md](devnet.md) |
 | **know exactly which Raydium code this is tested against** | [upstream-sources.md](upstream-sources.md) |
 
@@ -23,7 +24,8 @@ what you are doing.
 | [how-it-works.md](how-it-works.md) | The architecture and how each transfer leg's accounts are resolved and framed |
 | [raydium-instructions.md](raydium-instructions.md) | The two instructions added to Raydium, their byte layouts, and which surfaces are supported |
 | [hook-limits.md](hook-limits.md) | What bounds a hook, with measured numbers |
-| [trust-model.md](trust-model.md) | What the SDK checks, what it cannot, and what the policy models mean |
+| [security.md](security.md) | The threat model, what the SDK checks and cannot, malicious-hook tests, and what the policy models mean |
+| [permissionless-hooks.md](permissionless-hooks.md) | Each requirement of "permissionless" with its evidence, including the one gate Raydium upstream already has (per-mint admission) |
 | [upstream-sources.md](upstream-sources.md) | The pinned Raydium and SPL revisions, toolchains and dependency line |
 | [devnet.md](devnet.md) | Generated evidence page: what is deployed on devnet and what ran. Regenerate with `cargo xtask devnet-doc` |
 

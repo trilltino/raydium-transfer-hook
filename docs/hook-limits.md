@@ -33,22 +33,42 @@ transactions and an address lookup table, which this repository does not yet dri
 
 ## Compute
 
-All numbers are `solana-program-test` runs of the SBF binaries (the real runtime, not a validator),
-single runs, one hooked leg per swap. They are data points, not a benchmark. Whole-swap compute
-units (Raydium + Token-2022 + the hook) as reported by simulation, hooked token in and out:
+All numbers are `solana-program-test` runs of the SBF binaries (the real runtime, not a validator)
+and a few devnet runs. They are data points, not a benchmark. Whole-swap compute units (Raydium +
+Token-2022 + the hook) as reported by simulation, hooked token in and out, as the range seen across
+the runs made while writing this. One hooked leg unless stated:
 
 | Hook | CPMM swap | CLMM swap |
 |---|---|---|
-| reference hook (one amount check, the lightest here) | 75,900 | 98,900 to 101,700 |
-| creator-commitment | 85,800 to 85,900 | 102,800 to 105,800 |
-| arbitrary test hook (writes a counter) | 100,900 to 101,000 | 126,900 to 129,700 |
-| fair-launch (reads the instructions sysvar, writes a counter) | 94,300 to 101,500 | 129,000 to 132,100 |
-| loyalty-rewards (settles two records and the global) | 116,000 to 116,100 | 127,000 to 129,800 |
+| reference hook (one amount check, the lightest here) | 71,000 to 76,000 | 99,000 to 102,000 |
+| reference hook, TransferFee on both mints | 84,000 | 107,000 to 110,000 |
+| creator-commitment | 81,000 to 92,000 | 101,000 to 110,000 |
+| arbitrary test hook (writes a counter) | 83,000 to 101,000 | 112,000 to 130,000 |
+| anti-bundle (writes a counter) | 95,000 to 99,000 | 110,000 to 111,000 |
+| fair-launch (reads the instructions sysvar, writes a counter) | 94,000 to 127,000 | 115,000 to 132,000 |
+| loyalty-rewards (settles two records and the global) | 93,000 to 116,000 | 127,000 to 153,000 |
+| parent-spin-off (the same accounting) | 129,000 to 130,000 | 125,000 to 128,000 |
+| **two hooks, one per leg** (reference + arbitrary) | 113,000 to 137,000 | 147,000 to 157,000 |
+| two hooks, the same program on both legs | 112,000 | 136,000 to 139,000 |
+| two hooks plus a TransferFee on both mints | 121,000 | 162,000 to 164,000 |
 
 Every figure is under the default 200,000-unit limit of a transaction. The reference hook's `Execute`
 alone is about 16,600 units on SBF. The driver submits swaps with a 1,400,000-unit limit; a
-fee-optimal limit was not explored. Pool state differs between runs, so differences of a few
-thousand units between rows are noise, not a ranking.
+fee-optimal limit was not explored. Rows are not a ranking: the same hook varies by tens of
+thousands of units between runs, mostly
+because every run uses fresh random mints and `find_program_address` costs more compute when the
+bump search takes more tries (a hook derives its config PDA on every `Execute`; storing the bump
+and using `create_program_address` would make that cost fixed, and has not been done). The highest
+figure seen anywhere is about 164,000 (two hooks and a transfer fee on CLMM).
+
+## Transaction formats
+
+Every flow here uses legacy transactions. Two things depend on the format. A hook with many extras
+needs a versioned transaction and an address lookup table to fit the packet (the driver does not
+drive them yet). And the priority fee: in legacy and v0 transactions it is a `ComputeBudget`
+instruction a hook can read; in **v1 transactions (SIMD-0385, live on mainnet since September 2026)**
+it is a field of the message and `ComputeBudget` instructions are no-ops, so a hook cannot see it by
+reading instructions. See `templates/fair-launch`.
 
 ## Contention
 

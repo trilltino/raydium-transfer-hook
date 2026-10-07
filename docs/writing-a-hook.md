@@ -151,4 +151,4 @@ Each example README ends with the limits of its rule. Do the same. What a hook c
 important as what it can: a burn is not a transfer, so the hook never sees it; a tip paid to a block
 builder is not a priority fee. And be honest about trust: a hook is an untrusted program and can
 refuse any transfer, including deliberately. Say who holds your program's upgrade authority, or
-revoke it. See [trust-model.md](trust-model.md).
+revoke it. See [security.md](security.md).

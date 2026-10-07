@@ -20,8 +20,13 @@
 //! * The per-slot counter is per **mint**, not per buyer, so it is a launch-wide budget. A bundle
 //!   of `max_buys_per_slot + 1` buys fails as a whole.
 //! * The priority-fee check reads the transaction's `SetComputeUnitPrice` instruction. It sees the
-//!   fee a transaction **declares**. It cannot see a tip paid to a block builder through a plain
-//!   transfer, so it limits ordinary fee wars, not private bundles.
+//!   fee a legacy or v0 transaction **declares**. It cannot see a tip paid to a block builder through
+//!   a plain transfer, so it limits ordinary fee wars, not private bundles.
+//! * **It does not work on v1 transactions (SIMD-0385).** There the priority fee is a field of the
+//!   message, and `ComputeBudget` instructions inside a v1 transaction are no-ops, so a hook
+//!   reading them is bypassed (a v1 transaction can pay any fee and declare none) or fooled (it can
+//!   declare a price the runtime ignores). Do not rely on this check where v1 transactions are
+//!   accepted; the per-buy cap, per-account cap and per-slot budget do not depend on the format.
 //! * Selling is never limited, and neither is moving tokens between wallets.
 //!
 //! ## One fact about Token-2022 this relies on

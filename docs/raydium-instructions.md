@@ -63,6 +63,12 @@ own program ids ([devnet.md](devnet.md)). No row is "official Raydium deployed".
 | CLMM limit orders (open, increase, settle) | unsupported: explicit rejection | host unit tests |
 | LaunchLab | **blocked** | The on-chain handler is closed source, so nothing can be patched or tested; `integrations/launchlab` is a simulator, not an integration |
 
+**Pool creation with a hooked mint is gated upstream.** CPMM `initialize` and CLMM `create_pool` admit a
+Token-2022 mint only if its extensions are on a short list (`TransferHook` is not) or the pool admin
+(or a delegated owner) has created a `SupportMintAssociated` record for it. This is Raydium's existing
+mint admission, unchanged by the forks, and it is per mint, not per hook program; see
+[permissionless-hooks.md](permissionless-hooks.md).
+
 Every transfer helper that has no hook framing passes an empty slice and rejects a hook-enabled
 mint, so an unsupported path fails with a clear error instead of an opaque Token-2022 one. That is
 why liquidity deposits and withdrawals do not accept hooked mints yet: the hook goes on **after** a

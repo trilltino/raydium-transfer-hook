@@ -1024,3 +1024,43 @@ fn plain_mint_helper_is_a_valid_token_2022_mint() {
     use spl_token_2022::{extension::StateWithExtensions, state::Mint};
     StateWithExtensions::<Mint>::unpack(&token_2022_plain_mint_data()).unwrap();
 }
+
+// ----- a large account list -------------------------------------------------------
+
+/// A hook may declare many extra accounts. Resolution must return every one, in the order the list
+/// declares them, followed by the hook program and the validation list: `N + 2` accounts.
+#[tokio::test]
+async fn a_hook_with_a_large_account_list_resolves_every_extra_in_order() {
+    const N: usize = 48;
+    let keys: Vec<Pubkey> = (0..N).map(|_| Pubkey::new_unique()).collect();
+    let metas: Vec<ExtraAccountMeta> = keys.iter().map(|k| pubkey_meta(k, false, false)).collect();
+    let s = setup(&metas);
+    let leg = resolve(&s, &ResolveOptions::default()).await.unwrap();
+    let slice = leg.slice().expect("hooked");
+
+    assert_eq!(leg.account_count(), N + 2);
+    assert_eq!(slice.extras().len(), N);
+    for (i, key) in keys.iter().enumerate() {
+        assert_eq!(slice.extras()[i].pubkey, *key, "extra {i} out of order");
+    }
+    let list = get_extra_account_metas_address(&s.mint, &s.hook);
+    let all = slice.metas();
+    assert_eq!(all[N], ro(s.hook));
+    assert_eq!(all[N + 1], ro(list));
+}
+
+/// Many extras do not weaken the privilege checks: a writable account buried in the middle of a
+/// large list is still refused, and named.
+#[tokio::test]
+async fn a_writable_extra_hidden_in_a_large_list_is_still_refused_and_named() {
+    let mut metas: Vec<ExtraAccountMeta> = (0..40)
+        .map(|_| pubkey_meta(&Pubkey::new_unique(), false, false))
+        .collect();
+    let hostile = Pubkey::new_unique();
+    metas.insert(23, pubkey_meta(&hostile, false, true));
+    let s = setup(&metas);
+    match resolve_err(&s, &ResolveOptions::default()).await {
+        SplResolveError::UnexpectedWritable { address } => assert_eq!(address, hostile),
+        other => panic!("expected UnexpectedWritable, got {other:?}"),
+    }
+}

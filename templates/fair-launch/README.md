@@ -69,9 +69,16 @@ window closes.
   budget is what slows that, because all their buys share it.
 * **The slot budget is per mint, not per buyer.** It is a launch-wide budget: when it is used up,
   honest buyers in that slot are refused too. That is the price of stopping a bundle.
-* **The fee check sees the fee a transaction declares.** It reads `SetComputeUnitPrice` from the
-  transaction's top-level instructions. It cannot see a tip paid to a block builder as a plain
-  transfer, so it limits ordinary fee wars, not private bundles.
+* **The fee check sees the fee a legacy or v0 transaction declares.** It reads
+  `SetComputeUnitPrice` from the transaction's top-level instructions. It cannot see a tip paid to a
+  block builder as a plain transfer, so it limits ordinary fee wars, not private bundles.
+* **The fee check does not work on v1 transactions.** In the v1 format (SIMD-0385, live on mainnet
+  since September 2026) the priority fee is a field of the message and `ComputeBudget` instructions
+  are no-ops, so the check is bypassed (pay any fee, declare none) or fooled (declare a price the
+  runtime ignores). Where v1 transactions are accepted, do not rely on this check; the buy-size,
+  account and slot limits do not depend on the transaction format. See
+  [Solana Compass on SIMD-0385](https://solanacompass.com/news/transaction-v1-simd-0385-is-live-on-solana-mainnet-at-epoch-1035)
+  and the [Chainstack v1 guide](https://docs.chainstack.com/docs/solana-transaction-v1).
 * **Contention.** The counter is a writable account in every transfer of the mint, buys or not, so
   transfers of this mint in the same block serialise on it. Fine for a launch window; a reason to
   keep the window short.
