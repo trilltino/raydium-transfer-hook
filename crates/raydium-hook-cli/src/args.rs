@@ -10,9 +10,13 @@ commands:
            Deploy the integration programs (`solana program deploy`), skipping ones already
            deployed, and record each deployment in the environment file.
   e2e      --env FILE --keypair FILE [--fee-receiver-keypair FILE]
-           [--amm cpmm|clmm|all] [--hook reference|arbitrary|all] [--record]
+           [--amm cpmm|clmm|all]
+           [--hook reference|arbitrary|creator-commitment|fair-launch|loyalty-rewards|all]
+           [--vest-seconds N] [--window-seconds N] [--reward-seconds N] [--record]
            Run the checked end-to-end flows (admin setup, hooked mint, real pool, hooked swaps in
-           both directions, hook refusals with rollback). Exits non-zero on any failure.
+           both directions, hook refusals with rollback, the hook's own follow-up steps). The
+           time flags are real seconds the run waits on a live cluster. Exits non-zero on any
+           failure.
   inspect  --rpc URL MINT
            Show a mint's Transfer Hook, whether its validation list exists, and who can upgrade
            the hook program.

@@ -21,6 +21,23 @@ The full guide is [`docs/authoring-hooks.md`](docs/authoring-hooks.md). Using th
 optional: the repository also ships an unrelated hook (`programs/arbitrary-test-hook`) that runs
 through both AMMs with no change to the SDK or the Raydium builders.
 
+## Example hooks
+
+Three complete hooks, each in its own folder under `templates/`. In each, **the custom logic is one
+short file, `src/rule.rs`**: pure Rust with no accounts and no Solana types, unit-tested on its own.
+The rest of the folder is plumbing you can leave alone (the shared parts live in
+[`crates/hook-kit`](crates/hook-kit)).
+
+| Folder | The rule | Read |
+|---|---|---|
+| [`templates/creator-commitment`](templates/creator-commitment) | A creator's allocation **vests**: the dedicated account's balance may not fall below what a cliff-and-linear schedule still locks | [`rule.rs`](templates/creator-commitment/src/rule.rs) |
+| [`templates/fair-launch`](templates/fair-launch) | During a launch window, **buys** are limited: per-buy size, per-account balance, buys per slot (against bundles), declared priority fee | [`rule.rs`](templates/fair-launch/src/rule.rs) |
+| [`templates/loyalty-rewards`](templates/loyalty-rewards) | Holders earn a **quote-token reward stream** in proportion to balance x time held; the pool never earns | [`rule.rs`](templates/loyalty-rewards/src/rule.rs) |
+
+Each has its own README with the rule, the accounts, every error code and the honest limits, and
+each runs through real Raydium CPMM and CLMM pools in the end-to-end flows. The standard they all
+follow is in [`docs/template-standard.md`](docs/template-standard.md).
+
 ## Status
 
 | Capability | Status | Evidence |
@@ -50,6 +67,8 @@ is no `solana-test-validator` on this Windows setup, so devnet is the real-clust
 | `programs/reference-hook-onchain` | The deployable reference hook |
 | `programs/arbitrary-test-hook` | An unrelated hook that proves the stack is permissionless |
 | `templates/transfer-hook-starter` | Copy-me hook; the rule is `src/rule.rs` |
+| `templates/creator-commitment`, `fair-launch`, `loyalty-rewards` | The three example hooks, one folder each; the rule is `src/rule.rs` |
+| `crates/hook-kit` | Shared hook plumbing (`Execute` prelude, mint/token reads, PDA creation) and an in-process test world |
 | `integrations/` | CPMM and CLMM swap planners and a LaunchLab simulator (models) |
 | `environments/` | Cluster manifests: program ids, deployments, evidence |
 | `xtask` | `cargo xtask upstream list | verify | fetch` |
@@ -64,6 +83,9 @@ cargo test --workspace
 # the end-to-end flows against the exact deployed binaries, in-process
 cargo build-sbf --manifest-path programs\reference-hook-onchain\Cargo.toml --sbf-out-dir target\integration-sbf
 cargo build-sbf --manifest-path programs\arbitrary-test-hook\Cargo.toml --sbf-out-dir target\integration-sbf
+foreach ($t in 'creator-commitment','fair-launch','loyalty-rewards') {
+  cargo build-sbf --manifest-path templates\$t\Cargo.toml --sbf-out-dir target\integration-sbf
+}
 # (the CPMM and CLMM integration artifacts are built from the pinned forks: docs/integration-devnet.md)
 cargo test -p raydium-hook-driver --features local --test local_flows -- --ignored --nocapture
 

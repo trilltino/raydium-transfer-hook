@@ -32,6 +32,27 @@ pub(crate) const ARTIFACTS: &[Artifact] = &[
         source_key: "arbitrary_hook",
     },
     Artifact {
+        name: "creator-commitment",
+        file: "creator_commitment_hook.so",
+        keypair: "creator-commitment-program.json",
+        program_id: |e| e.programs.templates.get("creator_commitment"),
+        source_key: "creator_commitment",
+    },
+    Artifact {
+        name: "fair-launch",
+        file: "fair_launch_hook.so",
+        keypair: "fair-launch-program.json",
+        program_id: |e| e.programs.templates.get("fair_launch"),
+        source_key: "fair_launch",
+    },
+    Artifact {
+        name: "loyalty-rewards",
+        file: "loyalty_rewards_hook.so",
+        keypair: "loyalty-rewards-program.json",
+        program_id: |e| e.programs.templates.get("loyalty_rewards"),
+        source_key: "loyalty_rewards",
+    },
+    Artifact {
         name: "cpmm",
         file: "raydium_cp_swap.so",
         keypair: "cpmm-program.json",

@@ -30,6 +30,8 @@ any Transfer Hook program                   reference hook, arbitrary hook, or y
 | `programs/reference-hook-onchain` | The deployable reference hook (max transfer), with the plumbing a hook needs. |
 | `programs/arbitrary-test-hook` | An unrelated hook: own program id, PDAs, errors and init; two resolved extras; mutates state. Exists to prove nothing in the stack is specific to the reference hook. |
 | `templates/transfer-hook-starter` | The reference hook as a copy-me project; the rule lives in `src/rule.rs`. |
+| `templates/creator-commitment`, `fair-launch`, `loyalty-rewards` | Three example hooks, one folder each, with the custom logic in `src/rule.rs`; see [`template-standard.md`](template-standard.md). |
+| `crates/hook-kit` | What every hook needs: the `Execute` prelude, mint and token reads, PDA creation, and an in-process test world. |
 | `integrations/{cpmm,clmm}` | Plan a swap's two legs and delegate framing to the SDK. Model only. |
 | `integrations/launchlab` | A launch-policy simulator. Model only: LaunchLab's handlers are not public. |
 | `xtask` | `cargo xtask upstream {list,verify,fetch}`: the pinned upstream sources. |

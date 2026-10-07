@@ -11,7 +11,7 @@ use solana_program_test::{BanksClientError, ProgramTest, ProgramTestContext};
 use solana_sdk::{
     instruction::{Instruction, InstructionError},
     pubkey::Pubkey,
-    signature::{Keypair, Signer},
+    signature::{Keypair, Signature, Signer},
     system_instruction,
     transaction::{Transaction, TransactionError},
 };
@@ -59,6 +59,8 @@ pub struct World {
     pub accounts: Vec<Keypair>,
     /// The signer that owns each account (a copy of the payer for payer-owned accounts).
     pub owners: Vec<Keypair>,
+    /// The last transaction sent, to notice a resend (see [`World::send`]).
+    last_signature: Option<Signature>,
 }
 
 fn clone_key(keypair: &Keypair) -> Keypair {
@@ -164,6 +166,7 @@ impl World {
             mint,
             accounts,
             owners,
+            last_signature: None,
         };
         let refs: Vec<&Keypair> = {
             let mut v: Vec<&Keypair> = vec![&world.mint];
@@ -203,26 +206,50 @@ impl World {
         self.owners[index].pubkey()
     }
 
+    /// Send a transaction signed by the payer and `extra_signers`.
+    ///
+    /// The bank treats a transaction identical to one it already processed (same blockhash, same
+    /// instructions) as a duplicate and reports success without running it, which would make a
+    /// "this must fail the second time" test pass or fail by timing. So a resend of the previous
+    /// transaction first moves one slot ahead, keeping the clock, to get a fresh blockhash.
     pub async fn send(
         &mut self,
         instructions: &[Instruction],
         extra_signers: &[&Keypair],
     ) -> Result<(), BanksClientError> {
-        let blockhash = self
-            .context
-            .banks_client
-            .get_latest_blockhash()
-            .await
-            .unwrap();
-        let mut signers: Vec<&Keypair> = vec![&self.context.payer];
-        signers.extend_from_slice(extra_signers);
-        let tx = Transaction::new_signed_with_payer(
-            instructions,
-            Some(&self.context.payer.pubkey()),
-            &signers,
-            blockhash,
-        );
-        self.context.banks_client.process_transaction(tx).await
+        let mut attempts = 0;
+        loop {
+            let blockhash = self
+                .context
+                .banks_client
+                .get_latest_blockhash()
+                .await
+                .unwrap();
+            let mut signers: Vec<&Keypair> = vec![&self.context.payer];
+            signers.extend_from_slice(extra_signers);
+            let tx = Transaction::new_signed_with_payer(
+                instructions,
+                Some(&self.context.payer.pubkey()),
+                &signers,
+                blockhash,
+            );
+            let signature = tx.signatures[0];
+            if self.last_signature == Some(signature) && attempts < 5 {
+                attempts += 1;
+                let time = self.unix_time().await;
+                let slot = self.current_slot().await;
+                self.context.warp_to_slot(slot + 2).unwrap();
+                self.set_unix_time(time).await;
+                continue;
+            }
+            self.last_signature = Some(signature);
+            return self.context.banks_client.process_transaction(tx).await;
+        }
+    }
+
+    async fn current_slot(&mut self) -> u64 {
+        let clock: solana_sdk::clock::Clock = self.context.banks_client.get_sysvar().await.unwrap();
+        clock.slot
     }
 
     pub async fn data(&mut self, key: Pubkey) -> Vec<u8> {
