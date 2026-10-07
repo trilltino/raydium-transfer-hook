@@ -1,0 +1,30 @@
+[package]
+name = "parent-spin-off-hook"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Transfer Hook template: parent-token holders earn a one-time child-token allocation in proportion to balance x time held"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+# Link as a library without exporting the program entrypoint symbol.
+no-entrypoint = []
+
+[dependencies]
+# The balance-time accounting, the state, and the shared instructions come from loyalty-rewards:
+# a spin-off is that primitive plus one rule of its own.
+loyalty-rewards-hook = { path = "../loyalty-rewards", features = ["no-entrypoint"] }
+solana-program = "=2.2.1"
+
+[dev-dependencies]
+hook-kit = { path = "../../crates/hook-kit", features = ["test-support"] }
+solana-program-test = "=2.2.7"
+solana-sdk = "=2.2.2"
+spl-token = { version = "=7.0.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=7.0.0", features = ["no-entrypoint"] }
+spl-transfer-hook-interface = "=0.10.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

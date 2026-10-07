@@ -2901,6 +2901,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "parent-spin-off-hook"
+version = "0.1.0"
+dependencies = [
+ "hook-kit",
+ "loyalty-rewards-hook",
+ "solana-program",
+ "solana-program-test",
+ "solana-sdk",
+ "spl-token",
+ "spl-token-2022",
+ "spl-transfer-hook-interface 0.10.0",
+ "tokio",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3382,10 +3397,12 @@ dependencies = [
 name = "raydium-hook-driver"
 version = "0.1.0"
 dependencies = [
+ "anti-bundle-hook",
  "arbitrary-test-hook",
  "creator-commitment-hook",
  "fair-launch-hook",
  "loyalty-rewards-hook",
+ "parent-spin-off-hook",
  "reference-hook-onchain",
  "serde",
  "serde_json",

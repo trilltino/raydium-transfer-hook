@@ -21,10 +21,8 @@ use solana_sdk::{
     program_pack::Pack,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_instruction,
-    transaction::Transaction,
 };
-use spl_token_2022::{instruction as token_instruction, state::Account as TokenAccount};
+use spl_token_2022::state::Account as TokenAccount;
 
 const POOL: usize = 0;
 const A: usize = 1;
@@ -68,75 +66,18 @@ async fn world_with_holders(revoke_mint_authority: bool) -> World {
 }
 
 async fn create_reward(world: &mut World, token_program: Pubkey) -> Reward {
-    let payer = world.payer();
-    let rent = world.context.banks_client.get_rent().await.unwrap();
-    let mint = Keypair::new();
-    let mut instructions = vec![
-        system_instruction::create_account(
-            &payer,
-            &mint.pubkey(),
-            rent.minimum_balance(82),
-            82,
-            &token_program,
-        ),
-        token_instruction::initialize_mint2(&token_program, &mint.pubkey(), &payer, None, 0)
-            .unwrap(),
-    ];
-    let mut keypairs = vec![clone(&mint)];
-    let mut accounts = Vec::new();
-    let owners = [payer, world.owner(A), world.owner(B), world.owner(C)];
-    for owner in owners {
-        let account = Keypair::new();
-        instructions.push(system_instruction::create_account(
-            &payer,
-            &account.pubkey(),
-            rent.minimum_balance(TokenAccount::LEN),
-            TokenAccount::LEN as u64,
-            &token_program,
-        ));
-        instructions.push(
-            token_instruction::initialize_account3(
-                &token_program,
-                &account.pubkey(),
-                &mint.pubkey(),
-                &owner,
-            )
-            .unwrap(),
-        );
-        accounts.push(account.pubkey());
-        keypairs.push(account);
-    }
-    instructions.push(
-        token_instruction::mint_to(
-            &token_program,
-            &mint.pubkey(),
-            &accounts[0],
-            &payer,
-            &[],
-            1_000_000,
-        )
-        .unwrap(),
-    );
-    let blockhash = world
-        .context
-        .banks_client
-        .get_latest_blockhash()
-        .await
-        .unwrap();
-    let mut signers = vec![&world.context.payer];
-    signers.extend(keypairs.iter());
-    let tx = Transaction::new_signed_with_payer(&instructions, Some(&payer), &signers, blockhash);
-    world
-        .context
-        .banks_client
-        .process_transaction(tx)
-        .await
-        .expect("create the reward mint and accounts");
+    let token = world
+        .create_plain_token(token_program, &[A, B, C], 1_000_000)
+        .await;
     Reward {
-        mint,
+        mint: token.mint,
         token_program,
-        funder_account: accounts[0],
-        holder_accounts: [accounts[1], accounts[2], accounts[3]],
+        funder_account: token.funder_account,
+        holder_accounts: [
+            token.holder_accounts[0],
+            token.holder_accounts[1],
+            token.holder_accounts[2],
+        ],
     }
 }
 
@@ -145,10 +86,7 @@ fn clone(keypair: &Keypair) -> Keypair {
 }
 
 async fn reward_balance(world: &mut World, account: Pubkey) -> u64 {
-    let data = world.data(account).await;
-    TokenAccount::unpack(&data[..TokenAccount::LEN])
-        .unwrap()
-        .amount
+    world.token_balance(account).await
 }
 
 async fn global(world: &mut World) -> Global {

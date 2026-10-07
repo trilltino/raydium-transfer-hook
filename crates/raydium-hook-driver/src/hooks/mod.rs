@@ -2,20 +2,24 @@
 //! setup is delegated to a provider. The flows and the Raydium builders only see [`HookSetup`]; a
 //! new hook adds a provider and nothing else changes.
 
+mod anti_bundle;
 mod arbitrary;
 mod creator_commitment;
 mod fair_launch;
 mod loyalty_rewards;
+mod parent_spin_off;
 mod reference;
 
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey, signature::Keypair};
 use spl_token_2022::extension::transfer_hook::instruction as transfer_hook_instruction;
 use transfer_hook_sdk::SplTransferLeg;
 
+pub use anti_bundle::AntiBundleHook;
 pub use arbitrary::ArbitraryHook;
 pub use creator_commitment::CreatorCommitmentHook;
 pub use fair_launch::FairLaunchHook;
 pub use loyalty_rewards::LoyaltyRewardsHook;
+pub use parent_spin_off::ParentSpinOffHook;
 pub use reference::ReferenceHook;
 
 /// Which side of a swap the hooked token is on.
@@ -90,6 +94,13 @@ pub enum FollowUp {
         label: String,
         instructions: Vec<Instruction>,
         signers: Vec<Keypair>,
+    },
+    /// Send a transaction that the hook must refuse with `code`; nothing may change.
+    SendExpectFailure {
+        label: String,
+        instructions: Vec<Instruction>,
+        signers: Vec<Keypair>,
+        code: u32,
     },
     /// Let at least this many seconds of cluster time pass.
     AdvanceTime(u64),

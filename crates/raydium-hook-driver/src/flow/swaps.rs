@@ -305,6 +305,47 @@ async fn run_follow_ups<C: Chain, B: SwapBuilder>(
                     format!("balance {before} -> {now} (change {change}, expected {min}..={max})"),
                 );
             }
+            FollowUp::SendExpectFailure {
+                label,
+                instructions,
+                signers,
+                code,
+            } => {
+                let refs: Vec<&Keypair> = signers.iter().collect();
+                let hook_program = kit.hook.program_id();
+                let transaction = with_budget(instructions);
+                let sim = chain.simulate(&transaction, &refs).await?;
+                require(
+                    !sim.succeeded,
+                    format!(
+                        "step `{label}`: the hook was supposed to refuse this but it succeeded"
+                    ),
+                )?;
+                require(
+                    sim.program_failed_with(&hook_program, code),
+                    format!(
+                        "step `{label}`: the failure did not come from the hook with code {code:#x}: {:?}",
+                        sim.logs
+                    ),
+                )?;
+                let error = match chain.send(&transaction, &refs).await {
+                    Ok(_) => {
+                        return Err(DriverError::new(format!(
+                            "step `{label}`: the refused transaction was accepted"
+                        )))
+                    }
+                    Err(error) => error,
+                };
+                require(
+                    error.custom_code == Some(code),
+                    format!("step `{label}`: wrong error: {error}"),
+                )?;
+                rec.push(
+                    &label,
+                    None,
+                    format!("refused by the hook with {code:#x}; {}", describe(&sim)),
+                );
+            }
             FollowUp::Swap {
                 label,
                 direction,

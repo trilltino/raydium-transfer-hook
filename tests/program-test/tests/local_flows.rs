@@ -1,11 +1,11 @@
 //! Runs the driver's end-to-end flows inside ProgramTest against the **exact SBF artifacts that
 //! are deployed to the integration devnet** (`target/integration-sbf`), signing the real admin
 //! instructions with the deployer key from `.keys/` (the integration builds bake that key in as
-//! admin). Both hooks (reference and the unrelated arbitrary one) run through both AMMs.
+//! admin). Every hook runs through both AMMs.
 //!
-//! Prerequisites (see docs/forking.md): build the four artifacts into
-//! `target/integration-sbf` and have `.keys/{deployer,cpmm-fee-receiver,...}.json`. The tests are
-//! `#[ignore]` and fail loudly, not silently, when a prerequisite is missing.
+//! Prerequisites (see docs/forking.md): build the artifacts into `target/integration-sbf` and have
+//! `.keys/{deployer,cpmm-fee-receiver,...}.json`. The tests are `#[ignore]` and fail loudly, not
+//! silently, when a prerequisite is missing.
 //!
 //! ```text
 //! cargo test -p program-test-flows --test local_flows -- --ignored --nocapture
@@ -14,12 +14,14 @@
 use std::path::{Path, PathBuf};
 
 use raydium_hook_driver::{
-    env::Programs, run_clmm, run_cpmm, ArbitraryHook, CreatorCommitmentHook, Environment,
-    FairLaunchHook, FlowInputs, HookSetup, LocalChain, LoyaltyRewardsHook, ReferenceHook,
+    env::Programs, run_clmm, run_cpmm, AntiBundleHook, ArbitraryHook, CreatorCommitmentHook,
+    Environment, FairLaunchHook, FlowInputs, HookSetup, LocalChain, LoyaltyRewardsHook,
+    ParentSpinOffHook, ReferenceHook,
 };
 use solana_program_test::{ProgramTest, ProgramTestContext};
 use solana_sdk::{
     account::Account,
+    pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, Signer},
     system_program,
 };
@@ -38,6 +40,24 @@ fn clone(keypair: &Keypair) -> Keypair {
     Keypair::from_bytes(&keypair.to_bytes()).expect("keypair bytes")
 }
 
+/// The template hooks: the key in `programs.templates`, the SBF artifact name, and a program id.
+/// They need no key on disk locally: any program id will do.
+const TEMPLATES: &[(&str, &str, [u8; 32])] = &[
+    ("creator_commitment", "creator_commitment_hook", [0xC0; 32]),
+    ("fair_launch", "fair_launch_hook", [0xF1; 32]),
+    ("loyalty_rewards", "loyalty_rewards_hook", [0xC5; 32]),
+    ("anti_bundle", "anti_bundle_hook", [0xAB; 32]),
+    ("parent_spin_off", "parent_spin_off_hook", [0xE5; 32]),
+];
+
+fn template_id(env_key: &str) -> Pubkey {
+    let (_, _, id) = TEMPLATES
+        .iter()
+        .find(|(key, _, _)| *key == env_key)
+        .unwrap_or_else(|| panic!("unknown template {env_key}"));
+    Pubkey::new_from_array(*id)
+}
+
 struct Setup {
     env: Environment,
     deployer: Keypair,
@@ -46,19 +66,19 @@ struct Setup {
 
 fn setup() -> Setup {
     let artifacts = root().join("target/integration-sbf");
-    for file in [
-        "raydium_cp_swap.so",
-        "raydium_clmm.so",
-        "reference_hook_onchain.so",
-        "arbitrary_test_hook.so",
-        "creator_commitment_hook.so",
-        "fair_launch_hook.so",
-        "loyalty_rewards_hook.so",
-    ] {
+    let required = [
+        "raydium_cp_swap.so".to_string(),
+        "raydium_clmm.so".to_string(),
+        "reference_hook_onchain.so".to_string(),
+        "arbitrary_test_hook.so".to_string(),
+    ]
+    .into_iter()
+    .chain(TEMPLATES.iter().map(|(_, name, _)| format!("{name}.so")));
+    for file in required {
         assert!(
-            artifacts.join(file).exists(),
+            artifacts.join(&file).exists(),
             "missing artifact {}",
-            artifacts.join(file).display()
+            artifacts.join(&file).display()
         );
     }
     std::env::set_var("SBF_OUT_DIR", &artifacts);
@@ -74,18 +94,10 @@ fn setup() -> Setup {
             clmm: Some(key("clmm-program").pubkey().to_string()),
             reference_hook: Some(key("hook-program").pubkey().to_string()),
             arbitrary_hook: Some(key("arbitrary-hook-program").pubkey().to_string()),
-            templates: [
-                (
-                    "creator_commitment".to_string(),
-                    creator_commitment_program().to_string(),
-                ),
-                ("fair_launch".to_string(), fair_launch_program().to_string()),
-                (
-                    "loyalty_rewards".to_string(),
-                    loyalty_rewards_program().to_string(),
-                ),
-            ]
-            .into(),
+            templates: TEMPLATES
+                .iter()
+                .map(|(key, _, id)| (key.to_string(), Pubkey::new_from_array(*id).to_string()))
+                .collect(),
         },
         admin: Some(deployer.pubkey().to_string()),
         cpmm_fee_receiver: Some(fee_receiver.pubkey().to_string()),
@@ -112,13 +124,9 @@ async fn context(setup: &Setup) -> ProgramTestContext {
         setup.env.arbitrary_hook_program().unwrap(),
         None,
     );
-    test.add_program(
-        "creator_commitment_hook",
-        creator_commitment_program(),
-        None,
-    );
-    test.add_program("fair_launch_hook", fair_launch_program(), None);
-    test.add_program("loyalty_rewards_hook", loyalty_rewards_program(), None);
+    for (_, artifact, id) in TEMPLATES {
+        test.add_program(artifact, Pubkey::new_from_array(*id), None);
+    }
     // The deployer is the programs' admin, so it signs and pays.
     test.add_account(
         setup.deployer.pubkey(),
@@ -136,15 +144,6 @@ async fn context(setup: &Setup) -> ProgramTestContext {
     clock.unix_timestamp = 1_700_000_000;
     context.set_sysvar(&clock);
     context
-}
-
-/// The template hooks need no key on disk locally: any program id will do.
-fn creator_commitment_program() -> solana_sdk::pubkey::Pubkey {
-    solana_sdk::pubkey::Pubkey::new_from_array([0xC0; 32])
-}
-
-fn fair_launch_program() -> solana_sdk::pubkey::Pubkey {
-    solana_sdk::pubkey::Pubkey::new_from_array([0xF1; 32])
 }
 
 async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
@@ -189,104 +188,64 @@ async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
     );
 }
 
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn cpmm_with_the_reference_hook() {
-    let setup = setup();
-    let hook = ReferenceHook {
-        program_id: setup.env.reference_hook_program().unwrap(),
+/// One `#[tokio::test]` per (AMM, hook), each building its hook from the `Setup`.
+macro_rules! flows {
+    ($($name:ident: $amm:literal, |$setup:ident| $hook:expr;)+) => {$(
+        #[tokio::test]
+        #[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+        async fn $name() {
+            let $setup = setup();
+            let hook = $hook;
+            run($amm, &hook, &$setup).await;
+        }
+    )+};
+}
+
+flows! {
+    cpmm_with_the_reference_hook: "cpmm", |s| ReferenceHook {
+        program_id: s.env.reference_hook_program().unwrap(),
         max_transfer: 500,
     };
-    run("cpmm", &hook, &setup).await;
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn cpmm_with_an_unrelated_arbitrary_hook() {
-    let setup = setup();
-    let hook = ArbitraryHook {
-        program_id: setup.env.arbitrary_hook_program().unwrap(),
-        max_per_slot: 2,
-    };
-    run("cpmm", &hook, &setup).await;
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn clmm_with_the_reference_hook() {
-    let setup = setup();
-    let hook = ReferenceHook {
-        program_id: setup.env.reference_hook_program().unwrap(),
+    clmm_with_the_reference_hook: "clmm", |s| ReferenceHook {
+        program_id: s.env.reference_hook_program().unwrap(),
         max_transfer: 500,
     };
-    run("clmm", &hook, &setup).await;
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn clmm_with_an_unrelated_arbitrary_hook() {
-    let setup = setup();
-    let hook = ArbitraryHook {
-        program_id: setup.env.arbitrary_hook_program().unwrap(),
+    cpmm_with_an_unrelated_arbitrary_hook: "cpmm", |s| ArbitraryHook {
+        program_id: s.env.arbitrary_hook_program().unwrap(),
         max_per_slot: 2,
     };
-    run("clmm", &hook, &setup).await;
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn cpmm_with_the_creator_commitment_template() {
-    let setup = setup();
-    let hook = CreatorCommitmentHook::new(
-        setup.env.template_program("creator_commitment").unwrap(),
-        90,
-    );
-    run("cpmm", &hook, &setup).await;
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn clmm_with_the_creator_commitment_template() {
-    let setup = setup();
-    let hook = CreatorCommitmentHook::new(
-        setup.env.template_program("creator_commitment").unwrap(),
-        90,
-    );
-    run("clmm", &hook, &setup).await;
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn cpmm_with_the_fair_launch_template() {
-    let setup = setup();
-    let hook = FairLaunchHook::new(setup.env.template_program("fair_launch").unwrap(), 150);
-    run("cpmm", &hook, &setup).await;
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn clmm_with_the_fair_launch_template() {
-    let setup = setup();
-    let hook = FairLaunchHook::new(setup.env.template_program("fair_launch").unwrap(), 150);
-    run("clmm", &hook, &setup).await;
-}
-
-fn loyalty_rewards_program() -> solana_sdk::pubkey::Pubkey {
-    solana_sdk::pubkey::Pubkey::new_from_array([0xC5; 32])
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn cpmm_with_the_loyalty_rewards_template() {
-    let setup = setup();
-    let hook = LoyaltyRewardsHook::new(setup.env.template_program("loyalty_rewards").unwrap(), 100);
-    run("cpmm", &hook, &setup).await;
-}
-
-#[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
-async fn clmm_with_the_loyalty_rewards_template() {
-    let setup = setup();
-    let hook = LoyaltyRewardsHook::new(setup.env.template_program("loyalty_rewards").unwrap(), 100);
-    run("clmm", &hook, &setup).await;
+    clmm_with_an_unrelated_arbitrary_hook: "clmm", |s| ArbitraryHook {
+        program_id: s.env.arbitrary_hook_program().unwrap(),
+        max_per_slot: 2,
+    };
+    cpmm_with_the_creator_commitment_template: "cpmm", |_s| {
+        CreatorCommitmentHook::new(template_id("creator_commitment"), 90)
+    };
+    clmm_with_the_creator_commitment_template: "clmm", |_s| {
+        CreatorCommitmentHook::new(template_id("creator_commitment"), 90)
+    };
+    cpmm_with_the_fair_launch_template: "cpmm", |_s| {
+        FairLaunchHook::new(template_id("fair_launch"), 150)
+    };
+    clmm_with_the_fair_launch_template: "clmm", |_s| {
+        FairLaunchHook::new(template_id("fair_launch"), 150)
+    };
+    cpmm_with_the_loyalty_rewards_template: "cpmm", |_s| {
+        LoyaltyRewardsHook::new(template_id("loyalty_rewards"), 100)
+    };
+    clmm_with_the_loyalty_rewards_template: "clmm", |_s| {
+        LoyaltyRewardsHook::new(template_id("loyalty_rewards"), 100)
+    };
+    cpmm_with_the_anti_bundle_template: "cpmm", |_s| {
+        AntiBundleHook::new(template_id("anti_bundle"))
+    };
+    clmm_with_the_anti_bundle_template: "clmm", |_s| {
+        AntiBundleHook::new(template_id("anti_bundle"))
+    };
+    cpmm_with_the_parent_spin_off_template: "cpmm", |_s| {
+        ParentSpinOffHook::new(template_id("parent_spin_off"), 100)
+    };
+    clmm_with_the_parent_spin_off_template: "clmm", |_s| {
+        ParentSpinOffHook::new(template_id("parent_spin_off"), 100)
+    };
 }

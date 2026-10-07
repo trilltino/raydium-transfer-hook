@@ -15,6 +15,7 @@ members = [
     "templates/anti-bundle",
     "templates/fair-launch",
     "templates/loyalty-rewards",
+    "templates/parent-spin-off",
     "tests/models",
     "tests/program-test",
     "xtask",

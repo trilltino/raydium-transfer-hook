@@ -52,6 +52,16 @@ impl AccountSpec {
     }
 }
 
+/// A plain token made by [`World::create_plain_token`].
+pub struct PlainToken {
+    pub mint: Keypair,
+    pub token_program: Pubkey,
+    /// Owned by the payer, holds the whole supply.
+    pub funder_account: Pubkey,
+    /// One empty account per requested holder, owned by that holder.
+    pub holder_accounts: Vec<Pubkey>,
+}
+
 pub struct World {
     pub context: ProgramTestContext,
     pub program_id: Pubkey,
@@ -290,6 +300,88 @@ impl World {
     pub async fn unix_time(&mut self) -> i64 {
         let clock: solana_sdk::clock::Clock = self.context.banks_client.get_sysvar().await.unwrap();
         clock.unix_timestamp
+    }
+
+    /// Create a plain token (no hook) of either token program, with a payer-owned `funder_account`
+    /// holding `supply` and one empty account per `holders` index, owned by that holder. For rules
+    /// that pay out another token (rewards, spin-offs).
+    pub async fn create_plain_token(
+        &mut self,
+        token_program: Pubkey,
+        holders: &[usize],
+        supply: u64,
+    ) -> PlainToken {
+        use solana_sdk::program_pack::Pack;
+        let payer = self.payer();
+        let rent = self.context.banks_client.get_rent().await.unwrap();
+        let mint = Keypair::new();
+        let mut instructions = vec![
+            system_instruction::create_account(
+                &payer,
+                &mint.pubkey(),
+                rent.minimum_balance(Mint::LEN),
+                Mint::LEN as u64,
+                &token_program,
+            ),
+            token_instruction::initialize_mint2(&token_program, &mint.pubkey(), &payer, None, 0)
+                .unwrap(),
+        ];
+        let mut keypairs = vec![clone_key(&mint)];
+        let mut accounts = Vec::new();
+        let owners: Vec<Pubkey> = std::iter::once(payer)
+            .chain(holders.iter().map(|i| self.owner(*i)))
+            .collect();
+        for owner in owners {
+            let account = Keypair::new();
+            instructions.push(system_instruction::create_account(
+                &payer,
+                &account.pubkey(),
+                rent.minimum_balance(TokenAccount::LEN),
+                TokenAccount::LEN as u64,
+                &token_program,
+            ));
+            instructions.push(
+                token_instruction::initialize_account3(
+                    &token_program,
+                    &account.pubkey(),
+                    &mint.pubkey(),
+                    &owner,
+                )
+                .unwrap(),
+            );
+            accounts.push(account.pubkey());
+            keypairs.push(account);
+        }
+        instructions.push(
+            token_instruction::mint_to(
+                &token_program,
+                &mint.pubkey(),
+                &accounts[0],
+                &payer,
+                &[],
+                supply,
+            )
+            .unwrap(),
+        );
+        let signers: Vec<&Keypair> = keypairs.iter().collect();
+        self.send(&instructions, &signers)
+            .await
+            .expect("create the plain token and its accounts");
+        PlainToken {
+            mint,
+            token_program,
+            funder_account: accounts[0],
+            holder_accounts: accounts[1..].to_vec(),
+        }
+    }
+
+    /// The balance of any token account (either token program).
+    pub async fn token_balance(&mut self, account: Pubkey) -> u64 {
+        use solana_sdk::program_pack::Pack;
+        let data = self.data(account).await;
+        TokenAccount::unpack(&data[..TokenAccount::LEN])
+            .expect("token account")
+            .amount
     }
 
     /// Give the mint an end to minting (rules that assume a fixed supply need it).
