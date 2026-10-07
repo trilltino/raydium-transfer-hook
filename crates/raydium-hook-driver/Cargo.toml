@@ -18,6 +18,7 @@ solana-rpc-client = "=2.2.7"
 spl-token = "=7.0.0"
 spl-token-2022 = { version = "=7.0.0", features = ["no-entrypoint"] }
 spl-transfer-hook-interface = "=0.10.0"
+raydium-adapters = { path = "../raydium-adapters" }
 transfer-hook-sdk = { path = "../transfer-hook-sdk" }
 reference-hook-onchain = { path = "../../programs/reference-hook-onchain", features = ["no-entrypoint"] }
 arbitrary-test-hook = { path = "../../programs/arbitrary-test-hook", features = ["no-entrypoint"] }

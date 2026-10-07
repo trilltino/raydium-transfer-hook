@@ -23,7 +23,7 @@ use spl_token_2022::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MintFeatures {
     /// A TransferHook extension, with **no hook program yet**: the hook is switched on later (see
-    /// [`crate::hooks::HookSetup`]).
+    /// the hook setup providers of `raydium-hook-driver`).
     pub hook: bool,
     /// A TransferFee extension charging this many basis points (0 for none).
     pub transfer_fee_bps: u16,

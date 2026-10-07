@@ -5,17 +5,18 @@
 //! * [`hooks`]: hook setup providers, so a new hook adds a provider and nothing else (or, for a
 //!   hook known only by program id, a JSON description: [`hooks::GenericExternalHook`]).
 //! * [`readiness`]: the transport facts of a hooked mint, kept apart from business readiness.
-//! * [`cpmm`], [`clmm`]: instruction builders for the Raydium programs.
+//! * [`cpmm`], [`clmm`], [`swap`], [`token`]: instruction builders for the Raydium programs, from
+//!   the `raydium-adapters` crate.
 //! * [`flow`]: the checked end-to-end flows.
 
 pub mod chain;
-pub mod clmm;
-pub mod cpmm;
 pub mod env;
 pub mod flow;
 pub mod hooks;
 pub mod readiness;
-pub mod token;
+
+/// The instruction builders for the external Raydium programs live in `raydium-adapters`.
+pub use raydium_adapters::{clmm, cpmm, swap, token};
 
 #[cfg(feature = "local")]
 pub use chain::LocalChain;

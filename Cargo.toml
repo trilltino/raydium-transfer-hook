@@ -4,6 +4,7 @@ members = [
     "crates/hook-template-sdk",
     "crates/hook-policy-model",
     "crates/transfer-hook-sdk",
+    "crates/raydium-adapters",
     "crates/raydium-hook-driver",
     "crates/raydium-hook-cli",
     "integrations/cpmm",

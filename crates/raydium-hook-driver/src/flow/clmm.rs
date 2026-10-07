@@ -1,17 +1,15 @@
 //! The CLMM flow.
 
+use raydium_adapters::swap::clmm_swap_instruction;
 use solana_sdk::{
     instruction::Instruction,
     signature::{Keypair, Signer},
-};
-use transfer_hook_sdk::{
-    build_clmm_swap_v2, frame_clmm_or_passthrough, ClmmSwapAccounts, ClmmSwapArgs,
 };
 
 use super::{recorder::Recorder, support::*, swaps::*, world::*, FlowInputs};
 use crate::{
     chain::{Chain, DriverError, Result},
-    clmm::{Clmm, ClmmPool, MEMO_PROGRAM_ID},
+    clmm::{Clmm, ClmmPool},
     env::Evidence,
 };
 
@@ -67,43 +65,27 @@ impl SwapBuilder for ClmmSwaps<'_> {
             expected_out,
         )
         .await?;
-        let accounts = ClmmSwapAccounts {
-            payer,
-            amm_config: self.pool.amm_config,
-            pool_state: self.pool.pool_state,
-            input_token_account: in_account,
-            output_token_account: out_account,
-            input_vault,
-            output_vault,
-            observation_state: self.pool.observation,
-            token_program: spl_token::id(),
-            token_program_2022: spl_token_2022::id(),
-            memo_program: MEMO_PROGRAM_ID,
-            input_vault_mint: input_mint,
-            output_vault_mint: output_mint,
-        };
-        // zero_for_one (hooked token in, it is mint_0) walks A(0) then A(-600). After that swap
-        // the tick is -1, so the reverse swap starts in A(-600) then A(0).
+        // zero_for_one (mint_0 in) walks A(0) then A(-600). After that swap the tick is -1, so the
+        // reverse swap starts in A(-600) then A(0).
         let ticks = if mint0_in {
             self.pool.tick_arrays
         } else {
             [self.pool.tick_arrays[1], self.pool.tick_arrays[0]]
         };
-        let mut instruction = build_clmm_swap_v2(
-            self.clmm.program_id,
-            &accounts,
+        clmm_swap_instruction(
+            &self.clmm,
+            &self.pool,
+            payer,
+            mint0_in,
+            in_account,
+            out_account,
+            amount_in,
+            1,
             &ticks,
-            None,
-            ClmmSwapArgs {
-                amount: amount_in,
-                other_amount_threshold: 1,
-                sqrt_price_limit_x64: 0,
-                is_base_input: true,
-            },
-        );
-        frame_clmm_or_passthrough(&mut instruction, 2, 0, &input_leg, &output_leg)
-            .map_err(|e| DriverError::new(format!("framing the CLMM swap failed: {e:?}")))?;
-        Ok(instruction)
+            &input_leg,
+            &output_leg,
+        )
+        .map_err(|e| DriverError::new(format!("framing the CLMM swap failed: {e:?}")))
     }
 }
 

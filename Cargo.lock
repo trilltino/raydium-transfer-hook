@@ -3402,6 +3402,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "raydium-adapters"
+version = "0.1.0"
+dependencies = [
+ "solana-program",
+ "solana-sdk",
+ "spl-token",
+ "spl-token-2022",
+ "transfer-hook-sdk",
+]
+
+[[package]]
 name = "raydium-hook-cli"
 version = "0.1.0"
 dependencies = [
@@ -3424,6 +3435,7 @@ dependencies = [
  "fair-launch-hook",
  "loyalty-rewards-hook",
  "parent-spin-off-hook",
+ "raydium-adapters",
  "reference-hook-onchain",
  "serde",
  "serde_json",

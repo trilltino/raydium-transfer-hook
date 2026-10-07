@@ -1,7 +1,7 @@
 //! The CPMM flow.
 
+use raydium_adapters::swap::cpmm_swap_instruction;
 use solana_sdk::{instruction::Instruction, signature::Signer};
-use transfer_hook_sdk::{build_cpmm_swap_base_input_v1, frame_cpmm_or_passthrough};
 
 use super::{recorder::Recorder, support::*, swaps::*, world::*, FlowInputs};
 use crate::{
@@ -50,11 +50,19 @@ impl SwapBuilder for CpmmSwaps<'_> {
             expected_out,
         )
         .await?;
-        let mut instruction =
-            build_cpmm_swap_base_input_v1(self.cpmm.program_id, &accounts, amount_in, 1);
-        frame_cpmm_or_passthrough(&mut instruction, &input_leg, &output_leg)
-            .map_err(|e| DriverError::new(format!("framing the CPMM swap failed: {e:?}")))?;
-        Ok(instruction)
+        cpmm_swap_instruction(
+            &self.cpmm,
+            &self.pool,
+            payer,
+            mint0_in,
+            in_account,
+            out_account,
+            amount_in,
+            1,
+            &input_leg,
+            &output_leg,
+        )
+        .map_err(|e| DriverError::new(format!("framing the CPMM swap failed: {e:?}")))
     }
 }
 
