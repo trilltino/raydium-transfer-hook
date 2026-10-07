@@ -51,7 +51,7 @@ pub(crate) fn rows(subject: &Subject<'_>, evidence: &[Evidence]) -> Vec<Row> {
     let amm = subject.amm.to_uppercase();
     let swaps: Vec<&Evidence> = evidence
         .iter()
-        .filter(|e| e.step.starts_with("hooked swap"))
+        .filter(|e| e.step.starts_with("hooked swap ("))
         .collect();
     let refusals: Vec<&Evidence> = evidence
         .iter()
@@ -384,6 +384,33 @@ mod tests {
         assert_eq!(*outcome(&rows, "Atomic rollback"), Outcome::NotApplicable);
         assert_eq!(*outcome(&rows, "No hook allowlist"), Outcome::NotApplicable);
         assert_eq!(*outcome(&rows, "CLMM hooked swap"), Outcome::Pass);
+    }
+
+    #[test]
+    fn extra_swaps_from_other_checks_do_not_count_as_the_standard_hooked_swaps() {
+        let program = Pubkey::new_unique();
+        let r = readiness(program);
+        let subject = Subject {
+            amm: "cpmm",
+            hook_name: "third-party",
+            program,
+            readiness: Some(&r),
+            known_to_the_repository: false,
+        };
+        let mut run = full_run();
+        // Steps the exact-output and liquidity checks add; their details carry no "hook ran once".
+        run.push(evidence(
+            "swap on the second pool (hooked token in)",
+            "simulation ok",
+            Some("x"),
+        ));
+        run.push(evidence(
+            "hooked exact-output swap (exact output, hooked token in)",
+            "received 5 for 7",
+            Some("y"),
+        ));
+        let rows = rows(&subject, &run);
+        assert_eq!(*outcome(&rows, "CPMM hook Execute"), Outcome::Pass);
     }
 
     #[test]

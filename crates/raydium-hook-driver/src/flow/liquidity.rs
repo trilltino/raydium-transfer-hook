@@ -94,7 +94,7 @@ async fn accrue_fees<C: Chain>(
         };
         let (signature, detail) = run_hooked(chain, kit, label, instruction).await?;
         rec.push(
-            &format!("hooked swap on the second pool ({label})"),
+            &format!("swap on the second pool ({label})"),
             Some(signature),
             detail,
         );

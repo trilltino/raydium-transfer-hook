@@ -165,7 +165,28 @@ pub(crate) fn fetch(names: &[&str], hook: bool, locked: bool) -> Result<()> {
     Ok(())
 }
 
+/// Whether `dir` is the root of its own git repository. A cached build directory can keep an empty
+/// `.git` after its contents are pruned, and git then walks up and answers for the repository that
+/// contains it (this one), which would make a stale or missing checkout look like a wrong revision.
+fn is_own_repository(dir: &Path) -> bool {
+    let Ok(top) = git(dir, &["rev-parse", "--show-toplevel"]) else {
+        return false;
+    };
+    match (std::fs::canonicalize(top), std::fs::canonicalize(dir)) {
+        (Ok(top), Ok(dir)) => top == dir,
+        _ => false,
+    }
+}
+
 fn checkout(dir: &Path, url: &str, revision: &str, locked: bool) -> Result<()> {
+    // `dir` is a build cache under `target/upstream`, so a damaged checkout is safe to discard.
+    if dir.join(".git").exists() && !is_own_repository(dir) {
+        println!(
+            "{} is not a usable git checkout; fetching it again",
+            dir.display()
+        );
+        std::fs::remove_dir_all(dir)?;
+    }
     if !dir.join(".git").exists() {
         std::fs::create_dir_all(dir)?;
         git(dir, &["init", "-q"])?;
