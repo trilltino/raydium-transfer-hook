@@ -80,6 +80,13 @@ jobs:
         run: |
           cargo test -p reference-hook-onchain -- --ignored
           cargo test -p program-test-flows -p third-party-hook-acceptance -- --ignored
+      - name: benchmark harness smoke test (quick sweep; the full sweep is `cargo run --release -p hook-bench`)
+        env:
+          RTH_PROFILE: localnet
+          SBF_OUT_DIR: ${{ github.workspace }}/target/localnet-sbf
+        run: |
+          cargo build-sbf --manifest-path programs/bench-hook/Cargo.toml --sbf-out-dir "${{ github.workspace }}/target/localnet-sbf"
+          cargo test -p hook-bench -- --ignored
       - name: solana-test-validator E2E (every hook through CPMM and CLMM, and the starter built from source)
         run: cargo xtask localnet e2e --skip-build
       - name: git status is clean after fetching and building upstream

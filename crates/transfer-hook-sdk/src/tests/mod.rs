@@ -3,6 +3,7 @@
 
 mod frame_tests;
 mod golden_tests;
+mod pair_tests;
 mod resolve_tests;
 
 use solana_program::pubkey::Pubkey;

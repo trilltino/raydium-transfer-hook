@@ -163,7 +163,17 @@ fn integration_setup() -> Setup {
 }
 
 pub async fn context(setup: &Setup) -> ProgramTestContext {
+    context_with(setup, |_| {}).await
+}
+
+/// [`context`], with `extra` run on the `ProgramTest` first: add a program of your own (the
+/// benchmark hook, say) to the same chain.
+pub async fn context_with(
+    setup: &Setup,
+    extra: impl FnOnce(&mut ProgramTest),
+) -> ProgramTestContext {
     let mut test = ProgramTest::default();
+    extra(&mut test);
     test.add_program("raydium_cp_swap", setup.env.cpmm_program().unwrap(), None);
     test.add_program("raydium_clmm", setup.env.clmm_program().unwrap(), None);
     test.add_program(
@@ -217,12 +227,31 @@ pub async fn run_with(
     transfer_fee_bps: u16,
     setup: &Setup,
 ) {
+    run_full(amm, hook, second, transfer_fee_bps, false, false, setup).await
+}
+
+/// [`run_with`], optionally with the exact-output swap checks too (CPMM only).
+pub async fn run_full(
+    amm: &str,
+    hook: &dyn HookSetup,
+    second: Option<&dyn HookSetup>,
+    transfer_fee_bps: u16,
+    exact_output: bool,
+    liquidity: bool,
+    setup: &Setup,
+) {
     let mut context = context(setup).await;
     let mut chain = LocalChain::with_payer(&mut context, clone(&setup.deployer));
     let mut inputs = FlowInputs::new(&setup.env, hook, setup.fee_receiver.as_ref())
         .with_transfer_fee(transfer_fee_bps);
     if let Some(second) = second {
         inputs = inputs.with_second_hook(second);
+    }
+    if exact_output {
+        inputs = inputs.with_exact_output();
+    }
+    if liquidity {
+        inputs = inputs.with_liquidity();
     }
     println!(
         "== {amm} through {}{}{}",
@@ -248,6 +277,30 @@ pub async fn run_with(
         .filter(|e| e.step.starts_with("hooked swap"))
     {
         println!("   {}: {}", e.step, e.detail);
+    }
+    if exact_output {
+        assert!(
+            evidence
+                .iter()
+                .filter(|e| e.step.starts_with("hooked exact-output swap"))
+                .count()
+                == 2,
+            "the flow must record the exact-output swap in both directions"
+        );
+    }
+    if liquidity {
+        for step in [
+            "hooked pool creation (initialize_v2)",
+            "hooked deposit (deposit_v2)",
+            "hooked withdraw (withdraw_v2)",
+            "hooked protocol-fee collection (collect_protocol_fee_v2)",
+            "hooked fund-fee collection (collect_fund_fee_v2)",
+        ] {
+            assert!(
+                evidence.iter().any(|e| e.step == step),
+                "the flow must record `{step}`"
+            );
+        }
     }
     println!(
         "   largest transaction: {} bytes (limit 1232)",

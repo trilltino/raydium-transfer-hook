@@ -1,0 +1,964 @@
+{
+  "environment": {
+    "runtime": "solana-program-test executing the SBF binaries (the real runtime, in-process; not a validator, not a cluster under load)",
+    "toolchain": "solana-cargo-build-sbf 4.0.0; platform-tools v1.53",
+    "artifacts": [
+      [
+        "bench_hook.so",
+        "0bac29cc75f848ce3c957b724eb2697116902eaa629199a655b6d5b328e6e752"
+      ],
+      [
+        "raydium_cp_swap.so",
+        "ecb5ec0b82be5afa736b782c2aa4115d69bb22bcba6d4bfab60f277de33781ce"
+      ],
+      [
+        "raydium_clmm.so",
+        "3d4151fab3a1ec83ee68974ce8c517b410a9dee64f93022cdc4d5f7a497f3757"
+      ]
+    ],
+    "compute_unit_limit": 1400000,
+    "packet_data_size": 1232
+  },
+  "transfers": [
+    {
+      "extras": 0,
+      "writable_counter": false,
+      "hook_accounts": 2,
+      "validation_list_bytes": 16,
+      "validation_list_rent_lamports": 1002240,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 385,
+        "accounts": 8,
+        "writable_accounts": 3,
+        "compute_units": 19338,
+        "error": null
+      },
+      "legacy_with_heap_frame": null,
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 266,
+        "accounts": 8,
+        "writable_accounts": 3,
+        "compute_units": 19338,
+        "error": null
+      },
+      "lookup_table_entries": 5
+    },
+    {
+      "extras": 1,
+      "writable_counter": false,
+      "hook_accounts": 3,
+      "validation_list_bytes": 51,
+      "validation_list_rent_lamports": 1245840,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 418,
+        "accounts": 9,
+        "writable_accounts": 3,
+        "compute_units": 30831,
+        "error": null
+      },
+      "legacy_with_heap_frame": null,
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 268,
+        "accounts": 9,
+        "writable_accounts": 3,
+        "compute_units": 30831,
+        "error": null
+      },
+      "lookup_table_entries": 6
+    },
+    {
+      "extras": 2,
+      "writable_counter": false,
+      "hook_accounts": 4,
+      "validation_list_bytes": 86,
+      "validation_list_rent_lamports": 1489440,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 451,
+        "accounts": 10,
+        "writable_accounts": 3,
+        "compute_units": 45701,
+        "error": null
+      },
+      "legacy_with_heap_frame": null,
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 270,
+        "accounts": 10,
+        "writable_accounts": 3,
+        "compute_units": 45701,
+        "error": null
+      },
+      "lookup_table_entries": 7
+    },
+    {
+      "extras": 4,
+      "writable_counter": false,
+      "hook_accounts": 6,
+      "validation_list_bytes": 156,
+      "validation_list_rent_lamports": 1976640,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 517,
+        "accounts": 12,
+        "writable_accounts": 3,
+        "compute_units": 62787,
+        "error": null
+      },
+      "legacy_with_heap_frame": null,
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 274,
+        "accounts": 12,
+        "writable_accounts": 3,
+        "compute_units": 62787,
+        "error": null
+      },
+      "lookup_table_entries": 9
+    },
+    {
+      "extras": 8,
+      "writable_counter": false,
+      "hook_accounts": 10,
+      "validation_list_bytes": 296,
+      "validation_list_rent_lamports": 2951040,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 649,
+        "accounts": 16,
+        "writable_accounts": 3,
+        "compute_units": 139762,
+        "error": null
+      },
+      "legacy_with_heap_frame": null,
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 282,
+        "accounts": 16,
+        "writable_accounts": 3,
+        "compute_units": 139762,
+        "error": null
+      },
+      "lookup_table_entries": 13
+    },
+    {
+      "extras": 10,
+      "writable_counter": false,
+      "hook_accounts": 12,
+      "validation_list_bytes": 366,
+      "validation_list_rent_lamports": 3438240,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 715,
+        "accounts": 18,
+        "writable_accounts": 3,
+        "compute_units": 137107,
+        "error": null
+      },
+      "legacy_with_heap_frame": null,
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 286,
+        "accounts": 18,
+        "writable_accounts": 3,
+        "compute_units": 137107,
+        "error": null
+      },
+      "lookup_table_entries": 15
+    },
+    {
+      "extras": 12,
+      "writable_counter": false,
+      "hook_accounts": 14,
+      "validation_list_bytes": 436,
+      "validation_list_rent_lamports": 3925440,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 781,
+        "accounts": 20,
+        "writable_accounts": 3,
+        "compute_units": 167583,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [2] | Program log: Error: memory allocation failed, out of memory | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 91847 of 1324264 compute units | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 167433 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": true,
+        "bytes": 789,
+        "accounts": 20,
+        "writable_accounts": 3,
+        "compute_units": 167845,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [2] | Program log: Error: memory allocation failed, out of memory | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 91847 of 1324058 compute units | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 167489 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 290,
+        "accounts": 20,
+        "writable_accounts": 3,
+        "compute_units": 167583,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [2] | Program log: Error: memory allocation failed, out of memory | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 91847 of 1324264 compute units | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 167433 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete]"
+      },
+      "lookup_table_entries": 17
+    },
+    {
+      "extras": 14,
+      "writable_counter": false,
+      "hook_accounts": 16,
+      "validation_list_bytes": 506,
+      "validation_list_rent_lamports": 4412640,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 847,
+        "accounts": 22,
+        "writable_accounts": 3,
+        "compute_units": 184837,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [2] | Program log: Error: memory allocation failed, out of memory | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 96433 of 1311596 compute units | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 184687 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": true,
+        "bytes": 855,
+        "accounts": 22,
+        "writable_accounts": 3,
+        "compute_units": 185099,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [2] | Program log: Error: memory allocation failed, out of memory | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 96433 of 1311390 compute units | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 184743 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 294,
+        "accounts": 22,
+        "writable_accounts": 3,
+        "compute_units": 184837,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [2] | Program log: Error: memory allocation failed, out of memory | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 96433 of 1311596 compute units | Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 184687 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete]"
+      },
+      "lookup_table_entries": 19
+    },
+    {
+      "extras": 16,
+      "writable_counter": false,
+      "hook_accounts": 18,
+      "validation_list_bytes": 576,
+      "validation_list_rent_lamports": 4899840,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 913,
+        "accounts": 24,
+        "writable_accounts": 3,
+        "compute_units": 87814,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 87664 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": true,
+        "bytes": 921,
+        "accounts": 24,
+        "writable_accounts": 3,
+        "compute_units": 88020,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 87664 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 298,
+        "accounts": 24,
+        "writable_accounts": 3,
+        "compute_units": 87814,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 87664 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "lookup_table_entries": 21
+    },
+    {
+      "extras": 24,
+      "writable_counter": false,
+      "hook_accounts": 26,
+      "validation_list_bytes": 856,
+      "validation_list_rent_lamports": 6848640,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 1177,
+        "accounts": 32,
+        "writable_accounts": 3,
+        "compute_units": 79081,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 78931 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": true,
+        "bytes": 1185,
+        "accounts": 32,
+        "writable_accounts": 3,
+        "compute_units": 79287,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 78931 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 314,
+        "accounts": 32,
+        "writable_accounts": 3,
+        "compute_units": 79081,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 78931 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "lookup_table_entries": 29
+    },
+    {
+      "extras": 32,
+      "writable_counter": false,
+      "hook_accounts": 34,
+      "validation_list_bytes": 1136,
+      "validation_list_rent_lamports": 8797440,
+      "legacy": {
+        "fits_a_packet": false,
+        "bytes": 1441,
+        "accounts": 40,
+        "writable_accounts": 3,
+        "compute_units": 101289,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 101139 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": false,
+        "bytes": 1449,
+        "accounts": 40,
+        "writable_accounts": 3,
+        "compute_units": 101495,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 101139 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 330,
+        "accounts": 40,
+        "writable_accounts": 3,
+        "compute_units": 101289,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 101139 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "lookup_table_entries": 37
+    },
+    {
+      "extras": 40,
+      "writable_counter": false,
+      "hook_accounts": 42,
+      "validation_list_bytes": 1416,
+      "validation_list_rent_lamports": 10746240,
+      "legacy": {
+        "fits_a_packet": false,
+        "bytes": 1705,
+        "accounts": 48,
+        "writable_accounts": 3,
+        "compute_units": 77899,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 77749 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": false,
+        "bytes": 1713,
+        "accounts": 48,
+        "writable_accounts": 3,
+        "compute_units": 78105,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 77749 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 346,
+        "accounts": 48,
+        "writable_accounts": 3,
+        "compute_units": 77899,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 77749 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "lookup_table_entries": 45
+    },
+    {
+      "extras": 48,
+      "writable_counter": false,
+      "hook_accounts": 50,
+      "validation_list_bytes": 1696,
+      "validation_list_rent_lamports": 12695040,
+      "legacy": {
+        "fits_a_packet": false,
+        "bytes": 1969,
+        "accounts": 56,
+        "writable_accounts": 3,
+        "compute_units": 93447,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 93297 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": false,
+        "bytes": 1977,
+        "accounts": 56,
+        "writable_accounts": 3,
+        "compute_units": 93653,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 93297 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 362,
+        "accounts": 56,
+        "writable_accounts": 3,
+        "compute_units": 93447,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 93297 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "lookup_table_entries": 53
+    },
+    {
+      "extras": 56,
+      "writable_counter": false,
+      "hook_accounts": 58,
+      "validation_list_bytes": 1976,
+      "validation_list_rent_lamports": 14643840,
+      "legacy": {
+        "fits_a_packet": false,
+        "bytes": 2233,
+        "accounts": 64,
+        "writable_accounts": 3,
+        "compute_units": 73461,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 73311 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": false,
+        "bytes": 2241,
+        "accounts": 64,
+        "writable_accounts": 3,
+        "compute_units": 73667,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 73311 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 378,
+        "accounts": 64,
+        "writable_accounts": 3,
+        "compute_units": 73461,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 73311 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "lookup_table_entries": 61
+    },
+    {
+      "extras": 64,
+      "writable_counter": false,
+      "hook_accounts": 66,
+      "validation_list_bytes": 2256,
+      "validation_list_rent_lamports": 16592640,
+      "legacy": {
+        "fits_a_packet": false,
+        "bytes": 2497,
+        "accounts": 72,
+        "writable_accounts": 3,
+        "compute_units": 89071,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 88921 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": false,
+        "bytes": 2505,
+        "accounts": 72,
+        "writable_accounts": 3,
+        "compute_units": 89277,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 88921 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 394,
+        "accounts": 72,
+        "writable_accounts": 3,
+        "compute_units": 89071,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 88921 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "lookup_table_entries": 69
+    },
+    {
+      "extras": 1,
+      "writable_counter": true,
+      "hook_accounts": 3,
+      "validation_list_bytes": 51,
+      "validation_list_rent_lamports": 1245840,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 418,
+        "accounts": 9,
+        "writable_accounts": 4,
+        "compute_units": 39356,
+        "error": null
+      },
+      "legacy_with_heap_frame": null,
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 268,
+        "accounts": 9,
+        "writable_accounts": 4,
+        "compute_units": 39356,
+        "error": null
+      },
+      "lookup_table_entries": 6
+    },
+    {
+      "extras": 8,
+      "writable_counter": true,
+      "hook_accounts": 10,
+      "validation_list_bytes": 296,
+      "validation_list_rent_lamports": 2951040,
+      "legacy": {
+        "fits_a_packet": true,
+        "bytes": 649,
+        "accounts": 16,
+        "writable_accounts": 4,
+        "compute_units": 127287,
+        "error": null
+      },
+      "legacy_with_heap_frame": null,
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 282,
+        "accounts": 16,
+        "writable_accounts": 4,
+        "compute_units": 127287,
+        "error": null
+      },
+      "lookup_table_entries": 13
+    },
+    {
+      "extras": 32,
+      "writable_counter": true,
+      "hook_accounts": 34,
+      "validation_list_bytes": 1136,
+      "validation_list_rent_lamports": 8797440,
+      "legacy": {
+        "fits_a_packet": false,
+        "bytes": 1441,
+        "accounts": 40,
+        "writable_accounts": 4,
+        "compute_units": 78637,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 78487 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "legacy_with_heap_frame": {
+        "fits_a_packet": false,
+        "bytes": 1449,
+        "accounts": 40,
+        "writable_accounts": 4,
+        "compute_units": 78843,
+        "error": "the simulation failed: Error processing Instruction 2: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 78487 of 1399700 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "v0_lookup_table": {
+        "fits_a_packet": true,
+        "bytes": 330,
+        "accounts": 40,
+        "writable_accounts": 4,
+        "compute_units": 78637,
+        "error": "the simulation failed: Error processing Instruction 1: Program failed to complete [Program ComputeBudget111111111111111111111111111111 invoke [1] | Program ComputeBudget111111111111111111111111111111 success | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1] | Program log: Instruction: TransferChecked | Program log: Error: memory allocation failed, out of memory | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 78487 of 1399850 compute units | Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked]"
+      },
+      "lookup_table_entries": 37
+    }
+  ],
+  "swaps": [
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 0,
+      "writable_counter": false,
+      "compute_units_in": 64610,
+      "compute_units_out": 64657,
+      "largest_transaction_bytes": 870,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 1,
+      "writable_counter": false,
+      "compute_units_in": 76964,
+      "compute_units_out": 77011,
+      "largest_transaction_bytes": 870,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 4,
+      "writable_counter": false,
+      "compute_units_in": 121148,
+      "compute_units_out": 121195,
+      "largest_transaction_bytes": 870,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 8,
+      "writable_counter": false,
+      "compute_units_in": 160316,
+      "compute_units_out": 160363,
+      "largest_transaction_bytes": 932,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 10,
+      "writable_counter": false,
+      "compute_units_in": 228961,
+      "compute_units_out": 229008,
+      "largest_transaction_bytes": 998,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 12,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 870,
+      "completed": false,
+      "error": "hooked token in: swap simulation failed: Some(DriverError { message: \"Error processing Instruction 1: Program failed to complete\", custom_code: None }) [\"Program ComputeBudget111111111111111111111111111111 invoke [1]\", \"Program ComputeBudget111111111111111111111111111111 success\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ invoke [1]\", \"Program log: Instruction: SwapBaseInputV2\", \"Program data: QMbN6CYIceJirS9J8vOr427CVUUd+RtfFTDfLtGsYNVwQ5ldCCtIJEBCDwAAAAAAQEIPAAAAAAAKAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAG8AClFxb5zNIHNc4EfnJUie74Gqd0aD9YLW63JStL1tdKxFJ/uXJpw9+xOCJmqIH2UdcrpT0V79hVdZ9gnkPMuAQAAAAAAAAAAAAAAAAAAAAE=\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [2]\", \"Program log: Instruction: TransferChecked\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [3]\", \"Program log: Error: memory allocation failed, out of memory\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 90347 of 1280226 compute units\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 162935 of 1352814 compute units\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ consumed 209971 of 1399850 compute units\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ failed: Program failed to complete\"]"
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 14,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 870,
+      "completed": false,
+      "error": "hooked token in: swap simulation failed: Some(DriverError { message: \"Error processing Instruction 1: Program failed to complete\", custom_code: None }) [\"Program ComputeBudget111111111111111111111111111111 invoke [1]\", \"Program ComputeBudget111111111111111111111111111111 success\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ invoke [1]\", \"Program log: Instruction: SwapBaseInputV2\", \"Program data: QMbN6CYIceLv/GWhPlpWZhnMgDXcWW3QImuqOPNd7RGznRbIHbkbY0BCDwAAAAAAQEIPAAAAAAAKAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAF6c7RDb8jbVRB/IdBtud41lqByxByh8QScamRSJ+bU6r1yanxengKJxWBYdmuc3vYsx9Bgv/yBNkJnOCalTgiWAQAAAAAAAAAAAAAAAAAAAAE=\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [2]\", \"Program log: Instruction: TransferChecked\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [3]\", \"Program log: Error: memory allocation failed, out of memory\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 106933 of 1253149 compute units\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 204189 of 1350405 compute units\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ consumed 253634 of 1399850 compute units\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ failed: Program failed to complete\"]"
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 16,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 870,
+      "completed": false,
+      "error": "hooked token in: swap simulation failed: Some(DriverError { message: \"Error processing Instruction 1: Program failed to complete\", custom_code: None }) [\"Program ComputeBudget111111111111111111111111111111 invoke [1]\", \"Program ComputeBudget111111111111111111111111111111 success\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ invoke [1]\", \"Program log: Instruction: SwapBaseInputV2\", \"Program data: QMbN6CYIceIiqbttiFC+UFk7WKe7YjURcTSVkaDDiA7P9+sAx0HyI0BCDwAAAAAAQEIPAAAAAAAKAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAECP0i5giWrw6Y/0vDBU/FVaSBu5j1U92bQx94MG8xU0j7hJm8eWgg74eST2NLXPEwLE7pA1qso2UqJDa9hVFXcAQAAAAAAAAAAAAAAAAAAAAE=\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [2]\", \"Program log: Instruction: TransferChecked\", \"Program log: Error: memory allocation failed, out of memory\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 89166 of 1347861 compute units\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: SBF program panicked\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ consumed 141155 of 1399850 compute units\", \"Program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ failed: Program failed to complete\"]"
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 24,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 870,
+      "completed": false,
+      "error": "the transaction is 1460 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 2,
+      "extras": 0,
+      "writable_counter": false,
+      "compute_units_in": 86120,
+      "compute_units_out": 86167,
+      "largest_transaction_bytes": 903,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 2,
+      "extras": 1,
+      "writable_counter": false,
+      "compute_units_in": 101828,
+      "compute_units_out": 101875,
+      "largest_transaction_bytes": 903,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 2,
+      "extras": 4,
+      "writable_counter": false,
+      "compute_units_in": 193196,
+      "compute_units_out": 193243,
+      "largest_transaction_bytes": 966,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 2,
+      "extras": 6,
+      "writable_counter": false,
+      "compute_units_in": 242654,
+      "compute_units_out": 242701,
+      "largest_transaction_bytes": 1098,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 2,
+      "extras": 8,
+      "writable_counter": false,
+      "compute_units_in": 295532,
+      "compute_units_out": 295579,
+      "largest_transaction_bytes": 1230,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 2,
+      "extras": 10,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 903,
+      "completed": false,
+      "error": "the transaction is 1362 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 2,
+      "extras": 12,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 903,
+      "completed": false,
+      "error": "the transaction is 1494 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 1,
+      "writable_counter": true,
+      "compute_units_in": 73483,
+      "compute_units_out": 73530,
+      "largest_transaction_bytes": 870,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "cpmm",
+      "hooked_legs": 1,
+      "extras": 8,
+      "writable_counter": true,
+      "compute_units_in": 183835,
+      "compute_units_out": 183882,
+      "largest_transaction_bytes": 932,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 0,
+      "writable_counter": false,
+      "compute_units_in": 102487,
+      "compute_units_out": 99703,
+      "largest_transaction_bytes": 895,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 1,
+      "writable_counter": false,
+      "compute_units_in": 99777,
+      "compute_units_out": 96993,
+      "largest_transaction_bytes": 895,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 4,
+      "writable_counter": false,
+      "compute_units_in": 149769,
+      "compute_units_out": 146985,
+      "largest_transaction_bytes": 919,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 8,
+      "writable_counter": false,
+      "compute_units_in": 197681,
+      "compute_units_out": 194897,
+      "largest_transaction_bytes": 1051,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 10,
+      "writable_counter": false,
+      "compute_units_in": 239198,
+      "compute_units_out": 236414,
+      "largest_transaction_bytes": 1117,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 12,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 895,
+      "completed": false,
+      "error": "hooked token in: swap simulation failed: Some(DriverError { message: \"Error processing Instruction 1: Program failed to complete\", custom_code: None }) [\"Program ComputeBudget111111111111111111111111111111 invoke [1]\", \"Program ComputeBudget111111111111111111111111111111 success\", \"Program 3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD invoke [1]\", \"Program log: Instruction: SwapV3\", \"Program data: QMbN6CYIceJCearL5CZjOhCZh4S2UL1YPrS+bGFTLRdvRVdQWgmoawX3ObBmMzd1SYiKqpGarEkDHP59QAeSou1xQNk+paSYBlmxzFYk156tRb/pwbjBuAn0h0eVgEJ+Oe68srra2myyOKRspB/0/NJjGQSw+VIUyqSNWj3HRcj/Wl7kr1vVDAoAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAYpAC53/////AAAAAAAAAAAA6HZIFwAAAAAAAAAAAAAA/////wEAAAAAAAAAAAAAAAAAAAA=\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [2]\", \"Program log: Instruction: TransferChecked\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK invoke [3]\", \"Program log: Error: memory allocation failed, out of memory\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK consumed 88901 of 1251757 compute units\", \"Program DqbACDUwMfS3WCXRskyaHKdwPAyEy5SoAXdg5DWpxJHK failed: SBF program panicked\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 161645 of 1324501 compute units\", \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: Program failed to complete\", \"Program 3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD consumed 236994 of 1399850 compute units\", \"Program 3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD failed: Program failed to complete\"]"
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 14,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 895,
+      "completed": false,
+      "error": "the transaction is 1249 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 16,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 895,
+      "completed": false,
+      "error": "the transaction is 1315 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 24,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 895,
+      "completed": false,
+      "error": "the transaction is 1579 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 2,
+      "extras": 0,
+      "writable_counter": false,
+      "compute_units_in": 111937,
+      "compute_units_out": 109146,
+      "largest_transaction_bytes": 895,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 2,
+      "extras": 1,
+      "writable_counter": false,
+      "compute_units_in": 142517,
+      "compute_units_out": 139726,
+      "largest_transaction_bytes": 895,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 2,
+      "extras": 4,
+      "writable_counter": false,
+      "compute_units_in": 233501,
+      "compute_units_out": 230710,
+      "largest_transaction_bytes": 1085,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 2,
+      "extras": 6,
+      "writable_counter": false,
+      "compute_units_in": 258703,
+      "compute_units_out": 255912,
+      "largest_transaction_bytes": 1217,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 2,
+      "extras": 8,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 895,
+      "completed": false,
+      "error": "the transaction is 1349 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 2,
+      "extras": 10,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 895,
+      "completed": false,
+      "error": "the transaction is 1481 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 2,
+      "extras": 12,
+      "writable_counter": false,
+      "compute_units_in": null,
+      "compute_units_out": null,
+      "largest_transaction_bytes": 895,
+      "completed": false,
+      "error": "the transaction is 1613 bytes, over the 1232 byte packet limit"
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 1,
+      "writable_counter": true,
+      "compute_units_in": 99296,
+      "compute_units_out": 96512,
+      "largest_transaction_bytes": 895,
+      "completed": true,
+      "error": null
+    },
+    {
+      "amm": "clmm",
+      "hooked_legs": 1,
+      "extras": 8,
+      "writable_counter": true,
+      "compute_units_in": 194200,
+      "compute_units_out": 191416,
+      "largest_transaction_bytes": 1051,
+      "completed": true,
+      "error": null
+    }
+  ],
+  "not_measured": [
+    {
+      "what": "contention under load",
+      "why": "solana-program-test runs one transaction at a time. Writable-account serialisation is a property of a cluster's scheduler under concurrent load; the `write` rows show only what the extra write costs in compute, not any waiting."
+    },
+    {
+      "what": "v1 transactions (SIMD-0385)",
+      "why": "the pinned solana-sdk 2.2.2 cannot build or sign them, and the repository forbids moving its dependency line opportunistically. Measuring v1 needs a deliberate compatibility migration first."
+    },
+    {
+      "what": "swaps as v0 transactions with a lookup table",
+      "why": "the driver's chains send legacy transactions, so swaps are measured as legacy only. The transfer table shows the v0 + lookup-table effect on the hook's own accounts."
+    },
+    {
+      "what": "a real cluster",
+      "why": "every number is in-process: no network, no validator, no leader scheduling, so no latency or confirmation time."
+    },
+    {
+      "what": "loaded-accounts data size and CPI trace limits beyond the depth reached",
+      "why": "the in-process runtime does not report them per transaction."
+    }
+  ]
+}

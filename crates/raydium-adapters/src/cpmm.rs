@@ -194,6 +194,236 @@ impl Cpmm {
         }
     }
 
+    /// The creator's LP-token account: the associated token account of the classic token program.
+    pub fn lp_token_account(owner: &Pubkey, pool: &CpmmPool) -> Pubkey {
+        Pubkey::find_program_address(
+            &[
+                owner.as_ref(),
+                spl_token::id().as_ref(),
+                pool.lp_mint.as_ref(),
+            ],
+            &ASSOCIATED_TOKEN_PROGRAM_ID,
+        )
+        .0
+    }
+
+    /// `deposit`: add liquidity for `lp_token_amount` LP tokens, paying at most the two maximums.
+    /// Unframed (V1); frame it with `frame_cpmm_pair_or_passthrough(CpmmPairOp::Deposit, ..)`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn deposit_instruction(
+        &self,
+        owner: &Pubkey,
+        pool: &CpmmPool,
+        owner_lp_token: &Pubkey,
+        token_0_account: &Pubkey,
+        token_1_account: &Pubkey,
+        lp_token_amount: u64,
+        maximum_token_0_amount: u64,
+        maximum_token_1_amount: u64,
+    ) -> Instruction {
+        let mut data = anchor_discriminator("deposit").to_vec();
+        for amount in [
+            lp_token_amount,
+            maximum_token_0_amount,
+            maximum_token_1_amount,
+        ] {
+            data.extend_from_slice(&amount.to_le_bytes());
+        }
+        Instruction {
+            program_id: self.program_id,
+            accounts: self.liquidity_accounts(
+                owner,
+                pool,
+                owner_lp_token,
+                token_0_account,
+                token_1_account,
+                false,
+            ),
+            data,
+        }
+    }
+
+    /// `withdraw`: burn `lp_token_amount` LP tokens for at least the two minimums. Unframed (V1).
+    #[allow(clippy::too_many_arguments)]
+    pub fn withdraw_instruction(
+        &self,
+        owner: &Pubkey,
+        pool: &CpmmPool,
+        owner_lp_token: &Pubkey,
+        token_0_account: &Pubkey,
+        token_1_account: &Pubkey,
+        lp_token_amount: u64,
+        minimum_token_0_amount: u64,
+        minimum_token_1_amount: u64,
+    ) -> Instruction {
+        let mut data = anchor_discriminator("withdraw").to_vec();
+        for amount in [
+            lp_token_amount,
+            minimum_token_0_amount,
+            minimum_token_1_amount,
+        ] {
+            data.extend_from_slice(&amount.to_le_bytes());
+        }
+        Instruction {
+            program_id: self.program_id,
+            accounts: self.liquidity_accounts(
+                owner,
+                pool,
+                owner_lp_token,
+                token_0_account,
+                token_1_account,
+                true,
+            ),
+            data,
+        }
+    }
+
+    /// The accounts shared by `deposit` (13) and `withdraw` (14, with the memo program).
+    fn liquidity_accounts(
+        &self,
+        owner: &Pubkey,
+        pool: &CpmmPool,
+        owner_lp_token: &Pubkey,
+        token_0_account: &Pubkey,
+        token_1_account: &Pubkey,
+        with_memo: bool,
+    ) -> Vec<AccountMeta> {
+        let mut accounts = vec![
+            AccountMeta::new_readonly(*owner, true),
+            AccountMeta::new_readonly(pool.authority, false),
+            AccountMeta::new(pool.pool_state, false),
+            AccountMeta::new(*owner_lp_token, false),
+            AccountMeta::new(*token_0_account, false),
+            AccountMeta::new(*token_1_account, false),
+            AccountMeta::new(pool.vault_0, false),
+            AccountMeta::new(pool.vault_1, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(spl_token_2022::id(), false),
+            AccountMeta::new_readonly(pool.mint_0, false),
+            AccountMeta::new_readonly(pool.mint_1, false),
+            AccountMeta::new(pool.lp_mint, false),
+        ];
+        if with_memo {
+            accounts.push(AccountMeta::new_readonly(
+                crate::clmm::MEMO_PROGRAM_ID,
+                false,
+            ));
+        }
+        accounts
+    }
+
+    /// `collect_protocol_fee` (or `collect_fund_fee` when `fund` is set): send up to the requested
+    /// amounts of the accrued fees to the two recipient token accounts. `owner` must be the
+    /// account the program accepts for that fee. Unframed (V1).
+    #[allow(clippy::too_many_arguments)]
+    pub fn collect_fee_instruction(
+        &self,
+        fund: bool,
+        owner: &Pubkey,
+        pool: &CpmmPool,
+        recipient_token_0: &Pubkey,
+        recipient_token_1: &Pubkey,
+        amount_0_requested: u64,
+        amount_1_requested: u64,
+    ) -> Instruction {
+        let name = if fund {
+            "collect_fund_fee"
+        } else {
+            "collect_protocol_fee"
+        };
+        let mut data = anchor_discriminator(name).to_vec();
+        data.extend_from_slice(&amount_0_requested.to_le_bytes());
+        data.extend_from_slice(&amount_1_requested.to_le_bytes());
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(*owner, true),
+                AccountMeta::new_readonly(pool.authority, false),
+                AccountMeta::new(pool.pool_state, false),
+                AccountMeta::new_readonly(pool.amm_config, false),
+                AccountMeta::new(pool.vault_0, false),
+                AccountMeta::new(pool.vault_1, false),
+                AccountMeta::new_readonly(pool.mint_0, false),
+                AccountMeta::new_readonly(pool.mint_1, false),
+                AccountMeta::new(*recipient_token_0, false),
+                AccountMeta::new(*recipient_token_1, false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(spl_token_2022::id(), false),
+            ],
+            data,
+        }
+    }
+
+    /// The associated token account of `owner` for `mint`, under the Token-2022 program.
+    pub fn associated_token_2022(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(
+            &[owner.as_ref(), spl_token_2022::id().as_ref(), mint.as_ref()],
+            &ASSOCIATED_TOKEN_PROGRAM_ID,
+        )
+        .0
+    }
+
+    /// `collect_creator_fee` (the pool creator signs), or `collect_creator_fee_permissionless`
+    /// (anyone pays; the fee still goes to the creator). The creator's two associated token
+    /// accounts are created by the program if they do not exist. Unframed (V1).
+    pub fn collect_creator_fee_instruction(
+        &self,
+        permissionless: bool,
+        payer: &Pubkey,
+        creator: &Pubkey,
+        pool: &CpmmPool,
+    ) -> Instruction {
+        let creator_token_0 = Self::associated_token_2022(creator, &pool.mint_0);
+        let creator_token_1 = Self::associated_token_2022(creator, &pool.mint_1);
+        let creator_fee_share = self.pda(&[
+            b"creator_fee_share",
+            creator.as_ref(),
+            pool.amm_config.as_ref(),
+        ]);
+        let common = [
+            AccountMeta::new(pool.vault_0, false),
+            AccountMeta::new(pool.vault_1, false),
+            AccountMeta::new_readonly(pool.mint_0, false),
+            AccountMeta::new_readonly(pool.mint_1, false),
+            AccountMeta::new(creator_token_0, false),
+            AccountMeta::new(creator_token_1, false),
+            AccountMeta::new_readonly(spl_token_2022::id(), false),
+            AccountMeta::new_readonly(spl_token_2022::id(), false),
+            AccountMeta::new_readonly(ASSOCIATED_TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(system_program::id(), false),
+        ];
+        let mut accounts = if permissionless {
+            vec![
+                AccountMeta::new(*payer, true),
+                AccountMeta::new_readonly(*creator, false),
+                AccountMeta::new_readonly(pool.authority, false),
+                AccountMeta::new(pool.pool_state, false),
+            ]
+        } else {
+            vec![
+                AccountMeta::new(*creator, true),
+                AccountMeta::new_readonly(pool.authority, false),
+                AccountMeta::new(pool.pool_state, false),
+                AccountMeta::new_readonly(pool.amm_config, false),
+            ]
+        };
+        accounts.extend(common);
+        if permissionless {
+            accounts.push(AccountMeta::new_readonly(pool.amm_config, false));
+        }
+        accounts.push(AccountMeta::new_readonly(creator_fee_share, false));
+        Instruction {
+            program_id: self.program_id,
+            accounts,
+            data: anchor_discriminator(if permissionless {
+                "collect_creator_fee_permissionless"
+            } else {
+                "collect_creator_fee"
+            })
+            .to_vec(),
+        }
+    }
+
     /// Fixed accounts of a swap where `input` is token 0 or token 1 of `pool`.
     pub fn swap_accounts(
         &self,

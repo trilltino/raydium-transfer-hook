@@ -15,6 +15,10 @@ use solana_program::{
 
 pub const CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR: [u8; 8] = [143, 190, 90, 218, 196, 30, 51, 222];
 pub const CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR: [u8; 8] = [179, 135, 209, 217, 135, 75, 40, 58];
+/// `swap_base_output` (exact output), unchanged. `SHA256("global:swap_base_output")[..8]`.
+pub const CPMM_SWAP_BASE_OUTPUT_V1_DISCRIMINATOR: [u8; 8] = [55, 217, 98, 86, 163, 74, 180, 173];
+/// `swap_base_output_v2`, the hook-aware exact-output swap. `SHA256("global:swap_base_output_v2")[..8]`.
+pub const CPMM_SWAP_BASE_OUTPUT_V2_DISCRIMINATOR: [u8; 8] = [29, 143, 223, 109, 3, 111, 151, 147];
 pub const CLMM_SWAP_V2_DISCRIMINATOR: [u8; 8] = [43, 4, 237, 11, 26, 201, 30, 98];
 pub const CLMM_SWAP_V3_DISCRIMINATOR: [u8; 8] = [240, 224, 38, 33, 176, 31, 241, 175];
 
@@ -109,6 +113,25 @@ impl CpmmSwapAccounts {
 }
 
 /// Build the unframed V1 `swap_base_input` instruction (no hook accounts).
+/// Build the unframed V1 `swap_base_output`: spend at most `max_amount_in` to receive exactly
+/// `amount_out`. The accounts are the same thirteen as `swap_base_input`.
+pub fn build_cpmm_swap_base_output_v1(
+    program_id: Pubkey,
+    accounts: &CpmmSwapAccounts,
+    max_amount_in: u64,
+    amount_out: u64,
+) -> Instruction {
+    let mut data = Vec::with_capacity(CPMM_SWAP_BASE_INPUT_V1_DATA_LEN);
+    data.extend_from_slice(&CPMM_SWAP_BASE_OUTPUT_V1_DISCRIMINATOR);
+    data.extend_from_slice(&max_amount_in.to_le_bytes());
+    data.extend_from_slice(&amount_out.to_le_bytes());
+    Instruction {
+        program_id,
+        accounts: accounts.to_metas(),
+        data,
+    }
+}
+
 pub fn build_cpmm_swap_base_input_v1(
     program_id: Pubkey,
     accounts: &CpmmSwapAccounts,

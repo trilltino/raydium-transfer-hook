@@ -53,6 +53,20 @@ pub(super) trait SwapBuilder {
         amount_in: u64,
         expected_out: u64,
     ) -> Result<Instruction>;
+
+    /// An exact-output swap: receive exactly `amount_out`, spend at most `max_amount_in`. Only
+    /// AMMs with such an instruction implement it.
+    async fn build_exact_output<C: Chain>(
+        &self,
+        _chain: &C,
+        _mint0_in: bool,
+        _max_amount_in: u64,
+        _amount_out: u64,
+    ) -> Result<Instruction> {
+        Err(DriverError::new(
+            "this AMM has no exact-output swap that supports hooked mints",
+        ))
+    }
 }
 
 /// Resolve the two transfer legs of a swap independently. Each leg resolves against the hook of
@@ -131,6 +145,41 @@ pub(super) async fn legs<C: Chain>(
     Ok((input, output))
 }
 
+/// Resolve the two transfer legs of a two-token operation (liquidity, fee collection, pool
+/// creation) independently, like [`legs`] does for a swap: each leg resolves against the hook of
+/// its own mint, and a mint without a hook must come back unhooked.
+pub(super) async fn pair_legs<C: Chain>(
+    chain: &C,
+    kit: &SwapKit<'_>,
+    token_0: SplTransferLeg,
+    token_1: SplTransferLeg,
+) -> Result<(LegHook, LegHook)> {
+    let mut resolved = Vec::new();
+    for (role, leg) in [(LegRole::Token0, token_0), (LegRole::Token1, token_1)] {
+        let (program, writable) = match kit.entry_for(&leg.mint) {
+            Some(entry) => (
+                Some(entry.hook.program_id()),
+                entry.hook.allowed_writable(&entry.ctx, &leg),
+            ),
+            None => (None, Vec::new()),
+        };
+        let hooked = leg.mint;
+        let leg_hook = resolve(chain, role, leg, program, writable).await?;
+        require(
+            leg_hook.is_hooked() == kit.entry_for(&hooked).is_some(),
+            format!(
+                "exactly the hooked mint must resolve a hook ({role}: hooked {}, expected {})",
+                leg_hook.is_hooked(),
+                kit.entry_for(&hooked).is_some()
+            ),
+        )?;
+        resolved.push(leg_hook);
+    }
+    let second = resolved.pop().expect("two legs");
+    let first = resolved.pop().expect("two legs");
+    Ok((first, second))
+}
+
 pub(super) fn describe(sim: &Simulation) -> String {
     format!(
         "simulation {}: {} log lines, {} compute units",
@@ -143,7 +192,7 @@ pub(super) fn describe(sim: &Simulation) -> String {
 }
 
 /// How many times each hook program must run in one swap: once per hooked leg that uses it.
-fn expected_runs(kit: &SwapKit<'_>) -> Vec<(Pubkey, usize)> {
+pub(super) fn expected_runs(kit: &SwapKit<'_>) -> Vec<(Pubkey, usize)> {
     let mut runs: Vec<(Pubkey, usize)> = Vec::new();
     for entry in &kit.hooks {
         let program = entry.hook.program_id();
@@ -596,4 +645,108 @@ pub(super) fn build_session(
             .collect(),
         allowed_writable: allowed.iter().map(|k| k.to_string()).collect(),
     }
+}
+
+/// An exact-output swap in each direction: the hook must run once per hooked leg, the trader must
+/// receive exactly the requested amount (when no transfer fee is withheld) and spend no more than
+/// the limit, and a limit too low to cover the price must be refused with nothing moved.
+pub(super) async fn exact_output_checks<C: Chain, B: SwapBuilder>(
+    chain: &mut C,
+    rec: &mut Recorder,
+    builder: &B,
+    kit: &SwapKit<'_>,
+    exact: bool,
+) -> Result<()> {
+    const AMOUNT_OUT: u64 = 5;
+    // Well above the price of AMOUNT_OUT on the seeded pool (about 6 with fees), and within every
+    // hook's per-swap limit.
+    const MAX_IN: u64 = SWAP_AMOUNT;
+    let hooked_account = kit.primary().ctx.trader_accounts[0];
+    let quote_account = kit.primary().ctx.trader_accounts[1];
+    let runs = expected_runs(kit);
+    for direction in [Direction::HookedIn, Direction::HookedOut] {
+        let mint0_in = direction == Direction::HookedIn;
+        let label = format!("exact output, {}", direction.label());
+        let (in_account, out_account) = if mint0_in {
+            (hooked_account, quote_account)
+        } else {
+            (quote_account, hooked_account)
+        };
+        let before_in = amount_of(chain, &in_account).await?;
+        let before_out = amount_of(chain, &out_account).await?;
+        let instruction = builder
+            .build_exact_output(chain, mint0_in, MAX_IN, AMOUNT_OUT)
+            .await?;
+        let transaction = with_budget(vec![instruction]);
+        let sim = chain.simulate(&transaction, &[]).await?;
+        require(
+            sim.succeeded,
+            format!(
+                "{label}: swap simulation failed: {:?} {:?}",
+                sim.error, sim.logs
+            ),
+        )?;
+        for (program, expected) in &runs {
+            require(
+                sim.invocations_of(program) == *expected,
+                format!(
+                    "{label}: hook {program} must run {expected} time(s), ran {} times",
+                    sim.invocations_of(program)
+                ),
+            )?;
+        }
+        let sent = chain
+            .send(&transaction, &[])
+            .await
+            .map_err(|e| DriverError::new(format!("{label}: swap failed: {e}")))?;
+        let after_in = amount_of(chain, &in_account).await?;
+        let after_out = amount_of(chain, &out_account).await?;
+        let spent = before_in.saturating_sub(after_in);
+        let received = after_out.saturating_sub(before_out);
+        require(
+            spent > 0 && spent <= MAX_IN,
+            format!("{label}: spent {spent}, expected 1..={MAX_IN}"),
+        )?;
+        require(
+            if exact {
+                received == AMOUNT_OUT
+            } else {
+                received > 0 && received <= AMOUNT_OUT
+            },
+            format!("{label}: received {received}, expected {AMOUNT_OUT}"),
+        )?;
+        rec.push(
+            &format!("hooked exact-output swap ({label})"),
+            Some(sent.signature),
+            format!(
+                "received {received} for {spent} (limit {MAX_IN}); every hook ran once per hooked leg; {}",
+                describe(&sim)
+            ),
+        );
+
+        // A limit of 1 cannot buy AMOUNT_OUT: the swap is refused and nothing moves.
+        let instruction = builder
+            .build_exact_output(chain, mint0_in, 1, AMOUNT_OUT)
+            .await?;
+        let transaction = with_budget(vec![instruction]);
+        let sim = chain.simulate(&transaction, &[]).await?;
+        require(
+            !sim.succeeded,
+            format!("{label}: a limit of 1 must not buy {AMOUNT_OUT}"),
+        )?;
+        let balances = (
+            amount_of(chain, &in_account).await?,
+            amount_of(chain, &out_account).await?,
+        );
+        require(
+            balances == (after_in, after_out),
+            format!("{label}: balances moved after a refused exact-output swap"),
+        )?;
+        rec.push(
+            &format!("exact-output swap over its limit refused ({label})"),
+            None,
+            describe(&sim),
+        );
+    }
+    Ok(())
 }

@@ -37,9 +37,11 @@ pub use {solana_program, spl_tlv_account_resolution, spl_token, spl_token_2022};
 
 pub use abi::{
     anchor_instruction_discriminator, build_clmm_swap_v2, build_cpmm_swap_base_input_v1,
-    ClmmSwapAccounts, ClmmSwapArgs, CpmmSwapAccounts, CLMM_SWAP_FIXED_ACCOUNTS,
-    CLMM_SWAP_V2_DISCRIMINATOR, CLMM_SWAP_V3_DISCRIMINATOR, CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR,
-    CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR, CPMM_SWAP_FIXED_ACCOUNTS,
+    build_cpmm_swap_base_output_v1, ClmmSwapAccounts, ClmmSwapArgs, CpmmSwapAccounts,
+    CLMM_SWAP_FIXED_ACCOUNTS, CLMM_SWAP_V2_DISCRIMINATOR, CLMM_SWAP_V3_DISCRIMINATOR,
+    CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR, CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR,
+    CPMM_SWAP_BASE_OUTPUT_V1_DISCRIMINATOR, CPMM_SWAP_BASE_OUTPUT_V2_DISCRIMINATOR,
+    CPMM_SWAP_FIXED_ACCOUNTS,
 };
 pub use error::{
     AuthorityExpectation, ConflictSite, FetchError, FrameError, HookChangeKind,
@@ -47,7 +49,9 @@ pub use error::{
 };
 pub use frame::{
     frame_clmm_or_passthrough, frame_clmm_swap_v3, frame_cpmm_or_passthrough,
-    frame_cpmm_swap_base_input_v2, FramedAbi, FramedSwap,
+    frame_cpmm_output_or_passthrough, frame_cpmm_pair_or_passthrough, frame_cpmm_pair_v2,
+    frame_cpmm_swap_base_input_v2, frame_cpmm_swap_base_output_v2, CpmmPairOp, FramedAbi,
+    FramedSwap,
 };
 pub use resolve::{
     default_allowed_loaders, resolve_leg, resolve_legs, HookFingerprint, HookSlice, LegHook,

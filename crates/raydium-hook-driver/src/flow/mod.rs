@@ -16,6 +16,7 @@
 
 mod clmm;
 mod cpmm;
+mod liquidity;
 mod recorder;
 mod support;
 mod swaps;
@@ -44,6 +45,12 @@ pub struct FlowInputs<'a> {
     pub second_hook: Option<&'a dyn HookSetup>,
     /// Put a TransferFee extension of this many basis points on both mints (0 for none).
     pub transfer_fee_bps: u16,
+    /// After the standard checks, also swap for an exact output amount (CPMM `swap_base_output`,
+    /// framed as `swap_base_output_v2`). Only AMMs that have such an instruction support this.
+    pub exact_output: bool,
+    /// After the standard checks, also run the CPMM operations that move two tokens with the
+    /// hook live: pool creation, deposit, withdraw and fee collection (`*_v2`). CPMM only.
+    pub liquidity: bool,
 }
 
 impl<'a> FlowInputs<'a> {
@@ -59,6 +66,8 @@ impl<'a> FlowInputs<'a> {
             fee_receiver_keypair,
             second_hook: None,
             transfer_fee_bps: 0,
+            exact_output: false,
+            liquidity: false,
         }
     }
 
@@ -69,6 +78,16 @@ impl<'a> FlowInputs<'a> {
 
     pub fn with_transfer_fee(mut self, basis_points: u16) -> Self {
         self.transfer_fee_bps = basis_points;
+        self
+    }
+
+    pub fn with_liquidity(mut self) -> Self {
+        self.liquidity = true;
+        self
+    }
+
+    pub fn with_exact_output(mut self) -> Self {
+        self.exact_output = true;
         self
     }
 

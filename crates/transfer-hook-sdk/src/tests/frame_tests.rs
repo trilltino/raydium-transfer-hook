@@ -8,14 +8,17 @@ use spl_transfer_hook_interface::get_extra_account_metas_address;
 use super::{clmm_accounts, cpmm_accounts};
 use crate::{
     abi::{
-        build_clmm_swap_v2, build_cpmm_swap_base_input_v1, ClmmSwapAccounts, ClmmSwapArgs,
-        CpmmSwapAccounts, CLMM_SWAP_V2_DISCRIMINATOR, CLMM_SWAP_V3_DISCRIMINATOR,
-        CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR, CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR,
+        build_clmm_swap_v2, build_cpmm_swap_base_input_v1, build_cpmm_swap_base_output_v1,
+        ClmmSwapAccounts, ClmmSwapArgs, CpmmSwapAccounts, CLMM_SWAP_V2_DISCRIMINATOR,
+        CLMM_SWAP_V3_DISCRIMINATOR, CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR,
+        CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR, CPMM_SWAP_BASE_OUTPUT_V1_DISCRIMINATOR,
+        CPMM_SWAP_BASE_OUTPUT_V2_DISCRIMINATOR,
     },
     error::{ConflictSite, FrameError, LegField, LegRole, SliceFault},
     frame::{
         frame_clmm_or_passthrough, frame_clmm_swap_v3, frame_cpmm_or_passthrough,
-        frame_cpmm_swap_base_input_v2, FramedAbi,
+        frame_cpmm_output_or_passthrough, frame_cpmm_swap_base_input_v2,
+        frame_cpmm_swap_base_output_v2, FramedAbi,
     },
     resolve::{
         resolve_leg, HookFingerprint, HookSlice, LegHook, ProgramFingerprint, ResolveOptions,
@@ -140,6 +143,84 @@ fn well_formed_tail(mint: &Pubkey, hook: Pubkey) -> (Vec<AccountMeta>, Pubkey) {
 }
 
 // ----- CPMM --------------------------------------------------------------------------
+
+#[test]
+fn the_exact_output_discriminators_are_anchors_global_hashes() {
+    use crate::abi::anchor_instruction_discriminator;
+    assert_eq!(
+        CPMM_SWAP_BASE_OUTPUT_V1_DISCRIMINATOR,
+        anchor_instruction_discriminator("swap_base_output")
+    );
+    assert_eq!(
+        CPMM_SWAP_BASE_OUTPUT_V2_DISCRIMINATOR,
+        anchor_instruction_discriminator("swap_base_output_v2")
+    );
+}
+
+#[tokio::test]
+async fn cpmm_frames_exact_output_v1_to_v2_with_distinct_slices_in_order() {
+    let (a, b) = (Pubkey::new_unique(), Pubkey::new_unique());
+    let fixture = cpmm(Some(&[extra(&a)]), Some(&[extra(&a), extra(&b)]));
+    let (input, output) = fixture.legs().await;
+    let mut instruction = build_cpmm_swap_base_output_v1(PROGRAM, &fixture.accounts, 1_100, 900);
+    let before = instruction.clone();
+
+    let framed = frame_cpmm_swap_base_output_v2(&mut instruction, &input, &output).unwrap();
+
+    assert_eq!(framed.abi, FramedAbi::CpmmSwapBaseOutputV2);
+    assert_eq!(
+        (framed.input_hook_accounts, framed.output_hook_accounts),
+        (3, 4)
+    );
+    assert_eq!(framed.input_range, 13..16);
+    assert_eq!(framed.output_range, 16..20);
+    assert_eq!(
+        instruction.data[..8],
+        CPMM_SWAP_BASE_OUTPUT_V2_DISCRIMINATOR
+    );
+    assert_eq!(instruction.data[8..24], before.data[8..24]);
+    assert_eq!(&instruction.data[24..], &[3, 0, 4, 0]);
+    assert_eq!(&instruction.accounts[..13], &before.accounts[..]);
+    assert_eq!(
+        &instruction.accounts[13..16],
+        input.slice().unwrap().metas()
+    );
+    assert_eq!(&instruction.accounts[16..], output.slice().unwrap().metas());
+}
+
+#[tokio::test]
+async fn cpmm_exact_output_passthrough_and_cross_variant_rejections() {
+    let fixture = cpmm(None, None);
+    let (input, output) = fixture.legs().await;
+    let mut v1 = build_cpmm_swap_base_output_v1(PROGRAM, &fixture.accounts, 1_100, 900);
+    let before = v1.clone();
+    assert_eq!(
+        frame_cpmm_output_or_passthrough(&mut v1, &input, &output),
+        Ok(None)
+    );
+    assert_eq!(v1, before);
+    assert_eq!(v1.data[..8], CPMM_SWAP_BASE_OUTPUT_V1_DISCRIMINATOR);
+
+    // Each framer only accepts its own instruction: an exact-input swap is not an exact-output
+    // one, whatever its length.
+    let mut input_swap = fixture.instruction();
+    assert_eq!(
+        frame_cpmm_swap_base_output_v2(&mut input_swap, &input, &output),
+        Err(FrameError::InvalidInstructionData)
+    );
+    let mut output_swap = before.clone();
+    assert_eq!(
+        frame_cpmm_swap_base_input_v2(&mut output_swap, &input, &output),
+        Err(FrameError::InvalidInstructionData)
+    );
+
+    // Framing twice is refused.
+    frame_cpmm_swap_base_output_v2(&mut output_swap, &input, &output).unwrap();
+    assert_eq!(
+        frame_cpmm_swap_base_output_v2(&mut output_swap, &input, &output),
+        Err(FrameError::AlreadyFramed)
+    );
+}
 
 #[tokio::test]
 async fn cpmm_frames_v1_to_v2_with_distinct_slices_in_order() {

@@ -34,7 +34,9 @@ transactions and an address lookup table, which this repository does not yet dri
 ## Compute
 
 All numbers are `solana-program-test` runs of the SBF binaries (the real runtime, not a validator)
-and a few devnet runs. They are data points, not a benchmark. Whole-swap compute units (Raydium +
+and a few devnet runs. For a sweep over the number of extra accounts (with the memory limit it
+finds, address lookup tables and where the packet runs out), see [`benches/`](../benches/README.md).
+The numbers below are data points from the example hooks, not a benchmark. Whole-swap compute units (Raydium +
 Token-2022 + the hook) as reported by simulation, hooked token in and out, as the range seen across
 the runs made while writing this. One hooked leg unless stated:
 

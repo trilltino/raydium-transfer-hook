@@ -1,6 +1,6 @@
 //! The CPMM flow.
 
-use raydium_adapters::swap::cpmm_swap_instruction;
+use raydium_adapters::swap::{cpmm_swap_instruction, cpmm_swap_output_instruction};
 use solana_sdk::{instruction::Instruction, signature::Signer};
 
 use super::{recorder::Recorder, support::*, swaps::*, world::*, FlowInputs};
@@ -63,6 +63,50 @@ impl SwapBuilder for CpmmSwaps<'_> {
             &output_leg,
         )
         .map_err(|e| DriverError::new(format!("framing the CPMM swap failed: {e:?}")))
+    }
+
+    async fn build_exact_output<C: Chain>(
+        &self,
+        chain: &C,
+        mint0_in: bool,
+        max_amount_in: u64,
+        amount_out: u64,
+    ) -> Result<Instruction> {
+        let payer = chain.payer().pubkey();
+        let (in_account, out_account) = if mint0_in {
+            (self.world.trader[0].pubkey(), self.world.trader[1].pubkey())
+        } else {
+            (self.world.trader[1].pubkey(), self.world.trader[0].pubkey())
+        };
+        let accounts =
+            self.cpmm
+                .swap_accounts(payer, &self.pool, mint0_in, in_account, out_account);
+        let (input_leg, output_leg) = legs(
+            chain,
+            self.kit,
+            &accounts.input_token_mint,
+            &accounts.output_token_mint,
+            in_account,
+            out_account,
+            accounts.input_vault,
+            accounts.output_vault,
+            max_amount_in,
+            amount_out,
+        )
+        .await?;
+        cpmm_swap_output_instruction(
+            &self.cpmm,
+            &self.pool,
+            payer,
+            mint0_in,
+            in_account,
+            out_account,
+            max_amount_in,
+            amount_out,
+            &input_leg,
+            &output_leg,
+        )
+        .map_err(|e| DriverError::new(format!("framing the CPMM exact-output swap failed: {e:?}")))
     }
 }
 
@@ -206,6 +250,22 @@ pub async fn run_cpmm_session<C: Chain>(
         world: &world,
     };
     swap_checks(chain, &mut rec, &builder, &kit).await?;
+    if inputs.exact_output {
+        exact_output_checks(chain, &mut rec, &builder, &kit, exact).await?;
+    }
+    if inputs.liquidity {
+        super::liquidity::cpmm_liquidity_checks(
+            chain,
+            &mut rec,
+            &cpmm,
+            &world,
+            &kit,
+            &hooked_mints,
+            admin,
+            exact,
+        )
+        .await?;
+    }
     rec.push(
         "summary",
         None,

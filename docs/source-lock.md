@@ -39,11 +39,12 @@ No upstream pull request to `raydium-io` has been opened.
 
 | Program | Fork / branch | Hook-support commit | Adds |
 |---|---|---|---|
-| CPMM | [`trilltino/raydium-cp-swap`](https://github.com/trilltino/raydium-cp-swap) `transfer-hook-support` | `75ddc09f102c8e3e4424058cee188bf8277949fc` | `swap_base_input_v2`; the `integration` build feature |
+| CPMM | [`trilltino/raydium-cp-swap`](https://github.com/trilltino/raydium-cp-swap) `transfer-hook-support` | `842724dd9396508f8a653f14628dd78f597eff85` | `swap_base_input_v2`, `swap_base_output_v2`, and `_v2` variants of `initialize`, `initialize_with_permission`, `deposit`, `withdraw` and the four fee collections; the `integration` build feature |
 | CLMM | [`trilltino/raydium-clmm`](https://github.com/trilltino/raydium-clmm) `transfer-hook-support` | `40291d53d84c6a28991ed966aa2efd261843f662` | `swap_v3`; the `integration` build feature |
 
-Host unit tests (`cargo test --lib --locked`, upstream lockfile): CPMM 26 pass by default and 27 with
-`--features integration`; CLMM 204 pass by default and 205 with `--features integration`.
+Host unit tests (`cargo test --lib --locked`, upstream lockfile): CPMM 30 pass by default (re-run after adding the `_v2`
+instructions; the `--features integration` count was not re-run, it was 27 before those changes);
+CLMM 204 pass by default and 205 with `--features integration`.
 
 The `integration` feature selects a program id, admin and fee-receiver/owner keys, so the hook-aware
 builds can be deployed under ids you control. Default, `devnet` and `localnet` behavior is unchanged,

@@ -9,15 +9,23 @@ use std::ops::Range;
 
 mod clmm;
 mod cpmm;
+mod cpmm_pair;
 mod layout;
 
 pub use clmm::{frame_clmm_or_passthrough, frame_clmm_swap_v3};
-pub use cpmm::{frame_cpmm_or_passthrough, frame_cpmm_swap_base_input_v2};
+pub use cpmm::{
+    frame_cpmm_or_passthrough, frame_cpmm_output_or_passthrough, frame_cpmm_swap_base_input_v2,
+    frame_cpmm_swap_base_output_v2,
+};
+pub use cpmm_pair::{frame_cpmm_pair_or_passthrough, frame_cpmm_pair_v2, CpmmPairOp};
 
 /// Which framed Raydium instruction was produced.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FramedAbi {
     CpmmSwapBaseInputV2,
+    CpmmSwapBaseOutputV2,
+    /// A two-token CPMM operation other than a swap: liquidity, fee collection, pool creation.
+    CpmmPair(CpmmPairOp),
     ClmmSwapV3,
 }
 

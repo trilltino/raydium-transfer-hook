@@ -35,7 +35,7 @@ run it through Raydium
   e2e          --env FILE --keypair FILE [--fee-receiver-keypair FILE] [--amm cpmm|clmm|all]
                [--hook NAME|all | --hook-dir DIR [--setup FILE] [--keys DIR] | --setup FILE]
                [--second-hook NAME] [--transfer-fee-bps N] [--keep-state FILE]
-               [--vest-seconds N] [--window-seconds N] [--reward-seconds N] [--record]
+               [--vest-seconds N] [--window-seconds N] [--reward-seconds N] [--exact-output] [--liquidity] [--record]
                Run the checked end-to-end flows: admin setup, hooked mint, real pool, hooked swaps
                in both directions, the hook's refusals with rollback, its own follow-up steps.
                NAME: reference, arbitrary, creator-commitment, fair-launch, anti-bundle,
@@ -43,7 +43,10 @@ run it through Raydium
                and sets it up from DIR/setup.json (or --setup FILE); --setup alone runs a deployed
                hook known only by that description. Prints a results table derived from what
                happened and exits non-zero on any failure. --keep-state saves the pool for
-               `cpmm swap`. --record writes evidence (and a --hook-dir deployment) to the env file.
+               `cpmm swap`. --exact-output also swaps for an exact output amount on CPMM
+               (`swap_base_output_v2`; needs a CPMM build that has it). --liquidity also creates a second
+               CPMM pool with the hook live and deposits, withdraws and collects fees (`*_v2`).
+               --record writes evidence (and a --hook-dir deployment) to the env file.
   cpmm swap    --env FILE --keypair FILE --state FILE --amount N [--direction in|out]
   clmm swap    --env FILE --keypair FILE --state FILE --amount N [--direction in|out]
                [--min-out N] [--allow-writable KEY,KEY | --allow-all-writable] [--simulate-only]
@@ -81,7 +84,14 @@ pub(crate) struct Flags {
     pub(crate) positional: Vec<String>,
 }
 
-const SWITCHES: &[&str] = &["record", "simulate-only", "allow-all-writable", "hookable"];
+const SWITCHES: &[&str] = &[
+    "record",
+    "simulate-only",
+    "allow-all-writable",
+    "hookable",
+    "exact-output",
+    "liquidity",
+];
 
 pub(crate) fn parse(args: &[String]) -> Flags {
     let mut flags = Flags {

@@ -7,7 +7,8 @@
 //! cargo test -p program-test-flows --test local_flows -- --ignored --nocapture
 //! ```
 
-use program_test_flows::{arbitrary, reference, run, run_with, setup, template_id};
+use program_test_flows::{arbitrary, reference, run, run_full, run_with, setup, template_id};
+use raydium_hook_driver::HookSetup;
 use raydium_hook_driver::{
     AntiBundleHook, ArbitraryHook, CreatorCommitmentHook, FairLaunchHook, LoyaltyRewardsHook,
     ParentSpinOffHook, ReferenceHook,
@@ -114,4 +115,47 @@ macro_rules! fee_flows {
 fee_flows! {
     cpmm_with_a_transfer_fee_mint: "cpmm";
     clmm_with_a_transfer_fee_mint: "clmm";
+}
+
+/// CPMM exact-output swaps (`swap_base_output_v2`): hooked legs, with and without a transfer fee.
+macro_rules! exact_output_flows {
+    ($($name:ident: |$s:ident| ($first:expr, $second:expr, $fee:expr);)+) => {$(
+        #[tokio::test]
+        #[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
+        async fn $name() {
+            let $s = setup();
+            let first = $first;
+            let second: Option<Box<dyn HookSetup>> = $second;
+            run_full("cpmm", &first, second.as_deref(), $fee, true, false, &$s).await;
+        }
+    )+};
+}
+
+// Hooks that cap swaps per slot (the arbitrary hook) are left out: the standard checks have used the
+// slot's budget by the time the exact-output swaps run, and the slot does not advance in-process.
+exact_output_flows! {
+    cpmm_exact_output_with_the_reference_hook: |s| (reference(&s), None, 0);
+    cpmm_exact_output_with_the_same_hook_program_on_both_legs: |s| (reference(&s), Some(Box::new(reference(&s))), 0);
+    cpmm_exact_output_with_a_transfer_fee: |s| (reference(&s), None, 500);
+}
+
+/// CPMM pool creation, deposit, withdraw and fee collection with the hook live (the `_v2`
+/// instructions). Hooks that cap swaps per slot are left out, as for the exact-output flows.
+macro_rules! liquidity_flows {
+    ($($name:ident: |$s:ident| ($first:expr, $second:expr, $fee:expr);)+) => {$(
+        #[tokio::test]
+        #[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
+        async fn $name() {
+            let $s = setup();
+            let first = $first;
+            let second: Option<Box<dyn HookSetup>> = $second;
+            run_full("cpmm", &first, second.as_deref(), $fee, false, true, &$s).await;
+        }
+    )+};
+}
+
+liquidity_flows! {
+    cpmm_liquidity_with_the_reference_hook: |s| (reference(&s), None, 0);
+    cpmm_liquidity_with_the_same_hook_program_on_both_legs: |s| (reference(&s), Some(Box::new(reference(&s))), 0);
+    cpmm_liquidity_with_a_transfer_fee: |s| (reference(&s), None, 500);
 }

@@ -7,8 +7,9 @@
 
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 use transfer_hook_sdk::{
-    build_clmm_swap_v2, build_cpmm_swap_base_input_v1, frame_clmm_or_passthrough,
-    frame_cpmm_or_passthrough, ClmmSwapAccounts, ClmmSwapArgs, FrameError, LegHook,
+    build_clmm_swap_v2, build_cpmm_swap_base_input_v1, build_cpmm_swap_base_output_v1,
+    frame_clmm_or_passthrough, frame_cpmm_or_passthrough, frame_cpmm_output_or_passthrough,
+    ClmmSwapAccounts, ClmmSwapArgs, FrameError, LegHook,
 };
 
 use crate::{
@@ -36,6 +37,29 @@ pub fn cpmm_swap_instruction(
     let mut instruction =
         build_cpmm_swap_base_input_v1(cpmm.program_id, &accounts, amount_in, minimum_out);
     frame_cpmm_or_passthrough(&mut instruction, input, output)?;
+    Ok(instruction)
+}
+
+/// A CPMM `swap_base_output` (exact output): receive exactly `amount_out`, spending at most
+/// `max_amount_in`. Framed as `swap_base_output_v2` when either leg is hooked; with neither it stays
+/// the byte-identical V1.
+#[allow(clippy::too_many_arguments)]
+pub fn cpmm_swap_output_instruction(
+    cpmm: &Cpmm,
+    pool: &CpmmPool,
+    payer: Pubkey,
+    mint0_in: bool,
+    input_account: Pubkey,
+    output_account: Pubkey,
+    max_amount_in: u64,
+    amount_out: u64,
+    input: &LegHook,
+    output: &LegHook,
+) -> Result<Instruction, FrameError> {
+    let accounts = cpmm.swap_accounts(payer, pool, mint0_in, input_account, output_account);
+    let mut instruction =
+        build_cpmm_swap_base_output_v1(cpmm.program_id, &accounts, max_amount_in, amount_out);
+    frame_cpmm_output_or_passthrough(&mut instruction, input, output)?;
     Ok(instruction)
 }
 

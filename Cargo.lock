@@ -472,6 +472,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "bench-hook"
+version = "0.1.0"
+dependencies = [
+ "hook-kit",
+ "solana-program",
+ "spl-tlv-account-resolution 0.10.0",
+ "spl-token-2022",
+]
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1888,6 +1898,23 @@ dependencies = [
  "digest 0.9.0",
  "generic-array",
  "hmac 0.8.1",
+]
+
+[[package]]
+name = "hook-bench"
+version = "0.1.0"
+dependencies = [
+ "bench-hook",
+ "hook-kit",
+ "program-test-flows",
+ "raydium-hook-driver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "solana-program-test",
+ "solana-sdk",
+ "spl-tlv-account-resolution 0.10.0",
+ "tokio",
 ]
 
 [[package]]
