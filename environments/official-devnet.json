@@ -1,0 +1,15 @@
+{
+  "name": "official-raydium-devnet",
+  "cluster": "devnet",
+  "rpc_url": "https://api.devnet.solana.com",
+  "kind": "official",
+  "programs": {
+    "cpmm": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb",
+    "clmm": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+  },
+  "sources": {
+    "note": "Raydium's own devnet deployments (ids from the programs' own devnet feature). They do not contain the hook-aware instructions swap_base_input_v2 / swap_v3; the driver refuses to send them hook-aware instructions."
+  },
+  "deployments": [],
+  "evidence": []
+}

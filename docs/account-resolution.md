@@ -1,28 +1,48 @@
 # Account resolution
 
-## Resolver behavior
+## How a leg is resolved
 
-`TransferHookResolver` processes each `TransferContext` separately:
+`transfer_hook_sdk::resolve_leg` resolves one transfer, fresh, against the chain state its fetcher
+returns. It is built on the official `spl-transfer-hook-interface` off-chain helper; the crate does
+not reimplement the TLV or seed grammar and does not derive any non-canonical address.
 
-1. Fetch the mint again; verify the requested key, Token-2022 owner, and base mint layout.
-2. If there is no Transfer Hook program in the typed mint state, return an empty account slice without fetching a validation list.
-3. Derive the validation-list PDA for the hook program and mint. A production `TransferHookAccountSource` must use `spl_transfer_hook_interface::get_extra_account_metas_address`; the local test provider uses a deterministic fake key and is not a Solana PDA implementation.
-4. Fetch and validate the validation-list key, owner (hook program), mint, minimum TLV header length, and Execute discriminator.
-5. Resolve the list against the exact transfer context. A production provider must delegate decoding and seed/account resolution to the SPL TLV account-resolution implementation; this workspace intentionally does not reproduce SPL's seed grammar.
-6. Append the resolved additional metas, hook program, and validation-list account in that order, matching the reviewed SPL off-chain helper.
+1. Read the mint. It must be owned by Token-2022 and unpack as a mint.
+2. If the mint has no TransferHook extension or no hook program, the leg has no slice.
+3. Check the hook program: it must exist, be executable, be owned by an allowed loader, and not be
+   Token-2022 or a Raydium program. `ResolveOptions` can pin the exact program and the required
+   extension authority.
+4. Derive the canonical validation address (`get_extra_account_metas_address`), fetch it, and
+   require that it is owned by the hook program and parses as an `ExtraAccountMetaList` for Execute.
+5. Resolve the list for this transfer's exact source, mint, destination, authority and amount.
+6. Apply the privilege policy: a resolved extra that is a signer or writable is refused unless the
+   integrator named it. The hook program and validation list must be read-only non-signers.
+7. Return a `LegHook`: `[resolved extras..., hook program, validation list]` and a fingerprint of the
+   mint, program and list it was resolved against.
 
-The resolver does not cache mint or validation-list state. `resolve_batch` invokes the provider for each leg and records a separate `Range<usize>` for each transfer. It does not deduplicate repeated accounts or merge privileges.
+Nothing is cached. `LegHook::verify_unchanged` re-reads the three accounts so a caller can check
+that nothing changed between resolving and signing. Errors are structured, `Clone + PartialEq`, and
+name the leg (`LegError { leg, mint, source }`).
 
-## Source contract reviewed
+## Resolving several legs
 
-The SPL `spl-transfer-hook-interface` off-chain helper (reviewed at commit `ec7063291e968f4b0064e4df0324ff49dcf320df`) derives the validation PDA from the `extra-account-metas` seed and mint, fetches its data, builds an Execute instruction with source/mint/destination/authority and the validation state, asks `ExtraAccountMetaList::add_to_instruction` to resolve additional metas, then appends the resolved metas followed by the hook program id and validation-list account to the caller's instruction. Execute data is the 8-byte SPL discriminator `[105, 37, 101, 197, 75, 251, 102, 26]` followed by the transfer amount as little-endian `u64`.
-
-The Token-2022 transfer processor reads the hook program from the mint extension and invokes it with the current transfer accounts plus caller-supplied additional accounts. Its on-chain helper locates the hook program and validation PDA among those supplied accounts and resolves the TLV list for Execute.
-
-The crate has two provider boundaries. `TransferHookAccountSource` supplies typed views for deterministic model tests and intentionally uses a fake PDA derivation. `resolve_spl_transfer_hook_accounts` accepts raw `SplAccount` values from a caller-supplied fetcher, unpacks the actual Token-2022 mint extension, verifies account keys and owners, requires an executable hook program, derives the canonical validation-list PDA, and delegates Execute TLV/account resolution to the pinned SPL helper. Fetch and resolution errors are returned; the crate does not bundle an RPC client or cache account state.
+`resolve_legs` resolves on a private scratch instruction, so a failure on the second leg leaves the
+caller's instruction untouched. Resolution never mutates a caller's instruction; only the framers
+do, after validating every leg.
 
 ## Per-transfer slices
 
-Do not flatten transfers into a global union unless the target program defines unambiguous framing and the CPI helper consumes the exact corresponding subset. The CPMM and CLMM reference adapters preserve one range per transfer; CLMM additionally leaves tick/bitmap accounts in a separate prefix. The SDK instruction framers convert legacy CPMM swap and CLMM SwapV2 instruction data into the documented V2/V3 layouts, validating existing discriminator/data and remaining-account sections before appending the individual hook slices.
+Slices are appended input-then-output and are never flattened, merged, deduplicated or reordered.
+The framers (`frame_cpmm_swap_base_input_v2`, `frame_clmm_swap_v3`, and the `*_or_passthrough`
+forms that leave a swap with no hooked leg as the byte-identical V1) take resolved `LegHook`s, never
+raw account metas, re-derive each leg's validation address, and reject trailing accounts and
+privilege conflicts. See [versioning](versioning.md) for the instruction layouts.
 
-See [`builder-pseudocode.ts`](builder-pseudocode.ts) for the still-generic client construction sketch and the [ABI matrix](transfer-surface-matrix.md) for why it is not yet a live Raydium builder.
+## Source contract
+
+The SPL off-chain helper (reviewed at `ec7063291e968f4b0064e4df0324ff49dcf320df`) derives the
+validation PDA from the `extra-account-metas` seed and mint, resolves the list against an Execute
+instruction (`[105, 37, 101, 197, 75, 251, 102, 26]` plus the amount as little-endian `u64`), and
+appends the resolved metas followed by the hook program id and the validation list. Token-2022
+reads the hook program from the mint and invokes it with the transfer accounts plus the
+caller-supplied additional accounts, so a program that performs the transfer must forward each
+leg's slice to its own transfer CPI. That is what the hook-aware Raydium builds do.

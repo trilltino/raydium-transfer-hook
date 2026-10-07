@@ -1,92 +1,85 @@
 # Raydium Transfer Hooks
 
-Developer infrastructure for running **arbitrary, permissionless Token-2022 Transfer Hooks** inside
-Raydium CPMM and CLMM transfers. Raydium is an external integration target: this repository holds
-the hook framework, resolver/SDK, reference hook and test harness, not Raydium source.
+Infrastructure for running **any Token-2022 Transfer Hook inside Raydium CPMM and CLMM swaps**,
+with no allowlist and no approval from Raydium or from this repository. You write the rule; the
+stack resolves each swap leg's hook accounts, frames the swap, and proves the hook ran and that a
+refusal rolls everything back.
 
-> **Status: early.** The Token-2022 hook path is runtime-tested. Raydium hook support exists as
-> external fork branches with unit tests only; no hooked CPMM/CLMM swap has been executed on a
-> validator yet, and nothing is deployed to any cluster. See [Status](#status) before relying on anything.
+Raydium is an external program. This repository contains no Raydium source: the hook-aware changes
+live in forks pinned by `upstream.lock.toml`.
 
-## Build your own hook (target flow)
+## Build your own hook
 
-1. Copy the starter hook
-2. Implement your transfer rule
-3. Test it
-4. Deploy to devnet
-5. Create a hooked Token-2022 mint
-6. Configure your hook
-7. Run it through CPMM
-8. Run it through CLMM
+1. **Copy the starter**: `Copy-Item -Recurse templates\transfer-hook-starter my-hook`
+2. **Implement your rule** in `src/rule.rs`
+3. **Test it**: `cargo test`
+4. **Build and deploy**: `cargo build-sbf`, then `solana program deploy ...`
+5. **Create a hooked Token-2022 mint** and initialise your hook for it
+6. **Run it through Raydium CPMM and CLMM** with `raydium-hook e2e`
 
-Steps 1 and 4-8 need tooling that is **not built yet** (starter template, `raydium-hook` CLI,
-devnet environment). Today you can study and run the reference hook
-(`programs/reference-hook-onchain`) and the SDK resolver. No allowlist, registry or approval from
-Raydium or this repository is required for a hook to work; templates are optional tooling, not permission.
+The full guide is [`docs/authoring-hooks.md`](docs/authoring-hooks.md). Using the starter is
+optional: the repository also ships an unrelated hook (`programs/arbitrary-test-hook`) that runs
+through both AMMs with no change to the SDK or the Raydium builders.
 
 ## Status
 
-| Capability | Status |
-|---|---|
-| Token-2022 transfer through reference hook (success, rejection, rollback) | PASS (ProgramTest, real Token-2022 processor, SBF hook) |
-| SDK resolution via official SPL TLV/account-resolution helpers, per transfer | PASS (unit + ProgramTest) |
-| CPMM `swap_base_input_v2`, CLMM `swap_v3` handlers | Implemented on external fork branches; host unit tests pass; **no validator execution** |
-| CPMM / CLMM hooked swap local E2E | Not done |
-| Starter template, setup-provider interface, arbitrary third-party hook proof | Not done |
-| Integration devnet / official Raydium devnet | Not done |
-| LaunchLab | **Blocked**: deployed handler source is not public; the local crate is a model only |
+| Capability | Status | Evidence |
+|---|---|---|
+| Hooked swap through CPMM (`swap_base_input_v2`), both directions | **Done** | Real CPMM + Token-2022 + hook binaries: in-process runtime test, and on devnet |
+| Hooked swap through CLMM (`swap_v3`), both directions | **Done** | Real CLMM pool, tick arrays and position: in-process runtime test, and on devnet |
+| Hook refusal aborts the swap, balances and pool state unchanged | **Done** | Asserted for both AMMs, both legs |
+| An unrelated hook with no allowlist and no adapter changes | **Done** | `arbitrary-test-hook`: own program id, PDAs, errors; two extras; writes state |
+| Starter template | **Done** | Builds and passes standalone, from a copy outside the repository |
+| Integration devnet | **Deployed** | Our hook-aware builds under our own program ids; see [`docs/integration-devnet.md`](docs/integration-devnet.md) |
+| Official Raydium (including its devnet) | **Not supported** | Their programs do not contain `swap_base_input_v2` / `swap_v3`. No upstream PR has been opened |
+| Liquidity deposit / withdraw, fee collection, pool creation with a hooked mint | **Rejected** | Those paths reject hooked mints with a clear error; the hook goes on after a pool has liquidity |
+| LaunchLab | **Blocked** | Its on-chain handler is not public; `integrations/launchlab` is a simulator, not an integration |
+| Benchmarks of how heavy a hook can be, TypeScript client, commercial templates | **Not done** | |
 
-## Raydium programs and ABI
-
-External hook-support branches (pinned in [`upstream.lock.toml`](upstream.lock.toml)):
-
-| Program | Branch | Hook-aware instruction | V1 behavior |
-|---|---|---|---|
-| CPMM | [`trilltino/raydium-cp-swap@transfer-hook-support`](https://github.com/trilltino/raydium-cp-swap/tree/transfer-hook-support) | `swap_base_input_v2` | `swap_base_input` unchanged; helper paths reject hooked mints |
-| CLMM | [`trilltino/raydium-clmm@transfer-hook-support`](https://github.com/trilltino/raydium-clmm/tree/transfer-hook-support) | `swap_v3` | `swap_v2` unchanged; helper paths reject hooked mints |
-
-Official Raydium deployments do **not** contain these instructions. Per-surface detail:
-[transfer-surface matrix](docs/transfer-surface-matrix.md).
+"In-process" means `solana-program-test`: the real runtime executing the real SBF binaries. There
+is no `solana-test-validator` on this Windows setup, so devnet is the real-cluster evidence.
 
 ## Layout
 
-- `crates/hook-policy-model`: platform hook policy and account metadata types.
-- `crates/transfer-hook-sdk`: fresh per-transfer SPL account resolution; CPMM/CLMM instruction framing.
-- `crates/reference-hook-model`: the rule model (not on-chain); `programs/reference-hook-onchain`: the deployable reference hook.
-- `integrations/`: CPMM, CLMM, LaunchLab flow **models** (not live Raydium tests).
-- `tests/e2e`: policy, resolver and modeled-flow tests.
-- `xtask`: `cargo xtask upstream {list,verify,fetch}`.
-- `upstream.lock.toml`: pinned external revisions. `docs/`: source lock, matrix, trust boundary, versioning.
+| Path | What |
+|---|---|
+| `crates/transfer-hook-sdk` | Per-leg atomic hook-account resolution, structured errors, framing, V1 goldens |
+| `crates/raydium-hook-driver` | Raydium setup builders and the checked end-to-end flows, over RPC or in-process |
+| `crates/raydium-hook-cli` | `raydium-hook deploy | e2e | inspect` |
+| `crates/hook-policy-model`, `crates/reference-hook-model` | Pure-Rust policy and rule models (not on-chain) |
+| `programs/reference-hook-onchain` | The deployable reference hook |
+| `programs/arbitrary-test-hook` | An unrelated hook that proves the stack is permissionless |
+| `templates/transfer-hook-starter` | Copy-me hook; the rule is `src/rule.rs` |
+| `integrations/` | CPMM and CLMM swap planners and a LaunchLab simulator (models) |
+| `environments/` | Cluster manifests: program ids, deployments, evidence |
+| `xtask` | `cargo xtask upstream list | verify | fetch` |
+| `docs/` | [architecture](docs/architecture.md), [source lock](docs/source-lock.md), [surface matrix](docs/transfer-surface-matrix.md), [devnet](docs/integration-devnet.md), [authoring](docs/authoring-hooks.md), [trust](docs/trust-boundary.md) |
 
-There is no Raydium source in this repository. `cargo xtask upstream verify` fails if any appears.
-
-## Run tests
+## Run it
 
 ```powershell
+# unit + integration tests (native)
 cargo test --workspace
-cargo build-sbf --manifest-path programs\reference-hook-onchain\Cargo.toml
-$env:SBF_OUT_DIR = (Resolve-Path target\deploy).Path
-cargo test -p reference-hook-onchain --test token_2022_transfer -- --nocapture
-Remove-Item Env:SBF_OUT_DIR
+
+# the end-to-end flows against the exact deployed binaries, in-process
+cargo build-sbf --manifest-path programs\reference-hook-onchain\Cargo.toml --sbf-out-dir target\integration-sbf
+cargo build-sbf --manifest-path programs\arbitrary-test-hook\Cargo.toml --sbf-out-dir target\integration-sbf
+# (the CPMM and CLMM integration artifacts are built from the pinned forks: docs/integration-devnet.md)
+cargo test -p raydium-hook-driver --features local --test local_flows -- --ignored --nocapture
+
+# the same flows on devnet
+raydium-hook e2e --env environments\devnet.json --keypair .keys\deployer.json `
+  --fee-receiver-keypair .keys\cpmm-fee-receiver.json --amm all --hook all --record
 ```
 
-### External Raydium programs
-
-```powershell
-cargo xtask upstream verify
-cargo xtask upstream fetch --hook --locked        # -> target\upstream\cpmm-hook, clmm-hook
-cargo test --locked --lib --manifest-path target\upstream\cpmm-hook\Cargo.toml -p raydium-cp-swap
-cargo test --locked --lib --manifest-path target\upstream\clmm-hook\Cargo.toml -p raydium-clmm
-cargo build-sbf --manifest-path target\upstream\cpmm-hook\programs\cp-swap\Cargo.toml --sbf-out-dir target\raydium-runtime-sbf
-cargo build-sbf --manifest-path target\upstream\clmm-hook\programs\amm\Cargo.toml --sbf-out-dir target\raydium-runtime-sbf
-```
-
-Raydium builds use the upstream lockfile and toolchain, never this workspace's dependency graph.
-Loading the resulting artifacts in ProgramTest (`SBF_OUT_DIR`) only proves they register as
-executable programs; it is not evidence of swap execution.
+Windows note: ProgramTest pulls in a vendored OpenSSL build that needs a complete Perl. If a fresh
+build directory fails in `openssl-sys`, reuse an existing target directory or set
+`OPENSSL_SRC_PERL` to a full Strawberry Perl.
 
 ## Trust model
 
-Hooks are untrusted programs. A hook can intentionally reject any transfer. The SDK validates
-transport correctness (mint, hook program, validation PDA, TLV, account ordering); it cannot judge a
-hook's economics, authority or upgrade policy. Details: [trust boundary](docs/trust-boundary.md).
+A hook is an untrusted program and can refuse any transfer. The SDK checks transport correctness
+(the mint points at the expected program, the validation list is owned by it and parses, the
+resolved accounts carry no unexpected privileges). It cannot judge a hook's economics, who can
+change its settings, or whether its program can be upgraded. See
+[`docs/trust-boundary.md`](docs/trust-boundary.md).

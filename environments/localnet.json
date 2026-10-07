@@ -1,0 +1,19 @@
+{
+  "name": "local-integration",
+  "cluster": "localnet",
+  "rpc_url": "in-process (solana-program-test)",
+  "kind": "integration",
+  "programs": {
+    "cpmm": "7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ",
+    "clmm": "3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD",
+    "reference_hook": "Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X",
+    "arbitrary_hook": "EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB"
+  },
+  "admin": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
+  "cpmm_fee_receiver": "CnoYEaFeS92rnvfY7i1WHY3yKnXgUQqs1xiC1eVj2aYS",
+  "sources": {
+    "note": "The same integration artifacts as environments/devnet.json, executed in-process by crates/raydium-hook-driver/tests/local_flows.rs (no solana-test-validator exists on this Windows setup)."
+  },
+  "deployments": [],
+  "evidence": []
+}

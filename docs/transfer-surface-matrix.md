@@ -71,16 +71,21 @@ as supported as its highest *evidenced* rung.
 Base/hook revisions: see [`source-lock.md`](./source-lock.md). Official-deployment status is
 `not deployed` for every row; no upstream PR exists.
 
-| Surface | Hook-aware discriminator | Status | Runtime evidence |
+| Surface | Hook-aware discriminator | Status | Evidence |
 |---|---|---|---|
-| CPMM `swap_base_input_v2` | `[179, 135, 209, 217, 135, 75, 40, 58]` | implemented (external branch) | host unit tests only |
-| CPMM `swap_base_input` (V1) | n/a (unchanged) | unchanged; hooked mints rejected | host unit tests |
+| CPMM `swap_base_input_v2` | `[179, 135, 209, 217, 135, 75, 40, 58]` | **integration-devnet verified** | Real CPMM program: `cpmm_swap_base_input_v2_runtime.rs` and `local_flows.rs` (in-process); devnet transactions in [integration-devnet](./integration-devnet.md). Both directions, a refusal in each, two different hooks. |
+| CPMM `swap_base_input` (V1) | n/a (unchanged) | unchanged; hooked mints rejected | host unit tests; V1 byte-identity pinned by SDK golden fixtures |
 | CPMM `swap_base_output`, `deposit`, `withdraw`, fee collection, `initialize*` | none | unsupported: helper rejects hooked mints | host unit tests |
-| CLMM `swap_v3` | `[240, 224, 38, 33, 176, 31, 241, 175]` | implemented (external branch) | host unit tests only |
-| CLMM `swap_v2` (V1) | n/a (unchanged) | unchanged; hooked mints rejected | host unit tests |
+| CLMM `swap_v3` | `[240, 224, 38, 33, 176, 31, 241, 175]` | **integration-devnet verified** | Real CLMM pool, tick arrays and position: `clmm_swap_v3_runtime.rs` and `local_flows.rs` (in-process); devnet transactions in [integration-devnet](./integration-devnet.md). Both directions, a refusal in each, two different hooks. |
+| CLMM `swap_v2` (V1) | n/a (unchanged) | unchanged; hooked mints rejected | host unit tests; V1 byte-identity pinned by SDK golden fixtures |
 | CLMM positions, liquidity, rewards, fees | none | unsupported: helper rejects hooked mints | host unit tests |
 | CLMM limit orders (open/increase/settle) | none | unsupported: explicit rejection | host unit tests |
 | LaunchLab | none | designed; blocked (handler source not public) | none |
+
+"integration-devnet verified" means our fork builds under our own program ids on Solana devnet.
+Official Raydium, including its devnet, does not contain these instructions (no upstream PR exists),
+so no row is "official Raydium deployed". "In-process" is `solana-program-test`: the real runtime
+executing the real binaries, not a validator process.
 
 Fixed accounts, transfer counts, authorities and remaining-account grammars for the implemented
 rows are in the instruction table above. The remaining unsupported rows have not had a per-surface

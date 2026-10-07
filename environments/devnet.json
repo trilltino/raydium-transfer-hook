@@ -1,0 +1,400 @@
+{
+  "name": "integration-devnet",
+  "cluster": "devnet",
+  "rpc_url": "https://api.devnet.solana.com",
+  "kind": "integration",
+  "programs": {
+    "cpmm": "7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ",
+    "clmm": "3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD",
+    "reference_hook": "Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X",
+    "arbitrary_hook": "EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB"
+  },
+  "admin": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
+  "cpmm_fee_receiver": "CnoYEaFeS92rnvfY7i1WHY3yKnXgUQqs1xiC1eVj2aYS",
+  "sources": {
+    "arbitrary_hook": "trilltino/raydium-transfer-hook programs/arbitrary-test-hook @ 9cc41da",
+    "clmm_hook": "https://github.com/trilltino/raydium-clmm @ 40291d53d84c6a28991ed966aa2efd261843f662 (feature: integration; base raydium-io/raydium-clmm ed1eb41519d5355755f7df52b43fa9610938b60b)",
+    "cpmm_hook": "https://github.com/trilltino/raydium-cp-swap @ 75ddc09f102c8e3e4424058cee188bf8277949fc (feature: integration; base raydium-io/raydium-cp-swap b3187ae53a1b95a201f855a59024a12ca8f5b51a)",
+    "reference_hook": "trilltino/raydium-transfer-hook programs/reference-hook-onchain @ 9cc41da"
+  },
+  "deployments": [
+    {
+      "name": "reference-hook",
+      "program_id": "Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X",
+      "signature": "2AV4xF4hUyn8L7yGDJBTh8nM4yEhvdQt8YMQc7kkFYV7cXbiMh2LckAYQsvA3KbLHnVhpKYLhMfdEw9ps66GCNcZ",
+      "artifact_sha256": "11c7dd3410d8175be61cc330b1c9b8924d6da0eaa53d36706fe96edf366f808f",
+      "artifact_bytes": 141424,
+      "upgrade_authority": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
+      "source": "trilltino/raydium-transfer-hook programs/reference-hook-onchain @ 9cc41da"
+    },
+    {
+      "name": "arbitrary-test-hook",
+      "program_id": "EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB",
+      "signature": "bySBbdTRqEfdt47n8NrgMc6vge6FmsLuozr9hdcBH6efK3nQ9em7BUmDjHUsfQ5LC69NKefGmeLjfvAzMetZP1Z",
+      "artifact_sha256": "5055f7371daaa4f6b5d457f5027aa6685ea4d513dafecc58d98960bfb433bfb5",
+      "artifact_bytes": 125928,
+      "upgrade_authority": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
+      "source": "trilltino/raydium-transfer-hook programs/arbitrary-test-hook @ 9cc41da"
+    },
+    {
+      "name": "cpmm",
+      "program_id": "7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ",
+      "signature": "2e7f7e4UwjtmVCSTpAfJzST3R5CmgonJTYVHPnB8JDh7moAvstR8tLkqYBKURp83MoTijXX1BQHnQw5mAppukURm",
+      "artifact_sha256": "52a0efaba62ef3614d4523a2b69e04fe4c30bc0f47d95fe0cf07f2cc0ab2e9c6",
+      "artifact_bytes": 596720,
+      "upgrade_authority": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
+      "source": "https://github.com/trilltino/raydium-cp-swap @ 75ddc09f102c8e3e4424058cee188bf8277949fc (feature: integration; base raydium-io/raydium-cp-swap b3187ae53a1b95a201f855a59024a12ca8f5b51a)"
+    },
+    {
+      "name": "clmm",
+      "program_id": "3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD",
+      "signature": "hHxR4gjdgNA6ynHXyQcGLtApfhG618XEB6c65Jt5CBpXPvnLSqDLUj4s4PWtTpamefAYGDzYdPJ6PQeyzm7dK8k",
+      "artifact_sha256": "3d4151fab3a1ec83ee68974ce8c517b410a9dee64f93022cdc4d5f7a497f3757",
+      "artifact_bytes": 1152864,
+      "upgrade_authority": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
+      "source": "https://github.com/trilltino/raydium-clmm @ 40291d53d84c6a28991ed966aa2efd261843f662 (feature: integration; base raydium-io/raydium-clmm ed1eb41519d5355755f7df52b43fa9610938b60b)"
+    }
+  ],
+  "evidence": [
+    {
+      "flow": "cpmm",
+      "step": "create CPMM AmmConfig (admin instruction)",
+      "signature": "yqHtjjD3yPdLVMACsWq7gsxMRANxhmd3mdi5ocZsnDtTn2MkerBzyXmoz6Szcbj66yaUNQs8RRmQqtxVBuJuiqq",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create the wrapped-SOL pool-creation fee receiver",
+      "signature": "jwhjLJ8xo28XcXeSqw5tBfzhArFseEeHesGHoayU34oc2M5toBZD13TgyJzGEsZaTFf2edGskE71qXkBNoFP5hW",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create hooked Token-2022 mint (TransferHook extension, hook not yet enabled)",
+      "signature": "3nuhXMejGLvGmSrsimwccKGD7AzVj4VCmrq7D7kSnfv9n7eG8aiyyvU6Fa4nvfUYQWakxbsVFPosX5us6R81fk68",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create plain Token-2022 quote mint",
+      "signature": "S27u1KpcDwRkaiLMEQeD8vEoaJd3KDFUaghe9mMpneJSht6G9Fba6H38W3g3fYH4b8BQAaCjSBReUFqwcgAQr97",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create liquidity-provider token accounts",
+      "signature": "2jp3HkR72a2kNxre63SeEK6vXj88fvEB4e3Zc5GFUwwnFf5DbGDRDrjwnYV1BT1zydgMxLmcLfLtgUhqPJriNhtf",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create trader token accounts",
+      "signature": "4SX1CTXKiE15GNFcTmJWha6VZLMxRggWPDhbyXio9htT2uTMDZ11Yb3V7p3iub6KoGaNrCRmMzMHSjuNCwuwDZk5",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "fund provider and trader accounts",
+      "signature": "4ZDsBS3oq1KPdZUYHD9k6eobvXXGPKKjyLB2J2t7uqWqpb2dg2LcZrAb21DJCse6nWaiGVUcCeAeV3FAS3AcF9kn",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "register the hooked mint with CPMM (admin instruction)",
+      "signature": "SEhurCUsKGskp6bwd2JTdsqus8CaXzfyWLUtdbwrcFKCyyxZRsSocHSjEzFvyrmUjvriRBZUHHWUHuihvRtHuNE",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create a real CPMM pool (initialize) with Token-2022 liquidity",
+      "signature": "yW8Rhjq8D5tQVj3SRxFeXFUPF2nkjNcEMr6TorMc2E2XcArstVreggYvqJSkS8tcUWydtzxB7nkxxLouRjnU65c",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "enable reference-hook (max transfer) on the hooked mint",
+      "signature": "63XDmH7uDXSHi5BpmQeRbeHtZi6mBe58qN3UZWmoFArefcwfR6yhGEbv5gYrR1uorVYhN51HrRUMwTjcKJ1aLVbN",
+      "detail": "hook program Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X"
+    },
+    {
+      "flow": "cpmm",
+      "step": "hooked swap (hooked token in)",
+      "signature": "2A3MeK12sSwewRBxoZczBBAB15wGoVHHXqErFuZRPwXjW2AeMJ5xQzpgmTqSNyG1Wh3dawowt3rDfnh1Zq3Jthmf",
+      "detail": "hook ran once; hooked 10000->9990, quote 10000->10008; simulation ok: 18 log lines, 72524 compute units"
+    },
+    {
+      "flow": "cpmm",
+      "step": "hooked swap (hooked token out)",
+      "signature": "2WAvXdb8MkfLtYt6x8oQehoxqp3n4jpxqPuhSi5ch5MPDV95oPfseKdy8emWUogu6cY12HQj4Z5mpYKuCKRfuK5R",
+      "detail": "hook ran once; hooked 9990->9999, quote 10008->9998; simulation ok: 18 log lines, 72851 compute units"
+    },
+    {
+      "flow": "cpmm",
+      "step": "hook refused swap (hooked token in), nothing changed",
+      "detail": "hook Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X rejected with 0x700b after 1 hook run(s); 1 swap instruction(s) in the transaction rolled back; simulation failed: 14 log lines, 64009 compute units"
+    },
+    {
+      "flow": "cpmm",
+      "step": "hook refused swap (hooked token out), nothing changed",
+      "detail": "hook Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X rejected with 0x700b after 1 hook run(s); 1 swap instruction(s) in the transaction rolled back; simulation failed: 18 log lines, 69418 compute units"
+    },
+    {
+      "flow": "cpmm",
+      "step": "summary",
+      "detail": "program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ pool 7Aax19pFDHGYfhDH4azpGFiKNSf6sPTm4QfXeqoDSd4y hooked mint 5Bf1yZPeCwDAhkwZTSppfsKX4MTuckwgmehyezQyiNh7 quote mint 5PoNS6Djy8MQExVFp3MFoLX4cMRJyW4eKvMdTDRqisXc"
+    },
+    {
+      "flow": "cpmm",
+      "step": "create hooked Token-2022 mint (TransferHook extension, hook not yet enabled)",
+      "signature": "3PdT8Tgok8QVhsbmc4FK4pvpfccLTKdPCM1NWmCGpjHVTWQ7PnwqTYGdNBJyBVkZBStJwtLRp6ho2mWkYuwnfj6",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create plain Token-2022 quote mint",
+      "signature": "4JXkCwdCvj5tnaiQkdqbQ8XSoN8A7737P1f2xdsSZPqxTLqMHGCyAa9YCDMkMmesFgn72kRPUS8Q1PXWFEMrmerH",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create liquidity-provider token accounts",
+      "signature": "2xgkkgDFtxbuD9gAHff6hRvXLeGUjGyUVPmkHGsyKJkLDd1uqg8kNnyXQKyt8i1MAphyKDuywZ4aHvpio8Pye82E",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create trader token accounts",
+      "signature": "RZuySAwW7GKw13C1pAE5pZbTyuYxcCW7aDJ8ZtKzY3sWebhAnH1cmFtZZ8uwF6F5GVrfNNXofAYGwvrh2su3Ngf",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "fund provider and trader accounts",
+      "signature": "4P4nVucSiYuB3mKgCGhm6YaGoVtbScM7GMSUYGh2zJAr5BnGUcVqf5GkwzBuj62vmBE6xmMv8NVb3jg1zDmSYwXz",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "register the hooked mint with CPMM (admin instruction)",
+      "signature": "3qNjkvkPC8tHq12u6h7jiy2BjgdRbdJr5URzyokkLtKbtq1nhQeF3a8YAUZW19UsQTG7ic6Yw3UEqcJcZDq9akna",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "create a real CPMM pool (initialize) with Token-2022 liquidity",
+      "signature": "4ua9jJLocSQ2LNTkTasdBZ3S4CSXYLEZh4bFiXUoWmAqbxDFvw1sikEhX928XNUd2TvtusAxJwVNVePtbF3WYent",
+      "detail": ""
+    },
+    {
+      "flow": "cpmm",
+      "step": "enable arbitrary-test-hook (per-slot cap + counter) on the hooked mint",
+      "signature": "U4sfamDrK7jm2C1S1iPs63JDrfgrRpypNxPatAFbn2zuubmeoEeKTwiozjQEU8YpwM4YBLFqTzQDv4YLSzLNrB6",
+      "detail": "hook program EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB"
+    },
+    {
+      "flow": "cpmm",
+      "step": "hooked swap (hooked token in)",
+      "signature": "4aDR541HLMWc2axj77S9CF9bQBVXNH81YzC5qWWmz7S9fAoWPS6q852TxgA3wVyvXZPKJVNNctae2y2969LgKePv",
+      "detail": "hook ran once; hooked 10000->9990, quote 10000->10008; simulation ok: 18 log lines, 82036 compute units; hook state account changed"
+    },
+    {
+      "flow": "cpmm",
+      "step": "hooked swap (hooked token out)",
+      "signature": "v1GUCqZwsiunk4JGvqE3DadFtE5kW3Bqb4CJT7Gg7UniB8f73jzGthsQkcGVJq8B6fQh5Tad6LzpsgdLAoKXA7Q",
+      "detail": "hook ran once; hooked 9990->9999, quote 10008->9998; simulation ok: 18 log lines, 82363 compute units; hook state account changed"
+    },
+    {
+      "flow": "cpmm",
+      "step": "hook refused swap (hooked token in), nothing changed",
+      "detail": "hook EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB rejected with 0x9001 after 3 hook run(s); 3 swap instruction(s) in the transaction rolled back; simulation failed: 46 log lines, 237295 compute units"
+    },
+    {
+      "flow": "cpmm",
+      "step": "hook refused swap (hooked token out), nothing changed",
+      "detail": "hook EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB rejected with 0x9001 after 3 hook run(s); 3 swap instruction(s) in the transaction rolled back; simulation failed: 50 log lines, 242762 compute units"
+    },
+    {
+      "flow": "cpmm",
+      "step": "summary",
+      "detail": "program 7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ pool 5LPEEURCodbb1LK8HZkj13GWU1cQdo9zSNaSkNFmvTcH hooked mint 8sVD4FTZQBvq5NKR9zzbRuWjMAngLqwZEX4aGCTJx5aD quote mint GhUfDvBFcZs5dGaUP46RBi4zX4GhWdARHRjMrN2C39UB"
+    },
+    {
+      "flow": "clmm",
+      "step": "create CLMM AmmConfig (admin instruction)",
+      "signature": "3yLWKgaNuKqaBFRb556RQk7Gqptnmt8B8duMp13svXzWkhQCfzpB77j3RxNbFASWUWJ2Yt6C8WNPXfAmY7NsG9Fj",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create hooked Token-2022 mint (TransferHook extension, hook not yet enabled)",
+      "signature": "2btEq7rs3scs8pUxDffgT8vNK3r3KdtDCD9o3zzZCrX7tGLT5zKPv9vtmFibXs6xfcRJqwHSJ4dFEmj67ydqfu6b",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create plain Token-2022 quote mint",
+      "signature": "2qmhFBcFvPWZGu18SsZ7tcsvRyTPbMQj7VcQx9wmXh8fuCFgETC1eNEbe6wvBd4vTBuDxEV5P7UTtbBVdb42roGQ",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create liquidity-provider token accounts",
+      "signature": "zJ4pm6qgXfpS3aEUE29pkbL89XBa1wkyDUSES1dTUbPvz5asPm6gJ6ofALGABv7omcNnyPhinuBNFF9dUh5WovD",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create trader token accounts",
+      "signature": "3JccqXCzujxXGgL1T6LJXN8vkvZCBxS2BXWyod5w6HUZtyQvdonp4so5PUuq4T1XK42aAQHZQST6ZQtX9EVFNXy",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "fund provider and trader accounts",
+      "signature": "2ignqmVCHhZKmmVgprTa8vT4rBi9aFsNZdu7JbyPyVMtj2qxodHYf768a1eLnjgVZjkgxdAzg5yK9VDFry4YBqLQ",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "register the hooked mint with CLMM (admin instruction)",
+      "signature": "aCLWBuadQJ8ggfz5sWHDwwL7m6imhSVKgAe4xYkyM5mXXtZpXYUo5KYPmxsMTn5skSbSQQHVPSfGtzqWj9PH7ZP",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create a real CLMM pool (create_pool) at price 1",
+      "signature": "29NtsRSz4Ux5TKmcvJZWM1554gDRYHkj6Bjri1XrgZwUhxp74tKy7Z6WohmHgDmwkaTB1rnuCVJTRjmDg1xRWkqp",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "open a real CLMM liquidity position over ticks [-300, 300] (creates both tick arrays)",
+      "signature": "cvyKA2YxMk3ojNNgsrKoewoANvdojDmWYa6gyp9sEXYgF79nMJUePPSr7jnhm9u3AEcAc5HvWvC9rKuQvAiEcvg",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "vaults seeded by the position",
+      "detail": "vault_0 1488732162 vault_1 1488732162"
+    },
+    {
+      "flow": "clmm",
+      "step": "enable reference-hook (max transfer) on the hooked mint",
+      "signature": "4iyEnNCddXXnWJAKUx8J1RHTVERYJPd1q8sC7mnqRRbKdGUtJ2PGNRJ2r48np4Bygm6xGgFMCySAapk5KYGRVfCz",
+      "detail": "hook program Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X"
+    },
+    {
+      "flow": "clmm",
+      "step": "hooked swap (hooked token in)",
+      "signature": "67UuoVHejRLJnSCNsYS4vRC6dX2bVn5TvPUDN1oSwTQyJm2QEiWcQxpWH2LqDQQ2sat2ntBGomBR1Le47SmhXFK8",
+      "detail": "hook ran once; hooked 10000->9990, quote 10000->10008; simulation ok: 18 log lines, 111866 compute units"
+    },
+    {
+      "flow": "clmm",
+      "step": "hooked swap (hooked token out)",
+      "signature": "5dScczBqJ5MM6uqAAVbp7hphvLUY6pMQn2ouWz2WwxyGVBKQJWSqhJp7MFS62NALaAJejNzdgwv14z5mDsuC28Yg",
+      "detail": "hook ran once; hooked 9990->9998, quote 10008->9998; simulation ok: 18 log lines, 109081 compute units"
+    },
+    {
+      "flow": "clmm",
+      "step": "hook refused swap (hooked token in), nothing changed",
+      "detail": "hook Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X rejected with 0x700b after 1 hook run(s); 1 swap instruction(s) in the transaction rolled back; simulation failed: 14 log lines, 100609 compute units"
+    },
+    {
+      "flow": "clmm",
+      "step": "hook refused swap (hooked token out), nothing changed",
+      "detail": "hook Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X rejected with 0x700b after 1 hook run(s); 1 swap instruction(s) in the transaction rolled back; simulation failed: 18 log lines, 100960 compute units"
+    },
+    {
+      "flow": "clmm",
+      "step": "summary",
+      "detail": "program 3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD pool 7KBH7PaDKm3GiXruzgWno3jYQPEA1mJ1hgnadaL1L4Dw hooked mint 8hvLoLnbowTnwg33QyxsNnBgGAPcfcSg8miQwBiJvVy quote mint 9yp26sbfaR2xgheHcKBkV4qskxHK1xmscBxBFPeA3Nwe"
+    },
+    {
+      "flow": "clmm",
+      "step": "create hooked Token-2022 mint (TransferHook extension, hook not yet enabled)",
+      "signature": "UGS4SwAob6PCwzxLPNEwKxE3srG5xtgJALqDwnwVc5QFhx5CMxRL6dEA8EpbeefKGt3Re7Fxingtoq7vtCFEWXe",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create plain Token-2022 quote mint",
+      "signature": "275Xc2raW1tQRYRXRUAbtwwXvr8uBSWqZhST3RGMawKWMndZjn9SrxrpN5wE2VaetMkUdh9xgJGo1P5xq8amgTUD",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create liquidity-provider token accounts",
+      "signature": "ArG88QFvDvgNhpKnshtuZFdkJfHVSBkofdkhm58yTg5YSfVej2uvrHeg4drJ19SdTVrVjtXHVhkzfWhpJX6P65f",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create trader token accounts",
+      "signature": "2b3XsKvLSkMLR7pkmwyjuQjdPJEHrLcVC7xgbmoXvW3JWhnbhhdVjnyADGbqFx9RBXkfsV1Pf1NzB6SReH7YNwJX",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "fund provider and trader accounts",
+      "signature": "3si1hhecmNxF9qV7Z3SSPtoNXr5KNb3vT1iZPdBCFH2tGQZHwjdQHyJQu1K71XPRSwDwXzFrnWLykTmSpRsKr8CD",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "register the hooked mint with CLMM (admin instruction)",
+      "signature": "5wGvAHgbqziK6nqGxhHFzdimExcvmyZXmkgw1sPdrFdb6CzVGJkZhQSAURMNtD58jcLoMXKoxcLaVtvmBRC6nW4K",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "create a real CLMM pool (create_pool) at price 1",
+      "signature": "NkBYyyYyNFjQqJ59KzynaBWMqf5Suu6bBguUkd4ADGepuBL97LDQXCMPYLS1DqTDLKLLXA451j5brfdb8qcJgTN",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "open a real CLMM liquidity position over ticks [-300, 300] (creates both tick arrays)",
+      "signature": "3mRCAqRAN5ZJCuapQkSS7ZSaoV7H52p24GPmdi9FjmxMVZMSY53DUh86VVguiDmkvoEvENyaRFSNCNXw2VqLiG4f",
+      "detail": ""
+    },
+    {
+      "flow": "clmm",
+      "step": "vaults seeded by the position",
+      "detail": "vault_0 1488732162 vault_1 1488732162"
+    },
+    {
+      "flow": "clmm",
+      "step": "enable arbitrary-test-hook (per-slot cap + counter) on the hooked mint",
+      "signature": "2PXy3SKf2tZi8jeWJRGQG7EJ2LAmhvt6ztxAJa3owXKiJkLQRDs6vFsH7Dyks1SZoLRJrSkx9KJW3K18pCZKYuRK",
+      "detail": "hook program EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB"
+    },
+    {
+      "flow": "clmm",
+      "step": "hooked swap (hooked token in)",
+      "signature": "aTKCgSW24fJXyWtPw8dYQMHuPwN6BwwnEVzschh3EkcRzmJjJ8kMmPeZUuhjD3CnMNLSAj52Xg2Pcxu2MQx5EFW",
+      "detail": "hook ran once; hooked 10000->9990, quote 10000->10008; simulation ok: 18 log lines, 113814 compute units; hook state account changed"
+    },
+    {
+      "flow": "clmm",
+      "step": "hooked swap (hooked token out)",
+      "signature": "2v4oWm5HJtGRqn5a3Bq8gYoViks3UFbwFMadXTuQQgSZTBSBQyCwpH8k4BpMjbprCMWSovDFjE4E5PaSnmsZTdEt",
+      "detail": "hook ran once; hooked 9990->9998, quote 10008->9998; simulation ok: 18 log lines, 111029 compute units; hook state account changed"
+    },
+    {
+      "flow": "clmm",
+      "step": "hook refused swap (hooked token in), nothing changed",
+      "detail": "hook EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB rejected with 0x9001 after 3 hook run(s); 3 swap instruction(s) in the transaction rolled back; simulation failed: 46 log lines, 326962 compute units"
+    },
+    {
+      "flow": "clmm",
+      "step": "hook refused swap (hooked token out), nothing changed",
+      "detail": "hook EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB rejected with 0x9001 after 3 hook run(s); 3 swap instruction(s) in the transaction rolled back; simulation failed: 50 log lines, 318144 compute units"
+    },
+    {
+      "flow": "clmm",
+      "step": "summary",
+      "detail": "program 3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD pool 5QzkSCJSLN8v43sc4V1e1gE4MittajEhpnRNsDrytRTH hooked mint 58VnL5wUCw5BrNRoAoskazaK9ENc519GPJHLY4qCAzH quote mint rKLpAkGbABQ47fp5GkKkkacpjggrPMEyghQXbDHfjTM"
+    }
+  ]
+}

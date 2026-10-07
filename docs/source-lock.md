@@ -6,17 +6,18 @@ repository records exactly which upstream revisions it was reviewed and tested a
 `target/upstream/` directory.
 
 ```bash
-cargo xtask upstream list                 # print locked repositories and revisions
-cargo xtask upstream verify               # validate the lock, confirm every SHA exists remotely,
-                                          # and fail if any tracked path looks like copied Raydium source
-cargo xtask upstream verify --offline     # lock/format and tracked-tree checks only
-cargo xtask upstream fetch                # cpmm + clmm at base_revision -> target/upstream/<name>
+cargo xtask upstream list                   # print locked repositories and revisions
+cargo xtask upstream verify                 # validate the lock, confirm every SHA exists remotely,
+                                            # and fail if any tracked path looks like copied Raydium source
+cargo xtask upstream verify --offline       # lock/format and tracked-tree checks only
+cargo xtask upstream fetch                  # cpmm + clmm at base_revision -> target/upstream/<name>
 cargo xtask upstream fetch --hook --locked  # cpmm + clmm at the hook-support commit; refuses dirty trees
                                             # and unexpected commits
 ```
 
 Fetched trees are disposable build inputs. They are built with the upstream repository's own
 `Cargo.lock`, Anchor and Solana toolchain, never with this workspace's dependency graph.
+`verify` is a path-name heuristic plus a remote-existence check, not a content scan.
 
 ## Hook repository baseline
 
@@ -30,7 +31,11 @@ Implementation commits from the baseline forward:
 
 | Commit | Change |
 |---|---|
-| _(this change set)_ | Remove vendored Raydium trees; add `upstream.lock.toml` and `cargo xtask upstream`; remove the account-union helper from `hook-policy-model` |
+| `1917778` | Remove vendored Raydium trees; add `upstream.lock.toml` and `cargo xtask upstream`; remove the account-union helper |
+| `656544d` | CPMM `swap_base_input_v2` runtime test asserts hook leg execution and failure origin |
+| `66aff29` | Harden the reference hook (versioned `HookConfig`, authority modes, atomic init); refactor the SDK (per-leg atomic resolution, structured errors, framing, V1 goldens) |
+| `2036b9e` | CLMM `swap_v3` runtime test against the real CLMM program |
+| `9cc41da` | Driver and CLI; the unrelated second hook; starter template; `integration` fork feature locked; crates modularised |
 
 ## Upstream source-review locks
 
@@ -38,7 +43,7 @@ Implementation commits from the baseline forward:
 |---|---|---|
 | [`raydium-io/raydium-cp-swap`](https://github.com/raydium-io/raydium-cp-swap) | `b3187ae53a1b95a201f855a59024a12ca8f5b51a` | CPMM base |
 | [`raydium-io/raydium-clmm`](https://github.com/raydium-io/raydium-clmm) | `ed1eb41519d5355755f7df52b43fa9610938b60b` | CLMM base |
-| [`raydium-io/raydium-sdk-V2`](https://github.com/raydium-io/raydium-sdk-V2) | `cc33ec28a8921a35609e83293e9e07ad830b0779` | GPL-3.0 reference only; never copied |
+| [`raydium-io/raydium-sdk-V2`](https://github.com/raydium-io/raydium-sdk-V2) | `cc33ec28a8921a35609e83293e9e07ad830b0779` | GPL-3.0 reference only; never copied (a local, git-ignored copy may exist under `reference/`) |
 | [`raydium-io/raydium-cpi`](https://github.com/raydium-io/raydium-cpi) | `115df2779d53bacc7db9d0be2773a4b48a6d372b` | Public CPI interface reference |
 | [`solana-program/transfer-hook`](https://github.com/solana-program/transfer-hook) | `ec7063291e968f4b0064e4df0324ff49dcf320df` | Execute ABI, validation PDA, TLV resolver |
 | [`solana-program/token-2022`](https://github.com/solana-program/token-2022) | `b5b7511e5d4f19a6a118b858d83a7fe3b0017b1e` | Transfer-hook extension and CPI behavior |
@@ -47,22 +52,21 @@ These are source-review locks. They are **not** the Rust crate versions this wor
 
 ## Hook-support revisions (external)
 
-The Transfer Hook account-forwarding change is developed in external Raydium forks, on top of the
-base revisions above, never in a copied tree here.
+The Transfer Hook account-forwarding change lives in external forks, on top of the base revisions.
+No upstream pull request to `raydium-io` has been opened.
 
-| Program | External repository / branch | Base | Hook-support commit | Adds |
-|---|---|---|---|---|
-| CPMM | [`trilltino/raydium-cp-swap`](https://github.com/trilltino/raydium-cp-swap) `transfer-hook-support` | `b3187ae…` | `ec5862d8c735311d6fe88d3d19bd5f3637173db7` | `swap_base_input_v2` |
-| CLMM | [`trilltino/raydium-clmm`](https://github.com/trilltino/raydium-clmm) `transfer-hook-support` | `ed1eb41…` | `b04b6ec85a7e85457cafca3fc56511d81beaba06` | `swap_v3` |
+| Program | Fork / branch | Hook-support commit | Adds |
+|---|---|---|---|
+| CPMM | [`trilltino/raydium-cp-swap`](https://github.com/trilltino/raydium-cp-swap) `transfer-hook-support` | `75ddc09f102c8e3e4424058cee188bf8277949fc` | `swap_base_input_v2`; the `integration` build feature |
+| CLMM | [`trilltino/raydium-clmm`](https://github.com/trilltino/raydium-clmm) `transfer-hook-support` | `40291d53d84c6a28991ed966aa2efd261843f662` | `swap_v3`; the `integration` build feature |
 
-These are fork branches; no upstream PR to `raydium-io` has been opened. On each, the host unit
-tests pass using the upstream's own lockfile (CPMM: 26 passed; CLMM: 204 passed, 1 ignored,
-`cargo test --lib --locked`). The branches contain the changes previously carried in the
-now-deleted `vendor/` trees, including the uncommitted shared-helper edits from the working tree at
-the time of removal.
+Host unit tests (`cargo test --lib --locked`, upstream lockfile): CPMM 26 pass by default and 27
+with `--features integration`; CLMM 204 pass by default and 205 with `--features integration`.
 
-Program IDs, discriminators and deployment evidence for these builds belong in
-`environments/*.json` once they exist; none is recorded yet.
+The `integration` feature selects our own program id, admin and fee-receiver/owner keys, so the
+hook-aware builds can be deployed under ids we control. Default, `devnet` and `localnet` behavior
+is unchanged and combining `integration` with either is a compile error. The ids and the build and
+deploy procedure are in [integration-devnet](integration-devnet.md).
 
 ## Executable dependency line (this workspace)
 
@@ -75,30 +79,35 @@ Program IDs, discriminators and deployment evidence for these builds belong in
 | `spl-token-2022` | `7.0.0` |
 | `spl-transfer-hook-interface` | `0.10.0` |
 | `spl-tlv-account-resolution` | `0.10.0` |
+| `solana-rpc-client` | `2.2.7` (already in the lock through ProgramTest) |
 
-Cargo.lock records the full resolution. Do not upgrade this line opportunistically; change it only
-in a dedicated migration that keeps every runtime test green. ProgramTest 2.2.7 bundles the
-Token-2022 8.0.0 SBF program, which the runtime tests use to exercise the real transfer-hook CPI.
-Raydium's own Anchor/Solana graph is intentionally **not** merged into this workspace.
+Cargo.lock records the full resolution. Do not upgrade this line opportunistically. ProgramTest
+2.2.7 bundles the Token-2022 8.0.0 SBF program, which the runtime tests use to exercise the real
+transfer-hook CPI. Raydium's own Anchor/Solana graph is intentionally **not** merged into this
+workspace.
 
 ## External build toolchains
 
-| Program | Package | Toolchain used for last local check |
+| Program | Package | Toolchain used |
 |---|---|---|
-| CPMM (`raydium-cp-swap`) | `raydium-cp-swap`, lib `raydium_cp_swap` | host `cargo test --lib --locked` on cargo 1.96.1; SBF artifacts via `cargo build-sbf` (solana-cargo-build-sbf 4.0.0, platform-tools v1.53) |
+| CPMM (`raydium-cp-swap`) | `raydium-cp-swap`, lib `raydium_cp_swap` | `cargo build-sbf` (solana-cargo-build-sbf 4.0.0, platform-tools v1.53); host tests on cargo 1.96.1 |
 | CLMM (`raydium-clmm`) | `raydium-clmm`, lib `raydium_clmm` | same |
+| Hooks (this repo) | `reference-hook-onchain`, `arbitrary-test-hook` | same |
 
-Per-artifact records (Cargo.lock hash, artifact hash, program ID) are not yet produced; the
-external-build tooling that emits them is future work.
+Deployed artifacts are recorded with their SHA-256, size and source revision in
+`environments/devnet.json`.
 
 ## What is and is not verified
 
-- Verified: reference hook ProgramTest against the real Token-2022 processor (success, rejection,
-  rollback); SDK resolution through the official SPL helpers; host unit tests of both external
-  hook-support branches.
-- A ProgramTest that drives CPMM `swap_base_input_v2` exists as a work in progress in
-  `programs/reference-hook-onchain/tests/`; no CPMM or CLMM hooked swap has been executed in a
-  runtime test recorded here.
-- LaunchLab: the deployed handler is not public. The local LaunchLab crate is a model only and is not
-  evidence of deployed behavior. Real integration is **blocked**.
-- Nothing has been submitted to a public cluster.
+- Verified by execution: the reference hook against the real Token-2022 processor (success,
+  rejection, rollback); CPMM `swap_base_input_v2` and CLMM `swap_v3` hooked swaps in both
+  directions under ProgramTest with the real Raydium SBF binaries (the CPMM and CLMM runtime
+  tests, and the driver flows in `crates/raydium-hook-driver/tests/local_flows.rs`, which use the
+  exact integration artifacts); an unrelated second hook through both AMMs with no change to the
+  SDK or builders; the same flows on devnet (see [integration-devnet](integration-devnet.md)).
+- ProgramTest is the real runtime executing real binaries, but it is not a validator process.
+- The model crates (`hook-policy-model`, `reference-hook-model`, `integrations/*`) assert design
+  facts only and are not runtime evidence.
+- LaunchLab: the deployed handler is not public. `integrations/launchlab` is a simulator and says
+  so. Real integration is **blocked**.
+- Official Raydium (including its devnet) does not contain the hook-aware instructions.

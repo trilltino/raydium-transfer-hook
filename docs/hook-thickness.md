@@ -1,19 +1,41 @@
 # Hook thickness
 
-Do not impose an arbitrary maximum rule count. Measure the whole transaction on the target runtime and record:
+There is no arbitrary maximum rule count. What bounds a hook is the whole transaction on the
+target runtime: serialized size, compute, writable-account contention, CPI depth and setup rent.
+Limits change with the network, so any figure below is a measurement on a named runtime, not a
+protocol constant.
 
-- Total and incremental compute units.
-- Serialized message size.
-- Total and writable account counts.
-- Instruction trace count and CPI depth.
-- First-use setup accounts and rent.
-- Simulation latency and failure modes.
-- Contention from repeated writes to shared state.
+## Account thickness (exact)
 
-Benchmark at least: no hook, no-op hook, max-wallet only, a light fair-launch stack, loyalty checkpoints for sender and receiver, a heavy combined stack, and a dual-hook swap. The resolver's modeled account thickness is deterministic:
+- No hook: `0` appended accounts for that transfer.
+- A hook with `N` resolved extra accounts: `N + 2` appended accounts (the extras, the hook program,
+  the validation list), before the transaction compiler deduplicates keys.
+- A swap has two transfers: `(N1 + 2) + (N2 + 2)` when both legs are hooked. Each leg's slice is
+  kept separate even if keys repeat.
 
-- No hook: `0` appended metas for that transfer.
-- Hook with `N` resolved extra metas: `N + 2` appended metas (extra metas, hook program, validation list), before message-level key deduplication by the transaction compiler.
-- A modeled two-transfer instruction: `(N1 + 2) + (N2 + 2)` appended metas when both legs are hooked; unhooked legs contribute zero. Transfer-specific ranges are preserved even if keys repeat.
+Observed: the reference hook has `N = 1` (3 accounts per leg); the unrelated arbitrary hook has
+`N = 2` (4 accounts per leg).
 
-These are account-plan counts only. This workspace has no validator benchmark, real CPI execution, serialized transaction measurement, or compute-unit results. Record those only after running a concrete patched program on a named runtime; see [`../benches/README.md`](../benches/README.md).
+## Compute measured so far
+
+All numbers are `solana-program-test` runs of the SBF binaries (the real runtime, not a validator),
+single runs, one hooked leg per swap. They are data points, not a benchmark.
+
+| What | Compute units |
+|---|---|
+| Reference hook `Execute` alone (max-transfer rule), SBF | about 16,600 |
+| CPMM hooked swap, reference hook | about 75,900 |
+| CPMM hooked swap, arbitrary hook (2 extras, writes a counter) | about 82,900 |
+| CLMM hooked swap, reference hook | about 111,000 to 114,000 |
+| CLMM hooked swap, arbitrary hook | about 124,000 to 127,000 |
+
+The driver submits swaps with a 1,400,000 compute-unit limit; real limits and a fee-optimal limit
+were not explored.
+
+## Not measured
+
+Serialized transaction size and address-lookup-table behavior, transaction format limits, loaded
+account data, writable contention under load, CPI trace limits beyond the observed depth,
+first-use rent for hooks with large state, simulation latency, hooks with more than two extra
+accounts, and two different hooks on the two legs of one swap. The runnable `e2e` flows are the
+place to add those measurements; see [`../benches/README.md`](../benches/README.md).

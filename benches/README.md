@@ -1,12 +1,17 @@
 # Benchmarks
 
-No runtime benchmark has been run. The workspace tests model planning and rule execution; they do not execute a Solana transaction.
+No benchmark suite exists yet. The only measurements are the compute-unit data points recorded in
+[`../docs/hook-thickness.md`](../docs/hook-thickness.md), taken from `solana-program-test` runs of
+the SBF binaries (the real runtime, not a validator, one run each).
 
-The current plan-level account thickness is documented in [`../docs/hook-thickness.md`](../docs/hook-thickness.md). A runtime report must include:
+The driver already records what a benchmark needs: each swap is simulated before it is sent and the
+simulation's compute units, log count and hook-invocation count are kept in the run evidence
+(`raydium-hook e2e --record`). A real benchmark should add:
 
-- Solana/Agave version, cluster/runtime configuration, program ids and build hashes.
-- Exact instruction data, fixed accounts, remaining-account ranges, mint extension state, and validation-list size.
-- Compute units, transaction message bytes, account/read-write counts, CPI count/depth, and simulation/runtime latency.
-- First-use account creation/rent, failure logs, and whether all token and pool state rolled back on rejection.
+- Solana/Agave version, cluster configuration, program ids and artifact hashes.
+- Instruction data, fixed accounts, remaining-account ranges, extension state and validation-list size.
+- Serialized message bytes, account and writable counts, CPI count and depth, address-lookup-table use.
+- First-use account creation and rent, and latency.
+- Hooks with more extra accounts, a different hook on each leg, and writable shared state under load.
 
-Required scenarios remain: no hook, no-op hook, max-transfer rule, address rule, optional and mandatory policy, one-hook and dual-hook swaps, hook rejection, and setup/graduation. Do not publish simulated model timings as on-chain overhead.
+Do not publish model timings as on-chain overhead.
