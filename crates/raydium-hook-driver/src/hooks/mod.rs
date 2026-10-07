@@ -5,6 +5,7 @@
 mod arbitrary;
 mod creator_commitment;
 mod fair_launch;
+mod loyalty_rewards;
 mod reference;
 
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey, signature::Keypair};
@@ -14,6 +15,7 @@ use transfer_hook_sdk::SplTransferLeg;
 pub use arbitrary::ArbitraryHook;
 pub use creator_commitment::CreatorCommitmentHook;
 pub use fair_launch::FairLaunchHook;
+pub use loyalty_rewards::LoyaltyRewardsHook;
 pub use reference::ReferenceHook;
 
 /// Which side of a swap the hooked token is on.
@@ -91,6 +93,17 @@ pub enum FollowUp {
     },
     /// Let at least this many seconds of cluster time pass.
     AdvanceTime(u64),
+    /// Remember a token account's balance under `name`, for [`FollowUp::ExpectChange`].
+    Remember { name: String, account: Pubkey },
+    /// Require a token account's balance to differ from the one remembered under `since` by an
+    /// amount in `min..=max`.
+    ExpectChange {
+        label: String,
+        account: Pubkey,
+        since: String,
+        min: i64,
+        max: i64,
+    },
     /// A swap of `amount_in` in one direction that must succeed.
     Swap {
         label: String,

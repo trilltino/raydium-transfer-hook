@@ -21,5 +21,5 @@ pub use env::{Environment, Evidence};
 pub use flow::{run_clmm, run_cpmm, FlowInputs};
 pub use hooks::{
     ArbitraryHook, CreatorCommitmentHook, Direction, FairLaunchHook, FollowUp, HookContext,
-    HookSetup, ReferenceHook, Refusal, RejectionPlan,
+    HookSetup, LoyaltyRewardsHook, ReferenceHook, Refusal, RejectionPlan,
 };

@@ -276,8 +276,35 @@ async fn run_follow_ups<C: Chain, B: SwapBuilder>(
     builder: &B,
     kit: &SwapKit<'_>,
 ) -> Result<()> {
+    let mut remembered: std::collections::HashMap<String, u64> = Default::default();
     for step in kit.hook.follow_up(&kit.ctx) {
         match step {
+            FollowUp::Remember { name, account } => {
+                let amount = amount_of(chain, &account).await?;
+                remembered.insert(name, amount);
+            }
+            FollowUp::ExpectChange {
+                label,
+                account,
+                since,
+                min,
+                max,
+            } => {
+                let before = *remembered
+                    .get(&since)
+                    .ok_or_else(|| DriverError::new(format!("nothing remembered as `{since}`")))?;
+                let now = amount_of(chain, &account).await?;
+                let change = i128::from(now) - i128::from(before);
+                require(
+                    (i128::from(min)..=i128::from(max)).contains(&change),
+                    format!("{label}: balance changed by {change}, outside {min}..={max}"),
+                )?;
+                rec.push(
+                    &label,
+                    None,
+                    format!("balance {before} -> {now} (change {change}, expected {min}..={max})"),
+                );
+            }
             FollowUp::Swap {
                 label,
                 direction,

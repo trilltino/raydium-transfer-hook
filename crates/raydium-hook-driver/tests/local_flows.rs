@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use raydium_hook_driver::{
     env::Programs, run_clmm, run_cpmm, ArbitraryHook, CreatorCommitmentHook, Environment,
-    FairLaunchHook, FlowInputs, HookSetup, LocalChain, ReferenceHook,
+    FairLaunchHook, FlowInputs, HookSetup, LocalChain, LoyaltyRewardsHook, ReferenceHook,
 };
 use solana_program_test::{ProgramTest, ProgramTestContext};
 use solana_sdk::{
@@ -53,6 +53,7 @@ fn setup() -> Setup {
         "arbitrary_test_hook.so",
         "creator_commitment_hook.so",
         "fair_launch_hook.so",
+        "loyalty_rewards_hook.so",
     ] {
         assert!(
             artifacts.join(file).exists(),
@@ -79,6 +80,10 @@ fn setup() -> Setup {
                     creator_commitment_program().to_string(),
                 ),
                 ("fair_launch".to_string(), fair_launch_program().to_string()),
+                (
+                    "loyalty_rewards".to_string(),
+                    loyalty_rewards_program().to_string(),
+                ),
             ]
             .into(),
         },
@@ -113,6 +118,7 @@ async fn context(setup: &Setup) -> ProgramTestContext {
         None,
     );
     test.add_program("fair_launch_hook", fair_launch_program(), None);
+    test.add_program("loyalty_rewards_hook", loyalty_rewards_program(), None);
     // The deployer is the programs' admin, so it signs and pays.
     test.add_account(
         setup.deployer.pubkey(),
@@ -156,6 +162,17 @@ async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
         other => panic!("unknown amm {other}"),
     }
     .unwrap_or_else(|e| panic!("{amm} flow with {} failed: {e}", hook.name()));
+    // Measurements for the docs: compute units of the hooked swaps, and the largest transaction.
+    for e in evidence
+        .iter()
+        .filter(|e| e.step.starts_with("hooked swap"))
+    {
+        println!("   {}: {}", e.step, e.detail);
+    }
+    println!(
+        "   largest transaction: {} bytes (limit 1232)",
+        chain.largest_transaction
+    );
     assert!(
         evidence
             .iter()
@@ -251,5 +268,25 @@ async fn cpmm_with_the_fair_launch_template() {
 async fn clmm_with_the_fair_launch_template() {
     let setup = setup();
     let hook = FairLaunchHook::new(setup.env.template_program("fair_launch").unwrap(), 150);
+    run("clmm", &hook, &setup).await;
+}
+
+fn loyalty_rewards_program() -> solana_sdk::pubkey::Pubkey {
+    solana_sdk::pubkey::Pubkey::new_from_array([0xC5; 32])
+}
+
+#[tokio::test]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+async fn cpmm_with_the_loyalty_rewards_template() {
+    let setup = setup();
+    let hook = LoyaltyRewardsHook::new(setup.env.template_program("loyalty_rewards").unwrap(), 100);
+    run("cpmm", &hook, &setup).await;
+}
+
+#[tokio::test]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+async fn clmm_with_the_loyalty_rewards_template() {
+    let setup = setup();
+    let hook = LoyaltyRewardsHook::new(setup.env.template_program("loyalty_rewards").unwrap(), 100);
     run("clmm", &hook, &setup).await;
 }

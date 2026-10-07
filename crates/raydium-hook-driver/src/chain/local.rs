@@ -12,25 +12,31 @@ use super::{sign, Chain, DriverError, Reader, Result, Sent, Simulation};
 pub struct LocalChain<'a> {
     pub context: &'a mut ProgramTestContext,
     payer: Keypair,
+    /// The size in bytes of the largest transaction sent so far (a packet holds 1232).
+    pub largest_transaction: usize,
 }
 
 impl<'a> LocalChain<'a> {
     /// Sign as the context's own payer.
     pub fn new(context: &'a mut ProgramTestContext) -> Self {
         let payer = Keypair::from_bytes(&context.payer.to_bytes()).expect("payer keypair");
-        Self { context, payer }
+        Self::with_payer(context, payer)
     }
 
     /// Sign as `payer` (it must hold lamports in the test bank). Needed to act as the
     /// integration build's admin.
     pub fn with_payer(context: &'a mut ProgramTestContext, payer: Keypair) -> Self {
-        Self { context, payer }
+        Self {
+            context,
+            payer,
+            largest_transaction: 0,
+        }
     }
 }
 
 /// `ProgramTest` does not enforce the packet limit a real cluster does, so enforce it here: a flow
-/// that only fits locally would fail on devnet.
-fn ensure_fits_in_a_packet(tx: &solana_sdk::transaction::Transaction) -> Result<()> {
+/// that only fits locally would fail on devnet. Returns the transaction's size.
+fn ensure_fits_in_a_packet(tx: &solana_sdk::transaction::Transaction) -> Result<usize> {
     // compact-u16 signature count (one byte below 128), the signatures, then the message.
     let size = 1 + tx.signatures.len() * 64 + tx.message.serialize().len();
     if size > solana_sdk::packet::PACKET_DATA_SIZE {
@@ -39,7 +45,7 @@ fn ensure_fits_in_a_packet(tx: &solana_sdk::transaction::Transaction) -> Result<
             solana_sdk::packet::PACKET_DATA_SIZE
         )));
     }
-    Ok(())
+    Ok(size)
 }
 
 fn banks_error(error: BanksClientError) -> DriverError {
@@ -75,7 +81,8 @@ impl Chain for LocalChain<'_> {
             .await
             .map_err(banks_error)?;
         let tx = sign(&self.payer, instructions, signers, blockhash);
-        ensure_fits_in_a_packet(&tx)?;
+        let size = ensure_fits_in_a_packet(&tx)?;
+        self.largest_transaction = self.largest_transaction.max(size);
         let signature = tx.signatures[0].to_string();
         self.context
             .banks_client

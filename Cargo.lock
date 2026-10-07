@@ -2428,6 +2428,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "loyalty-rewards-hook"
+version = "0.1.0"
+dependencies = [
+ "hook-kit",
+ "solana-program",
+ "solana-program-test",
+ "solana-sdk",
+ "spl-tlv-account-resolution 0.10.0",
+ "spl-token",
+ "spl-token-2022",
+ "spl-transfer-hook-interface 0.10.0",
+ "tokio",
+]
+
+[[package]]
 name = "lru-slab"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3334,6 +3349,7 @@ dependencies = [
  "arbitrary-test-hook",
  "creator-commitment-hook",
  "fair-launch-hook",
+ "loyalty-rewards-hook",
  "reference-hook-onchain",
  "serde",
  "serde_json",
