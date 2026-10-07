@@ -1173,7 +1173,9 @@ async fn execute_requires_exactly_six_readonly_accounts() {
     let payer = ctx.payer.pubkey();
     let good = direct_execute(source, mint, destination, config, list, payer, 1);
     assert_eq!(good.accounts.len(), 6);
-    send(&mut ctx, &[good.clone()], &[]).await.unwrap();
+    send(&mut ctx, std::slice::from_ref(&good), &[])
+        .await
+        .unwrap();
 
     let mut missing = good.clone();
     missing.accounts.pop();

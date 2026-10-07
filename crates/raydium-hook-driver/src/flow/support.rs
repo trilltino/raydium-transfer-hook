@@ -98,7 +98,10 @@ pub(super) async fn raw_data<C: Chain>(chain: &mut C, account: &Pubkey) -> Resul
         .data)
 }
 
-pub(super) async fn resolve<C: Chain>(
+/// Resolve one transfer leg of a swap for `chain`: `expected_hook` pins the hook program (so a mint
+/// re-pointed to another program is refused), and `writable_extras` names the only writable extra
+/// accounts the caller accepts. The same call the end-to-end flows and the CLI make.
+pub async fn resolve<C: Chain>(
     chain: &C,
     role: LegRole,
     leg: SplTransferLeg,

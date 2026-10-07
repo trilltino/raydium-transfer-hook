@@ -149,6 +149,40 @@ fn execute_list_extras(data: &[u8]) -> Option<usize> {
     consistent.then_some(count)
 }
 
+/// Whether `program` exists and is executable, which loader owns it, and who can upgrade it.
+pub async fn inspect_program(reader: &Reader, program: Pubkey) -> Result<ProgramFacts> {
+    let read = |key: Pubkey| {
+        let reader = reader.clone();
+        async move { reader(key).await }
+    };
+    Ok(match read(program).await? {
+        None => ProgramFacts {
+            address: program,
+            exists: false,
+            executable: false,
+            loader: None,
+            upgrade: None,
+        },
+        Some(p) => {
+            let programdata = if p.owner == bpf_loader_upgradeable::id() && p.data.len() >= 36 {
+                match Pubkey::try_from(&p.data[4..36]) {
+                    Ok(address) => read(address).await?.map(|a| a.data),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            };
+            ProgramFacts {
+                address: program,
+                exists: true,
+                executable: p.executable,
+                loader: Some(p.owner),
+                upgrade: Some(upgrade_info(p.owner, &p.data, programdata.as_deref())),
+            }
+        }
+    })
+}
+
 /// Read the transport facts of `mint` through `reader`.
 pub async fn inspect_readiness(reader: &Reader, mint: Pubkey) -> Result<Readiness> {
     let read = |key: Pubkey| {
@@ -185,33 +219,7 @@ pub async fn inspect_readiness(reader: &Reader, mint: Pubkey) -> Result<Readines
     };
     readiness.hook_program = Some(hook);
 
-    let program = read(hook).await?;
-    readiness.program = Some(match &program {
-        None => ProgramFacts {
-            address: hook,
-            exists: false,
-            executable: false,
-            loader: None,
-            upgrade: None,
-        },
-        Some(p) => {
-            let programdata = if p.owner == bpf_loader_upgradeable::id() && p.data.len() >= 36 {
-                match Pubkey::try_from(&p.data[4..36]) {
-                    Ok(address) => read(address).await?.map(|a| a.data),
-                    Err(_) => None,
-                }
-            } else {
-                None
-            };
-            ProgramFacts {
-                address: hook,
-                exists: true,
-                executable: p.executable,
-                loader: Some(p.owner),
-                upgrade: Some(upgrade_info(p.owner, &p.data, programdata.as_deref())),
-            }
-        }
-    });
+    readiness.program = Some(inspect_program(reader, hook).await?);
 
     let list_address = spl_transfer_hook_interface::get_extra_account_metas_address(&mint, &hook);
     readiness.validation_list = Some(match read(list_address).await? {

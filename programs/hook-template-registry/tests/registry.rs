@@ -167,7 +167,7 @@ async fn publishing_twice_as_the_same_publisher_is_refused() {
         [1; 32],
         0,
     );
-    send(&mut context, &[ix.clone()], &[&publisher])
+    send(&mut context, std::slice::from_ref(&ix), &[&publisher])
         .await
         .expect("first");
     let result = send(&mut context, &[ix], &[&publisher]).await;

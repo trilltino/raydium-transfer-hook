@@ -67,10 +67,10 @@ and the validation list. An integrator must name them as allowed writable accoun
 | `0xC007` | `InvalidDuration` | zero, or longer than about ten years |
 | `0xC008` | `MathOverflow` | a fixed-point calculation overflowed |
 | `0xC009` | `RewardMintHasHook` | the reward mint has a hook of its own |
-| `0xC00a` | `RewardAccountMismatch` | wrong vault, mint, token program or payout account |
-| `0xC00b` | `WrongOwner` | the signer does not own the token account |
-| `0xC00c` | `NothingToClaim` | no earnings yet |
-| `0xC00d` | `PoolVaultMismatch` | the pool vault is for another mint |
+| `0xC00A` | `RewardAccountMismatch` | wrong vault, mint, token program or payout account |
+| `0xC00B` | `WrongOwner` | the signer does not own the token account |
+| `0xC00C` | `NothingToClaim` | no earnings yet |
+| `0xC00D` | `PoolVaultMismatch` | the pool vault is for another mint |
 | `0x8001..` | `hook_kit::KitError` | shared checks: wrong authority, mint authority not revoked, direct `Execute`, already registered, ... |
 
 ## Run it

@@ -24,13 +24,13 @@ pub enum LoyaltyError {
     /// The reward mint carries a TransferHook of its own.
     RewardMintHasHook = 0xC009,
     /// The reward vault, reward mint or token program is not the one the rewards were set up with.
-    RewardAccountMismatch = 0xC00a,
+    RewardAccountMismatch = 0xC00A,
     /// The signer does not own the token account.
-    WrongOwner = 0xC00b,
+    WrongOwner = 0xC00B,
     /// Nothing to claim yet.
-    NothingToClaim = 0xC00c,
+    NothingToClaim = 0xC00C,
     /// The pool vault is not a token account of the hooked mint.
-    PoolVaultMismatch = 0xC00d,
+    PoolVaultMismatch = 0xC00D,
 }
 
 impl LoyaltyError {

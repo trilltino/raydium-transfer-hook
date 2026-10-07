@@ -24,7 +24,7 @@ pub enum FairLaunchError {
     /// The slot-counter account is wrong, malformed, or not writable.
     InvalidCounter = 0xB009,
     /// The instructions sysvar account is missing or wrong.
-    InvalidSysvar = 0xB00a,
+    InvalidSysvar = 0xB00A,
 }
 
 impl FairLaunchError {

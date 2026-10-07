@@ -1,25 +1,72 @@
 //! Command-line arguments: a tiny flag parser and keypair loading.
 
-use solana_sdk::signature::{read_keypair_file, Keypair};
+use std::str::FromStr;
+
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{read_keypair_file, Keypair},
+};
 
 pub(crate) const USAGE: &str = "\
 raydium-hook <command> [options]
 
-commands:
-  deploy   --env FILE --keypair FILE --artifacts DIR --keys DIR [--only NAME]
-           Deploy the integration programs (`solana program deploy`), skipping ones already
-           deployed, and record each deployment in the environment file.
-  e2e      --env FILE --keypair FILE [--fee-receiver-keypair FILE]
-           [--amm cpmm|clmm|all]
-           [--hook reference|arbitrary|creator-commitment|fair-launch|loyalty-rewards|all]
-           [--vest-seconds N] [--window-seconds N] [--reward-seconds N] [--record]
-           Run the checked end-to-end flows (admin setup, hooked mint, real pool, hooked swaps in
-           both directions, hook refusals with rollback, the hook's own follow-up steps). The
-           time flags are real seconds the run waits on a live cluster. Exits non-zero on any
-           failure.
-  inspect  --rpc URL MINT
-           Show a mint's Transfer Hook, whether its validation list exists, and who can upgrade
-           the hook program.
+build, ship and run a hook
+  hook build   DIR [--out DIR]
+               Build a hook program with `cargo build-sbf`; prints the artifact, its size and hash.
+  hook deploy  --env FILE --keypair FILE --so FILE --name NAME [--keys DIR] [--program-keypair FILE]
+               Deploy one program (a new program keypair is made under --keys if none exists) and
+               record it in the environment file.
+  hook setup   --env FILE --keypair FILE --kind KIND --mint MINT [--program ID] [--setup FILE]
+               [--pool-vault KEY] [--creator-account KEY] [--reward-mint KEY] [--max-transfer N]
+               [--max-per-slot N] [--vest-seconds N] [--window-seconds N] [--reward-seconds N]
+               Point the mint at the hook and initialise it. KIND: reference, arbitrary, generic
+               (needs --setup FILE), creator-commitment, fair-launch, anti-bundle,
+               loyalty-rewards, parent-spin-off.
+  hook inspect MINT --rpc URL
+               Same as `inspect`.
+  mint create  --env FILE --keypair FILE [--decimals N] [--hook PROGRAM | --hookable]
+               [--transfer-fee-bps N]
+               [--supply N]
+               Create a Token-2022 mint (--hook: TransferHook extension pointed at PROGRAM now;
+               --hookable: the extension with no hook yet, to attach one after a pool exists),
+               an account for the payer, and optionally mint a supply.
+
+run it through Raydium
+  e2e          --env FILE --keypair FILE [--fee-receiver-keypair FILE] [--amm cpmm|clmm|all]
+               [--hook NAME|all | --hook-dir DIR [--setup FILE] | --setup FILE]
+               [--second-hook NAME] [--transfer-fee-bps N] [--keep-state FILE]
+               [--vest-seconds N] [--window-seconds N] [--reward-seconds N] [--record]
+               Run the checked end-to-end flows: admin setup, hooked mint, real pool, hooked swaps
+               in both directions, the hook's refusals with rollback, its own follow-up steps.
+               NAME: reference, arbitrary, creator-commitment, fair-launch, anti-bundle,
+               loyalty-rewards, parent-spin-off. --hook-dir builds and deploys a hook you wrote
+               (the starter's setup ABI, or --setup for any other). Prints a results table and
+               exits non-zero on any failure. --keep-state saves the pool for `cpmm swap`.
+  cpmm swap    --env FILE --keypair FILE --state FILE --amount N [--direction in|out]
+  clmm swap    --env FILE --keypair FILE --state FILE --amount N [--direction in|out]
+               [--min-out N] [--allow-writable KEY,KEY | --allow-all-writable] [--simulate-only]
+               Swap on the pool a flow kept: resolve each leg's hook accounts, simulate, say whether
+               a hook refused and why, then send. `in` sells mint_0 into the pool.
+
+inspect and check
+  inspect      --rpc URL MINT
+               A mint's transport readiness: the hook, its program, who can upgrade it, whether the
+               validation list is sound. (It says nothing about whether the hook is trustworthy.)
+  env probe    --env FILE --keypair FILE
+               Does each Raydium program in the environment recognise the hook-aware instructions
+               (swap_base_input_v2, swap_v3)? Nothing is sent; it simulates a malformed call.
+
+describe a template (optional metadata, never permission)
+  template id  MANIFEST.json
+               The content-derived template id of a manifest.
+  template publish --env FILE --keypair FILE --registry PROGRAM --hook PROGRAM --manifest FILE
+               [--flags N]
+  template show    --rpc URL --registry PROGRAM --hook PROGRAM --manifest FILE --publisher KEY
+
+deploy the whole environment
+  deploy       --env FILE --keypair FILE --artifacts DIR --keys DIR [--only NAME]
+               Deploy every program the environment lists (skipping ones already deployed) and
+               record each deployment with its hash, lockfile hash and toolchain.
 
 The deployer keypair is also the admin of the integration builds. Nothing is sent unless the
 command says so; secrets are read from the files you name and never printed.";
@@ -32,6 +79,8 @@ pub(crate) struct Flags {
     pub(crate) positional: Vec<String>,
 }
 
+const SWITCHES: &[&str] = &["record", "simulate-only", "allow-all-writable", "hookable"];
+
 pub(crate) fn parse(args: &[String]) -> Flags {
     let mut flags = Flags {
         values: vec![],
@@ -42,7 +91,7 @@ pub(crate) fn parse(args: &[String]) -> Flags {
     while index < args.len() {
         let arg = &args[index];
         if let Some(name) = arg.strip_prefix("--") {
-            if matches!(name, "record") {
+            if SWITCHES.contains(&name) {
                 flags.switches.push(name.to_string());
             } else if let Some(value) = args.get(index + 1) {
                 flags.values.push((name.to_string(), value.clone()));
@@ -72,8 +121,77 @@ impl Flags {
     pub(crate) fn has(&self, name: &str) -> bool {
         self.switches.iter().any(|s| s == name)
     }
+
+    /// A number flag, or `default` when it is absent.
+    pub(crate) fn number<T: FromStr>(&self, name: &str, default: T) -> Res<T>
+    where
+        T::Err: std::fmt::Display,
+    {
+        match self.get(name) {
+            None => Ok(default),
+            Some(text) => text.parse().map_err(|e| format!("--{name}: {e}")),
+        }
+    }
+
+    /// A required public key flag.
+    pub(crate) fn pubkey(&self, name: &str) -> Res<Pubkey> {
+        Pubkey::from_str(self.need(name)?).map_err(|e| format!("--{name}: {e}"))
+    }
+
+    /// An optional public key flag.
+    pub(crate) fn pubkey_opt(&self, name: &str) -> Res<Option<Pubkey>> {
+        self.get(name)
+            .map(|text| Pubkey::from_str(text).map_err(|e| format!("--{name}: {e}")))
+            .transpose()
+    }
+
+    /// The first positional argument after the command words.
+    pub(crate) fn first_positional(&self, what: &str) -> Res<&str> {
+        self.positional
+            .first()
+            .map(String::as_str)
+            .ok_or_else(|| format!("give {what}\n\n{USAGE}"))
+    }
 }
 
 pub(crate) fn keypair(path: &str) -> Res<Keypair> {
     read_keypair_file(path).map_err(|e| format!("cannot read keypair {path}: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn values_switches_and_positionals_are_separated() {
+        let flags = parse(&args(&[
+            "MINT",
+            "--rpc",
+            "http://x",
+            "--simulate-only",
+            "--amount",
+            "42",
+        ]));
+        assert_eq!(flags.positional, vec!["MINT"]);
+        assert_eq!(flags.get("rpc"), Some("http://x"));
+        assert!(flags.has("simulate-only"));
+        assert_eq!(flags.number("amount", 0u64), Ok(42));
+        assert_eq!(flags.number("missing", 7u64), Ok(7));
+    }
+
+    #[test]
+    fn bad_numbers_and_keys_name_the_flag() {
+        let flags = parse(&args(&["--amount", "lots", "--mint", "not-a-key"]));
+        assert!(flags
+            .number("amount", 0u64)
+            .unwrap_err()
+            .contains("--amount"));
+        assert!(flags.pubkey("mint").unwrap_err().contains("--mint"));
+        assert!(flags.need("nope").unwrap_err().contains("missing --nope"));
+        assert_eq!(flags.pubkey_opt("absent"), Ok(None));
+    }
 }

@@ -12,6 +12,8 @@ name = "raydium-hook"
 path = "src/main.rs"
 
 [dependencies]
+hook-template-sdk = { path = "../hook-template-sdk" }
+raydium-adapters = { path = "../raydium-adapters" }
 raydium-hook-driver = { path = "../raydium-hook-driver" }
 transfer-hook-sdk = { path = "../transfer-hook-sdk" }
 solana-sdk = "=2.2.2"
@@ -19,3 +21,4 @@ spl-token-2022 = { version = "=7.0.0", features = ["no-entrypoint"] }
 spl-transfer-hook-interface = "=0.10.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 sha2 = "0.10"
+serde_json = "1"

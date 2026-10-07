@@ -24,8 +24,9 @@ mod world;
 use crate::{env::Environment, hooks::HookSetup};
 use solana_sdk::signature::Keypair;
 
-pub use clmm::run_clmm;
-pub use cpmm::run_cpmm;
+pub use clmm::{run_clmm, run_clmm_session};
+pub use cpmm::{run_cpmm, run_cpmm_session};
+pub use support::resolve as resolve_swap_leg;
 
 /// Swap size that every hook in this repository allows.
 pub const SWAP_AMOUNT: u64 = 10;

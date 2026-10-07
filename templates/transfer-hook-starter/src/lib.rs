@@ -112,5 +112,10 @@ pub use pda::{
 };
 pub use processor::process_instruction;
 
+// The entrypoint macro tests cfgs (`solana`, `custom-heap`, `custom-panic`) of the crate using it.
 #[cfg(not(feature = "no-entrypoint"))]
-solana_program::entrypoint!(process_instruction);
+#[allow(unexpected_cfgs)]
+mod entrypoint {
+    use super::process_instruction;
+    solana_program::entrypoint!(process_instruction);
+}

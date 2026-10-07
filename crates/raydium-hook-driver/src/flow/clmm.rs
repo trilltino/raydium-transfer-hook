@@ -89,7 +89,11 @@ impl SwapBuilder for ClmmSwaps<'_> {
     }
 }
 
-pub async fn run_clmm<C: Chain>(chain: &mut C, inputs: &FlowInputs<'_>) -> Result<Vec<Evidence>> {
+/// Run the CLMM flow, and also return what it left behind (see [`crate::session::Session`]).
+pub async fn run_clmm_session<C: Chain>(
+    chain: &mut C,
+    inputs: &FlowInputs<'_>,
+) -> Result<(Vec<Evidence>, crate::session::Session)> {
     inputs.env.require_hook_aware()?;
     let mut rec = Recorder::new("clmm");
     let payer = chain.payer().pubkey();
@@ -233,5 +237,13 @@ pub async fn run_clmm<C: Chain>(chain: &mut C, inputs: &FlowInputs<'_>) -> Resul
             world.quote.pubkey()
         ),
     );
-    Ok(rec.evidence)
+    let session = build_session("clmm", &world, &kit);
+    Ok((rec.evidence, session))
+}
+
+/// Run the CLMM flow.
+pub async fn run_clmm<C: Chain>(chain: &mut C, inputs: &FlowInputs<'_>) -> Result<Vec<Evidence>> {
+    run_clmm_session(chain, inputs)
+        .await
+        .map(|(evidence, _)| evidence)
 }

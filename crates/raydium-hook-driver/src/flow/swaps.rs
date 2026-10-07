@@ -548,3 +548,52 @@ pub(super) fn hook_entries<'a>(
     }
     entries
 }
+
+/// What to leave behind after a flow, so the pool can be traded against afterwards.
+pub(super) fn build_session(
+    amm: &str,
+    world: &super::world::World,
+    kit: &SwapKit<'_>,
+) -> crate::session::Session {
+    use solana_sdk::signature::Signer;
+    let mut allowed: Vec<Pubkey> = Vec::new();
+    for entry in &kit.hooks {
+        let ctx = &entry.ctx;
+        for (source, destination) in [
+            (ctx.trader_accounts[0], ctx.vaults[0]),
+            (ctx.vaults[0], ctx.trader_accounts[0]),
+        ] {
+            let leg = SplTransferLeg {
+                source,
+                mint: ctx.hooked_mint,
+                destination,
+                authority: ctx.payer,
+                amount: 0,
+            };
+            for key in entry.hook.allowed_writable(ctx, &leg) {
+                if !allowed.contains(&key) {
+                    allowed.push(key);
+                }
+            }
+        }
+    }
+    let primary = kit.primary();
+    crate::session::Session {
+        amm: amm.to_string(),
+        mint_0: world.hooked.pubkey().to_string(),
+        mint_1: world.quote.pubkey().to_string(),
+        accounts: [
+            primary.ctx.trader_accounts[0].to_string(),
+            primary.ctx.trader_accounts[1].to_string(),
+        ],
+        hooks: kit
+            .hooks
+            .iter()
+            .map(|entry| crate::session::SessionHook {
+                mint: entry.ctx.hooked_mint.to_string(),
+                program: entry.hook.program_id().to_string(),
+            })
+            .collect(),
+        allowed_writable: allowed.iter().map(|k| k.to_string()).collect(),
+    }
+}
