@@ -4,8 +4,11 @@ Thumbs.db
 
 # Fetched upstream trees and caches (never tracked)
 /.cache/
-
-# Fetched upstream trees and caches (never tracked)
-/.cache/
 /reference/
+
+# Private deployment keys (the integration profile). The throwaway localnet keys under
+# tests/fixtures/localnet are deliberately tracked.
 /.keys/
+
+# Build output of a standalone template built in place
+/templates/*/target/

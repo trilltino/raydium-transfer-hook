@@ -2,7 +2,7 @@
 
 Permissionless Token-2022 Transfer Hooks that run inside Raydium CPMM and CLMM swaps. Raydium is an
 external program: no Raydium source lives in this repository (see
-[upstream-sources.md](upstream-sources.md)).
+[source-lock.md](source-lock.md)).
 
 ```text
 integrator (CLI, app, script)
@@ -28,7 +28,7 @@ any Transfer Hook program                   one of the examples, or yours
 | `crates/raydium-hook-driver` | Instruction builders for the Raydium admin, pool and position setup, and the checked end-to-end flows (`flow/`), over a `Chain` that is a real RPC endpoint or in-process ProgramTest (`chain/`). Hook setup providers live in `hooks/`. |
 | `crates/raydium-hook-cli` | `raydium-hook deploy \| e2e \| inspect`: a thin shell over the driver. |
 | `crates/hook-kit` | What every hook needs: the `Execute` prelude, mint and token reads, PDA creation, an in-process test world. |
-| `templates/` | The three example hooks and the starter. The rule of each is `src/rule.rs`. |
+| `templates/` | The five example hooks and the starter. The rule of each is `src/rule.rs`. |
 | `programs/` | The reference hook and the arbitrary test hook. |
 | `crates/hook-policy-model`, `crates/reference-hook-model` | Pure-Rust models of platform policy and hook rules. Not on-chain. |
 | `integrations/{cpmm,clmm}` | Plan a swap's two legs and delegate framing to the SDK. Model only. |
@@ -74,7 +74,7 @@ do, after validating every leg. The framers (`frame_cpmm_swap_base_input_v2`, `f
 and the `*_or_passthrough` forms that leave a swap with no hooked leg as the byte-identical V1) take
 resolved `LegHook`s, never raw account metas, re-derive each leg's validation address, and reject
 trailing accounts and privilege conflicts. The layouts are in
-[raydium-instructions.md](raydium-instructions.md).
+[transfer-surface-matrix.md](transfer-surface-matrix.md).
 
 ## The SPL contract this rests on
 
@@ -96,15 +96,16 @@ Program ids are never constants in code. Each environment is a manifest in `envi
 | Manifest | Programs | Used for |
 |---|---|---|
 | `devnet.json` | Our hook-aware Raydium builds (`integration` feature) under our own ids, plus the hooks | The hooked-swap demo on a real cluster |
-| `localnet.json` | The same artifacts, in-process | `crates/raydium-hook-driver/tests/local_flows.rs` |
+| `localnet.json` | The same forks built with their `localnet` feature (upstream program ids, a throwaway admin from `tests/fixtures/localnet`), plus the hooks under throwaway ids | `cargo xtask localnet e2e` (a real `solana-test-validator`) and the in-process tests in `tests/program-test`; needs no private key |
 | `raydium-devnet.json` | Raydium's own devnet programs | Compatibility checks only. They do not contain the hook-aware instructions, and the driver refuses to send them any |
 
 ## What the evidence is
 
 * ProgramTest executes the actual SBF binaries in the Agave runtime, so a rejected swap rolling back,
-  hook invocation counts and compute use are observed, not assumed. It is not a validator process:
-  there is no `solana-test-validator` on the Windows setup this was built on. The in-process chain
-  also enforces the 1,232-byte packet limit, because ProgramTest does not, so a flow cannot pass
+  hook invocation counts and compute use are observed, not assumed. The in-process chain also
+  enforces the 1,232-byte packet limit, because ProgramTest does not, so a flow cannot pass
   locally and fail on a cluster.
-* A devnet run ([devnet.md](devnet.md)) is the real-cluster evidence.
+* `cargo xtask localnet e2e` runs the same flows on a real `solana-test-validator` over RPC, from a
+  clean checkout; CI runs it on every change.
+* A devnet run ([devnet.md](devnet.md)) is the public-cluster evidence.
 * The `integrations/` and model crates assert design facts only; they are not runtime evidence.

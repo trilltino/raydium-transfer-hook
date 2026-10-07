@@ -92,7 +92,7 @@ Both were verified against the Token-2022 source and are covered by tests.
    fair-launch `0xB001..`, loyalty-rewards `0xC001..`, reference hook `0x7001..`, arbitrary hook
    `0x9001..`.
 6. **Keep it bounded.** No loops over holders. Every extra account is added to every hooked
-   transfer, and a Raydium swap has two transfers. See [hook-limits.md](hook-limits.md).
+   transfer, and a Raydium swap has two transfers. See [hook-thickness.md](hook-thickness.md).
 7. **Do not try to move the transferred tokens.** Token-2022 gives a hook no authority over them.
    (A hook can move *other* tokens that a PDA of its own controls, as loyalty-rewards does when a
    holder claims, but never inside the transfer it is checking.)

@@ -1,7 +1,7 @@
 # Benchmarks
 
 No benchmark suite exists yet. The only measurements are the compute-unit data points recorded in
-[`../docs/hook-limits.md`](../docs/hook-limits.md), taken from `solana-program-test` runs of
+[`../docs/hook-thickness.md`](../docs/hook-thickness.md), taken from `solana-program-test` runs of
 the SBF binaries (the real runtime, not a validator, one run each).
 
 The driver already records what a benchmark needs: each swap is simulated before it is sent and the

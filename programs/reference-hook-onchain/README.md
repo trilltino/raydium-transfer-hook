@@ -13,7 +13,7 @@ models in `crates/reference-hook-model` and `crates/hook-policy-model`. This pro
 implement them.
 
 Raydium source is not part of this repository. This crate is tested against locally built SBF
-artifacts only (see `docs/upstream-sources.md`).
+artifacts only (see `docs/source-lock.md`).
 
 ## Accounts per hooked mint
 

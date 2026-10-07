@@ -17,7 +17,7 @@ if every row below holds; each row says how it is shown and where it is not.
 | 10 | A third-party hook needs no edit to the CPMM adapter code | The CPMM builder (`raydium-adapters::swap::cpmm_swap_instruction`) takes resolved legs and never names a hook. |
 | 11 | ...nor the CLMM adapter code | Same for `clmm_swap_instruction`. |
 | 12 | ...nor the core resolver | Every hook above runs through the one resolver. |
-| 13 | A third-party hook can be demonstrated on localnet | [`tests/third-party-hook`](../tests/third-party-hook): the arbitrary hook as a compiled `.so` and a JSON description, with **no hook crate in the test's manifest**, through CPMM and CLMM, alone and next to a different hook on the other leg. In-process (`solana-program-test`), not a validator. |
+| 13 | A third-party hook can be demonstrated on localnet | [`tests/third-party-hook`](../tests/third-party-hook): the arbitrary hook as a compiled `.so` and a JSON description, with **no hook crate in the test's manifest**, through CPMM and CLMM, alone and next to a different hook on the other leg. In-process (`solana-program-test`); and `cargo xtask localnet e2e` runs the starter built from source, known to the stack only by its `setup.json`, on a real `solana-test-validator`. |
 | 14 | ...and on the hook-enabled devnet environment | [devnet.md](devnet.md): five hooks through CPMM, and the three originally deployed templates through CLMM too. The third-party JSON-described run is in-process; see its row for what has not run on devnet. |
 
 ## Raydium's mint admission (a real gate, and what it is)
@@ -48,7 +48,6 @@ change the rule.
 * **Official Raydium.** Raydium's own programs do not contain the hook-aware instructions, so no
   hook of any kind runs through them. "Permissionless" is demonstrated on forks under our own ids,
   and even there a hooked mint needs the per-mint admission above before it can start a pool.
-* **A validator process.** The in-process runs use the real runtime but not a validator.
 * **Hostile hooks on a cluster.** The malicious-hook scenarios are tested in-process and in the SDK
   ([security.md](security.md)), not on devnet.
 * **That a permissionless hook is a good hook.** Anyone can write one that refuses every transfer.

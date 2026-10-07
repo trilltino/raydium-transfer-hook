@@ -11,30 +11,48 @@ which of the three goals you have, because the cost differs a lot.
 
 ## A. Write and test a hook (no keys, no Raydium, no network)
 
-```powershell
+```sh
 git clone <your fork>
-cd raydium_transfer_hook
-Copy-Item -Recurse templates\transfer-hook-starter my-hook      # or copy one of the three examples
+cd raydium-transfer-hook
+cp -r templates/transfer-hook-starter my-hook    # or an example; PowerShell: Copy-Item -Recurse
 cd my-hook
-cargo test                                                      # native
-cargo build-sbf                                                 # the deployable program
+cargo test                                       # native
+cargo build-sbf                                  # the deployable program
 ```
+
+To run it through real Raydium pools on a local validator, still with no keys:
+`cargo xtask localnet build`, `cargo xtask localnet validator`, then
+`raydium-hook e2e --env environments/localnet.json --keypair tests/fixtures/localnet/admin.json
+--keys target/localnet/keys --amm all --hook-dir my-hook` (see the README).
 
 Your rule is `src/rule.rs`. The tests run a real Token-2022 transfer through your hook in-process
 and check exact error codes and rollback. Nothing else in this repository is needed for this. See
-[writing-a-hook.md](writing-a-hook.md).
+[authoring-hooks.md](authoring-hooks.md).
 
 To use the shared plumbing and the in-process test world (`hook-kit`), put your hook under
-`templates/` as a workspace member, as the three examples are.
+`templates/` as a workspace member, as the five examples are.
 
 ## B and C. Run it through Raydium
 
-### What a fork cannot reuse
+### What needs no keys at all
 
-The hook-aware Raydium programs are built from two external forks with an `integration` feature
-that **bakes in a program id, an admin key and a fee-receiver key**. The committed manifests and the
-tests use *our* ids, and the keys behind them are git-ignored and never published. So a fork cannot
-run the Raydium flows against our binaries: it needs its own.
+`cargo xtask localnet build` builds the two forks with their `localnet` feature: the **upstream
+program ids** and an admin read at build time from `environments/localnet.json`, whose key is the
+throwaway one committed in `tests/fixtures/localnet`. The CPMM fee receiver is seeded at genesis. So
+a fork runs every Raydium flow, in-process and on `solana-test-validator`, with nothing to set up:
+
+```sh
+cargo xtask localnet build
+cargo test -p program-test-flows -p third-party-hook-acceptance -- --ignored
+cargo xtask localnet e2e --skip-build
+```
+
+### What a public cluster needs
+
+For devnet the forks are built with their `integration` feature instead, which **bakes in a program
+id, an admin key and a fee-receiver key** (the localnet ids are upstream's mainnet ids, which nobody
+can deploy to). The committed `environments/devnet.json` uses *our* ids, and the keys behind them
+are git-ignored and never published. So a fork deploying to a public cluster needs its own.
 
 ### Steps
 
@@ -51,68 +69,60 @@ run the Raydium flows against our binaries: it needs its own.
    | `cpmm-program.json`, `clmm-program.json` | the two Raydium program ids |
    | `cpmm-fee-receiver.json` | the CPMM pool-creation fee receiver (a wrapped-SOL token account) |
    | `hook-program.json`, `arbitrary-hook-program.json` | the reference and arbitrary hooks |
-   | `creator-commitment-program.json`, `fair-launch-program.json`, `loyalty-rewards-program.json` | the three examples |
+   | `creator-commitment-program.json`, `fair-launch-program.json`, `anti-bundle-program.json`, `loyalty-rewards-program.json`, `parent-spin-off-program.json` | the five examples |
 
-3. **Build the artifacts** into `target/integration-sbf`:
+3. **Point an environment at your ids.** Copy `environments/devnet.json` to, say,
+   `environments/mine.json`; replace `programs`, `admin` and `cpmm_fee_receiver`, and empty
+   `deployments` and `evidence`.
+4. **Build, deploy, run and record** in one command:
 
-   ```powershell
-   cargo xtask upstream fetch --hook --locked
-   cargo build-sbf --manifest-path target\upstream\cpmm-hook\programs\cp-swap\Cargo.toml `
-     --sbf-out-dir target\integration-sbf -- --features integration
-   cargo build-sbf --manifest-path target\upstream\clmm-hook\programs\amm\Cargo.toml `
-     --sbf-out-dir target\integration-sbf -- --features integration
-   foreach ($p in 'programs\reference-hook-onchain','programs\arbitrary-test-hook',
-                  'templates\creator-commitment','templates\fair-launch','templates\loyalty-rewards') {
-     cargo build-sbf --manifest-path $p\Cargo.toml --sbf-out-dir target\integration-sbf
-   }
+   ```sh
+   cargo xtask env deploy-devnet --env environments/mine.json
    ```
 
-4. **Run the flows in-process** (no network):
+   It verifies the locks, builds the forks (`integration`) and every hook into
+   `target/integration-sbf`, deploys whatever is missing (`raydium-hook deploy` skips programs that
+   already exist, so recorded ids are never replaced, and records each deployment with its SHA-256,
+   lockfile hash and toolchain), runs `raydium-hook e2e --record` for every hook through both AMMs,
+   and regenerates the evidence page. `--hook NAME` and `--amm cpmm|clmm` narrow the run. Hooks
+   with a time window really wait on a live cluster; the individual commands take
+   `--vest-seconds`, `--window-seconds` and `--reward-seconds`.
 
-   ```powershell
-   cargo test -p raydium-hook-driver --features local --test local_flows -- --ignored --nocapture
-   ```
+   The same steps by hand: `raydium-hook deploy --env FILE --keypair .keys/deployer.json
+   --artifacts target/integration-sbf --keys .keys`, then `raydium-hook e2e --env FILE --keypair
+   .keys/deployer.json --fee-receiver-keypair .keys/cpmm-fee-receiver.json --amm all --hook all
+   --record`, then `cargo xtask devnet-doc --env FILE --out docs/devnet.md`.
 
-5. **Point an environment at your ids.** Copy `environments/devnet.json`, replace `programs`,
-   `admin` and `cpmm_fee_receiver`, and empty `deployments` and `evidence`.
-6. **Deploy and run on a cluster:**
-
-   ```powershell
-   raydium-hook deploy --env environments\mine.json --keypair .keys\deployer.json `
-     --artifacts target\integration-sbf --keys .keys
-   raydium-hook e2e --env environments\mine.json --keypair .keys\deployer.json `
-     --fee-receiver-keypair .keys\cpmm-fee-receiver.json --amm all --hook all --record
-   ```
-
-   `deploy` skips programs that already exist and records each deployment with its SHA-256 and
-   transaction. `e2e` exits non-zero if any check fails, and `--record` appends the evidence.
-   Hooks with a time window (`creator-commitment`, `fair-launch`, `loyalty-rewards`) really wait on
-   a live cluster; tune them with `--vest-seconds`, `--window-seconds`, `--reward-seconds`.
-7. **Publish your evidence page:**
-
-   ```powershell
-   cargo xtask devnet-doc --env environments\mine.json --out docs\devnet.md
-   ```
+5. **Run the in-process flows against these exact binaries** (optional):
+   `RTH_PROFILE=integration cargo test -p program-test-flows -- --ignored`.
 
 ## Adding your hook to the flows
 
-A hook needs one small provider, not changes to the SDK or the Raydium builders:
+Nothing has to change for a hook to run: `raydium-hook e2e --hook-dir DIR` builds, deploys and
+sets up a hook from its `setup.json`, and `--setup FILE` runs an already-deployed one known only
+by that description (see `crates/raydium-hook-driver/src/hooks/generic.rs`). That is the
+permissionless path, and the one to use for your own hook.
+
+To make a hook one of the repository's named examples (with follow-up steps a JSON description
+cannot express, like advancing time or claiming), add a provider:
 
 1. `crates/raydium-hook-driver/src/hooks/<yours>.rs`: implement `HookSetup` (how to point a mint at
    your hook and initialise your state, which swaps it must refuse and with which error code, which
    writable extras the integrator accepts, and any follow-up steps). Export it from
-   `hooks/mod.rs` and `lib.rs`. The three examples are good models.
-2. Add your program id under `programs.templates` in your environment manifest.
-3. Add an entry to `ARTIFACTS` in `crates/raydium-hook-cli/src/commands/deploy.rs` and a branch in
-   `commands/e2e.rs` so the CLI can deploy and run it by name.
-4. Add a test next to the others in `crates/raydium-hook-driver/tests/local_flows.rs`.
+   `hooks/mod.rs` and `lib.rs`. The five examples are good models.
+2. Add your program id under `programs.templates` in your environment manifests
+   (`environments/localnet.json` too, with a throwaway keypair in `tests/fixtures/localnet`).
+3. Add it to `ARTIFACTS` in `crates/raydium-hook-cli/src/commands/deploy.rs`, to `program_for` and
+   `provider` in `commands/hook.rs`, to `SHIPPED` in `commands/e2e.rs`, and to `HOOKS` in
+   `xtask/src/localnet.rs`.
+4. Add a test next to the others in `tests/program-test/tests/local_flows.rs`.
 
 ## Do not change
 
 * **The pinned dependency line** (`solana-program 2.2.1`, `solana-program-test 2.2.7`,
   `solana-sdk 2.2.2`, `spl-token 7.0.0`, `spl-token-2022 7.0.0`, `spl-transfer-hook-interface 0.10.0`,
   `spl-tlv-account-resolution 0.10.0`). It is exact on purpose; see
-  [upstream-sources.md](upstream-sources.md).
+  [source-lock.md](source-lock.md).
 * **Per-leg resolution.** The two transfers of a swap get independent slices that are never merged,
   deduplicated or reordered. Everything else rests on that.
 * **No Raydium source in the repository.** `cargo xtask upstream verify` fails if tracked paths look

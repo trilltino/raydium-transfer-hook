@@ -6,104 +6,130 @@ stack resolves each swap leg's hook accounts, frames the swap, and proves the ho
 refusal rolls everything back.
 
 Raydium is an external program. This repository contains no Raydium source: the hook-aware changes
-live in forks pinned by `upstream.lock.toml`.
+live in forks pinned by [`upstream.lock.toml`](upstream.lock.toml), fetched into the git-ignored
+`target/upstream/` when something needs to build them.
 
 ## Build your own hook
 
-1. **Copy the starter**: `Copy-Item -Recurse templates\transfer-hook-starter my-hook`
-2. **Implement your rule** in `src/rule.rs`
-3. **Test it**: `cargo test`
-4. **Build and deploy**: `cargo build-sbf`, then `solana program deploy ...`
-5. **Create a hooked Token-2022 mint** and initialise your hook for it
-6. **Run it through Raydium CPMM and CLMM** with `raydium-hook e2e`
+Needs Rust and the [Solana CLI](https://docs.anza.xyz/cli/install) (Agave 4.0, for `cargo build-sbf`
+and `solana-test-validator`). No keys, no network beyond fetching the pinned forks.
 
-The full guide is [`docs/writing-a-hook.md`](docs/writing-a-hook.md). Using the starter is
-optional: the repository also ships an unrelated hook (`programs/arbitrary-test-hook`) that runs
-through both AMMs with no change to the SDK or the Raydium builders.
+```sh
+# 1. Copy the starter (or one of the five examples below)
+cp -r templates/transfer-hook-starter my-hook        # PowerShell: Copy-Item -Recurse templates\transfer-hook-starter my-hook
 
-**Forking?** Writing and testing a hook needs only a Rust toolchain. Running it through real
-Raydium pools needs the two hook-aware Raydium builds made with *your own* keys, because the ones
-here bake in ours. [`docs/forking.md`](docs/forking.md) lists what to reuse, what to change and the
-steps, and `cargo xtask devnet-doc` regenerates the evidence page for your own deployment.
+# 2. Implement your rule: my-hook/src/rule.rs (and my-hook/setup.json if you change its parameters)
+
+# 3. Test it against the real Token-2022 program
+cargo test --manifest-path my-hook/Cargo.toml
+
+# 4. Run it through real Raydium CPMM and CLMM pools on a local validator
+cargo xtask localnet build                            # the pinned Raydium forks and this repo's hooks
+cargo xtask localnet validator                        # leave running; in another terminal:
+cargo run -p raydium-hook-cli -- e2e --env environments/localnet.json \
+  --keypair tests/fixtures/localnet/admin.json --keys target/localnet/keys \
+  --amm all --hook-dir my-hook
+```
+
+Step 4 builds your hook, deploys it, creates a hooked Token-2022 mint, sets your hook up from
+`setup.json`, creates real CPMM and CLMM pools, swaps in both directions, makes your hook refuse,
+checks every balance rolled back, and prints a PASS/FAIL table derived from what actually happened.
+`cargo xtask localnet e2e` does all of it for every hook in the repository in one command.
+
+The full guide is [`docs/authoring-hooks.md`](docs/authoring-hooks.md). Using the starter is
+optional: [`programs/arbitrary-test-hook`](programs/arbitrary-test-hook) shares no code with it and
+runs through both AMMs, described to the stack only as JSON, with no change to the SDK or the
+Raydium builders.
+
+**Devnet.** The same commands run against a real cluster with an environment file and your own
+keys; see [`docs/forking.md`](docs/forking.md) (your own deployment) and
+[`docs/devnet.md`](docs/devnet.md) (ours, with transactions).
 
 ## Example hooks
 
-Three complete hooks, each in its own folder under `templates/`. In each, **the custom logic is one
-short file, `src/rule.rs`**: pure Rust with no accounts and no Solana types, unit-tested on its own.
-The rest of the folder is plumbing you can leave alone (the shared parts live in
-[`crates/hook-kit`](crates/hook-kit)).
+In each, **the custom logic is one short file, `src/rule.rs`**: pure Rust with no accounts and no
+Solana types, unit-tested on its own. The rest is plumbing you can leave alone (the shared parts live
+in [`crates/hook-kit`](crates/hook-kit)).
 
-| Folder | The rule | Read |
-|---|---|---|
-| [`templates/creator-commitment`](templates/creator-commitment) | A creator's allocation **vests**: the dedicated account's balance may not fall below what a cliff-and-linear schedule still locks | [`rule.rs`](templates/creator-commitment/src/rule.rs) |
-| [`templates/fair-launch`](templates/fair-launch) | During a launch window, **buys** are limited: per-buy size, per-account balance, buys per slot (against bundles), declared priority fee | [`rule.rs`](templates/fair-launch/src/rule.rs) |
-| [`templates/loyalty-rewards`](templates/loyalty-rewards) | Holders earn a **quote-token reward stream** in proportion to balance x time held; the pool never earns | [`rule.rs`](templates/loyalty-rewards/src/rule.rs) |
+| Folder | The rule |
+|---|---|
+| [`templates/transfer-hook-starter`](templates/transfer-hook-starter) | The copy-me starter: a maximum transfer size, with per-mint config, authority modes and versioning already done |
+| [`templates/creator-commitment`](templates/creator-commitment) | A creator's allocation **vests**: the dedicated account may not fall below what a cliff-and-linear schedule still locks |
+| [`templates/fair-launch`](templates/fair-launch) | During a launch window, **buys** are limited: per-buy size, per-account balance, buys per slot, declared priority fee |
+| [`templates/anti-bundle`](templates/anti-bundle) | A per-slot budget on **buys from recognised venues**, so a bundle packed into one block is refused |
+| [`templates/loyalty-rewards`](templates/loyalty-rewards) | Holders earn a **quote-token reward stream** in proportion to balance x time held; the pool never earns |
+| [`templates/parent-spin-off`](templates/parent-spin-off) | Parent holders accrue a **child token** allocation by balance x time; the allocation can be funded exactly once |
 
-Each has its own README with the rule, the accounts, every error code and the honest limits, and
-each runs through real Raydium CPMM and CLMM pools in the end-to-end flows. The standard they all
-follow is in [`docs/writing-a-hook.md`](docs/writing-a-hook.md).
+Each has its own README with the rule, the accounts, every error code and the honest limits.
 
 ## Status
 
+Evidence levels, weakest to strongest: `in-process` (`solana-program-test`, the real runtime and SBF
+binaries) < `local validator` (`solana-test-validator`, over RPC) < `integration devnet` (our builds
+of the forks, under our program ids) < `official Raydium` (Raydium's own deployment).
+
 | Capability | Status | Evidence |
 |---|---|---|
-| Hooked swap through CPMM (`swap_base_input_v2`), both directions | **Done** | Real CPMM + Token-2022 + hook binaries: in-process runtime test, and on devnet |
-| Hooked swap through CLMM (`swap_v3`), both directions | **Done** | Real CLMM pool, tick arrays and position: in-process runtime test, and on devnet |
-| Hook refusal aborts the swap, balances and pool state unchanged | **Done** | Asserted for both AMMs, both legs |
-| An unrelated hook with no allowlist and no adapter changes | **Done** | `arbitrary-test-hook`: own program id, PDAs, errors; two extras; writes state |
-| Starter template | **Done** | Builds and passes standalone, from a copy outside the repository |
-| Three example hooks (creator commitment, fair launch, loyalty rewards) | **Done** | Unit, runtime (native and SBF) and Raydium flow tests for each; the flows run through both AMMs in-process and on devnet, see [`docs/devnet.md`](docs/devnet.md) |
-| Integration devnet | **Deployed** | Our hook-aware builds under our own program ids; see [`docs/devnet.md`](docs/devnet.md) |
-| Official Raydium (including its devnet) | **Not supported** | Their programs do not contain `swap_base_input_v2` / `swap_v3`. No upstream PR has been opened |
-| Liquidity deposit / withdraw, fee collection, pool creation with a hooked mint | **Rejected** | Those paths reject hooked mints with a clear error; the hook goes on after a pool has liquidity |
-| Creating a pool with a hooked mint | **Needs Raydium's per-mint approval** | Upstream's own mint admission requires a `SupportMintAssociated` record from the pool admin for any mint with a TransferHook. It is per mint, not per hook program: [`docs/permissionless-hooks.md`](docs/permissionless-hooks.md) |
+| Hooked swap through CPMM (`swap_base_input_v2`) and CLMM (`swap_v3`), both directions | **Integration devnet** | Real CPMM/CLMM pools, tick arrays and positions; [`docs/devnet.md`](docs/devnet.md) |
+| Hook refusal aborts the swap, balances and pool state unchanged | **Integration devnet** | Asserted for both AMMs, both legs |
+| Every example hook through both AMMs | **Local validator**; devnet for reference, arbitrary, creator-commitment, fair-launch, loyalty-rewards | `cargo xtask localnet e2e`; anti-bundle and parent-spin-off are not yet deployed to devnet (`cargo xtask env deploy-devnet --hook anti-bundle`, needs the integration keys) |
+| An unrelated hook with no allowlist and no adapter changes | **Integration devnet** | `arbitrary-test-hook`, and the JSON-described acceptance tests in `tests/third-party-hook` |
+| Starter template built from source and run through both AMMs | **Local validator** | `e2e --hook-dir templates/transfer-hook-starter` |
+| Different hooks on the two legs, transfer-fee mints | **In-process** | `tests/program-test` |
+| Clean checkout reproduces all of the above without private keys | **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml): forks built with their `localnet` feature and a throwaway admin in [`tests/fixtures/localnet`](tests/fixtures/localnet) |
+| Official Raydium (including its devnet) | **Not supported** | Their programs do not contain `swap_base_input_v2` / `swap_v3`; no upstream PR has been opened. `raydium-hook env probe` checks a deployment |
+| Deposit / withdraw, fee collection, `swap_base_output`, pool creation with a live hook | **Rejected early** | Those paths reject hooked mints with a clear error; the hook goes on after a pool has liquidity. Adding them means new framed instructions in the forks: [`docs/transfer-surface-matrix.md`](docs/transfer-surface-matrix.md) |
+| Creating a pool with a hooked mint | **Needs the pool admin's per-mint record** | Upstream's mint admission requires a `SupportMintAssociated` record for any mint with a TransferHook. Per mint, not per hook program: [`docs/permissionless-hooks.md`](docs/permissionless-hooks.md) |
 | LaunchLab | **Blocked** | Its on-chain handler is not public; `integrations/launchlab` is a simulator, not an integration |
-| Benchmarks of how heavy a hook can be, TypeScript client, commercial templates | **Not done** | |
+| Hook-thickness benchmarks (accounts, compute, v0/v1, contention) | **Partial** | Measured compute and sizes in [`docs/hook-thickness.md`](docs/hook-thickness.md); no benchmark suite yet ([`benches/`](benches)) |
 
-"In-process" means `solana-program-test`: the real runtime executing the real SBF binaries. There
-is no `solana-test-validator` on this Windows setup, so devnet is the real-cluster evidence.
+## The CLI
+
+`raydium-hook` (crate `crates/raydium-hook-cli`) is a thin shell over the same driver the tests use.
+`cargo run -p raydium-hook-cli -- help` lists everything:
+
+| Command | Does |
+|---|---|
+| `hook build DIR`, `hook deploy`, `hook setup`, `hook inspect MINT` | The author's loop for one hook |
+| `mint create [--hook PROGRAM]` | A Token-2022 mint with the TransferHook extension |
+| `e2e` | The checked end-to-end flows and the results table (`--hook NAME|all`, `--hook-dir DIR`, `--setup FILE`, `--second-hook`, `--transfer-fee-bps`, `--keep-state`, `--record`) |
+| `cpmm swap`, `clmm swap` | Swap on a pool `e2e --keep-state` left: resolve each leg, simulate, explain a refusal, send |
+| `inspect MINT`, `env probe` | Transport readiness of a mint; whether a cluster's Raydium programs have the hook-aware instructions |
+| `template id / publish / show` | The optional template descriptor standard (metadata, never permission) |
+| `deploy` | Deploy every program an environment lists, recording hashes and toolchain |
+
+## Repository automation
+
+```sh
+cargo xtask upstream verify            # the pins in upstream.lock.toml exist, nothing Raydium is tracked
+cargo xtask localnet build             # fetch the locked forks, build them (`localnet`) and every hook
+cargo xtask localnet validator         # solana-test-validator with every program preloaded
+cargo xtask localnet e2e               # build, start the validator, run every flow, stop it
+cargo xtask env deploy-devnet          # build (`integration`), deploy what is missing, run, record
+cargo xtask devnet-doc                 # regenerate docs/devnet.md from environments/devnet.json
+```
+
+The in-process tests use the same artifacts: `cargo test -p program-test-flows -p
+third-party-hook-acceptance -- --ignored` after `cargo xtask localnet build`
+(`RTH_PROFILE=integration` uses the devnet binaries and `.keys/` instead).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `crates/transfer-hook-sdk` | Per-leg atomic hook-account resolution, structured errors, framing, V1 goldens |
-| `crates/raydium-hook-driver` | Raydium setup builders and the checked end-to-end flows, over RPC or in-process |
-| `crates/raydium-hook-cli` | `raydium-hook deploy | e2e | inspect` |
-| `crates/hook-policy-model`, `crates/reference-hook-model` | Pure-Rust policy and rule models (not on-chain) |
-| `programs/reference-hook-onchain` | The deployable reference hook |
-| `programs/arbitrary-test-hook` | An unrelated hook that proves the stack is permissionless |
-| `templates/transfer-hook-starter` | Copy-me hook; the rule is `src/rule.rs` |
-| `templates/creator-commitment`, `fair-launch`, `loyalty-rewards` | The three example hooks, one folder each; the rule is `src/rule.rs` |
-| `crates/hook-kit` | Shared hook plumbing (`Execute` prelude, mint/token reads, PDA creation) and an in-process test world |
+| `crates/transfer-hook-sdk` | Per-leg hook-account resolution with the official SPL resolver, structured errors, framing, V1 golden fixtures |
+| `crates/raydium-adapters` | Instruction builders for the external Raydium programs |
+| `crates/raydium-hook-driver` | Hook setup providers (including the generic JSON one) and the checked end-to-end flows, over RPC or in-process |
+| `crates/raydium-hook-cli` | `raydium-hook` |
+| `crates/hook-kit` | Shared hook plumbing and an in-process test world |
+| `crates/hook-policy-model`, `crates/reference-hook-model`, `crates/hook-template-sdk` | Platform policy model, rule model, template descriptor client |
+| `programs/` | The reference hook, the unrelated arbitrary hook, the template descriptor registry |
+| `templates/` | The starter and the five example hooks |
 | `integrations/` | CPMM and CLMM swap planners and a LaunchLab simulator (models) |
-| `environments/` | Cluster manifests: program ids, deployments, evidence |
-| `xtask` | `cargo xtask upstream list | verify | fetch` |
-| `docs/` | Start at [docs/README.md](docs/README.md): [writing a hook](docs/writing-a-hook.md), [forking](docs/forking.md), [how it works](docs/how-it-works.md), [Raydium instructions](docs/raydium-instructions.md), [limits](docs/hook-limits.md), [security](docs/security.md), [upstream sources](docs/upstream-sources.md), [devnet evidence](docs/devnet.md) |
-
-## Run it
-
-```powershell
-# unit + integration tests (native)
-cargo test --workspace
-
-# the end-to-end flows against the exact deployed binaries, in-process
-cargo build-sbf --manifest-path programs\reference-hook-onchain\Cargo.toml --sbf-out-dir target\integration-sbf
-cargo build-sbf --manifest-path programs\arbitrary-test-hook\Cargo.toml --sbf-out-dir target\integration-sbf
-foreach ($t in 'creator-commitment','fair-launch','loyalty-rewards') {
-  cargo build-sbf --manifest-path templates\$t\Cargo.toml --sbf-out-dir target\integration-sbf
-}
-# (the CPMM and CLMM integration artifacts are built from the pinned forks: docs/forking.md)
-cargo test -p program-test-flows --test local_flows -- --ignored --nocapture
-
-# the same flows on devnet
-raydium-hook e2e --env environments\devnet.json --keypair .keys\deployer.json `
-  --fee-receiver-keypair .keys\cpmm-fee-receiver.json --amm all --hook all --record
-```
-
-Windows note: ProgramTest pulls in a vendored OpenSSL build that needs a complete Perl. If a fresh
-build directory fails in `openssl-sys`, reuse an existing target directory or set
-`OPENSSL_SRC_PERL` to a full Strawberry Perl.
+| `environments/` | Cluster manifests: `localnet.json` (keyless), `devnet.json` (integration), `raydium-devnet.json` (official) |
+| `tests/` | In-process flows, third-party acceptance tests, the localnet fixtures |
+| `xtask` | Upstream locks, localnet, devnet deployment, evidence page |
+| `docs/` | Start at [docs/README.md](docs/README.md) |
 
 ## Trust model
 

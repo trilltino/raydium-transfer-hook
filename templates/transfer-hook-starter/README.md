@@ -22,43 +22,43 @@ repository ships a second, unrelated hook (`programs/arbitrary-test-hook`) to pr
 
 ## The flow
 
-1. **Copy the starter.**
-   ```powershell
-   Copy-Item -Recurse templates\transfer-hook-starter my-hook
-   cd my-hook
+1. **Copy the starter** (from the repository root).
+   ```sh
+   cp -r templates/transfer-hook-starter my-hook     # PowerShell: Copy-Item -Recurse templates\transfer-hook-starter my-hook
    ```
 2. **Edit the rule.** Open `src/rule.rs`. Change `validate_params` (what a creator may configure)
    and `check_transfer` (allow or refuse each transfer). Rename the crate in `Cargo.toml`.
 3. **Test it.**
-   ```powershell
-   cargo test
+   ```sh
+   cargo test --manifest-path my-hook/Cargo.toml
    ```
    The tests expect the default max-transfer rule. Update the ones that exercise it when you
    change the rule; keep the plumbing tests (direct-call rejection, authority, config layout).
-4. **Build the program.**
-   ```powershell
-   cargo build-sbf
+   To run them against the real SBF build: `cargo build-sbf` in `my-hook`, then
+   `SBF_OUT_DIR=$PWD/target/deploy cargo test` (PowerShell: `$env:SBF_OUT_DIR = (Resolve-Path target\deploy).Path`).
+4. **Describe its setup in `setup.json`.** The stack never links your crate: it initialises your
+   hook for a mint from this file (the `InitializeHook` bytes, which accounts, and which swaps
+   your rule must refuse with which error code). `tests/setup_json.rs` checks it against the real
+   encoding, so it fails if you change the rule's parameters or error code without updating it.
+5. **Run it through real Raydium pools on a local validator** (from the repository root; no keys):
+   ```sh
+   cargo xtask localnet build
+   cargo xtask localnet validator          # leave running; in another terminal:
+   cargo run -p raydium-hook-cli -- e2e --env environments/localnet.json \
+     --keypair tests/fixtures/localnet/admin.json --keys target/localnet/keys \
+     --amm all --hook-dir my-hook
    ```
-   The `.so` is written to `target/deploy/`. Run the tests again against the real build:
-   ```powershell
-   $env:SBF_OUT_DIR = (Resolve-Path target\deploy).Path
-   cargo test
-   ```
-5. **Deploy** (devnet):
-   ```powershell
-   solana program deploy target\deploy\transfer_hook_starter.so --url devnet `
+   This builds and deploys your hook, creates a hooked mint and real CPMM and CLMM pools, swaps
+   both ways, makes your hook refuse, checks the rollback, and prints a PASS/FAIL table.
+6. **Deploy to devnet.** The same `e2e --hook-dir` against an environment file for devnet and a
+   funded keypair; the hook-aware Raydium programs must exist there (ours are listed in
+   `environments/devnet.json`, see `docs/forking.md` for your own). Or deploy by hand:
+   ```sh
+   solana program deploy target/deploy/transfer_hook_starter.so --url devnet \
      --program-id <PROGRAM_KEYPAIR.json> --upgrade-authority <KEYPAIR.json>
    ```
    Decide who holds the upgrade authority. It can replace your rule for every token, so say so
    publicly or revoke it.
-6. **Create a hooked mint.** A Token-2022 mint with the `TransferHook` extension whose program id
-   is your deployed program and whose authority is the key that will initialise the hook.
-7. **Initialise the hook for that mint** with `initialize_hook_instruction` (see
-   `tests/token_2022_transfer.rs` for a worked example). Pick the authority mode here.
-8. **Run it through Raydium.** Resolve each swap leg's hook accounts with the SDK in
-   `crates/transfer-hook-sdk` and use the hook-aware CPMM `swap_base_input_v2` or CLMM
-   `swap_v3` instructions on a build that includes them (see `docs/forking.md`).
-   You do not edit the SDK or the Raydium adapters for your hook.
 
 ## Things your rule must respect
 

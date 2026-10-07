@@ -2,7 +2,7 @@
 
 Two instructions are added to Raydium so each transfer of a swap can carry its own hook accounts.
 Everything else is unchanged. The code lives in the external forks pinned in `upstream.lock.toml`
-(see [upstream-sources.md](upstream-sources.md)), not in this repository.
+(see [source-lock.md](source-lock.md)), not in this repository.
 
 ## Policy
 
@@ -50,13 +50,13 @@ The SDK never merges or deduplicates accounts across the two legs.
 ## Surface support
 
 Status ladder: `unsupported` < `designed` < `implemented (external branch)` < `in-process verified` <
-`devnet verified` < `official Raydium deployed`. "Devnet verified" means our fork builds under our
+`local validator verified` < `devnet verified` < `official Raydium deployed`. "Devnet verified" means our fork builds under our
 own program ids ([devnet.md](devnet.md)). No row is "official Raydium deployed".
 
 | Surface | Status | Evidence |
 |---|---|---|
-| CPMM `swap_base_input_v2` | **devnet verified** | Real CPMM program: `cpmm_swap_base_input_v2_runtime.rs` and `local_flows.rs` (in-process, five different hooks), and the devnet transactions listed in [devnet.md](devnet.md). Both directions, with refusals. |
-| CLMM `swap_v3` | **devnet verified** | Real CLMM pool, tick arrays and position: `clmm_swap_v3_runtime.rs` and `local_flows.rs` (in-process, five different hooks), and the devnet transactions listed in [devnet.md](devnet.md). Both directions, with refusals. |
+| CPMM `swap_base_input_v2` | **devnet verified** | Real CPMM program: `cpmm_swap_base_input_v2_runtime.rs` and `local_flows.rs` (in-process, seven different hooks), `cargo xtask localnet e2e` (a real `solana-test-validator`, every hook and the starter built from source, from a clean checkout; CI), and the devnet transactions listed in [devnet.md](devnet.md). Both directions, with refusals. |
+| CLMM `swap_v3` | **devnet verified** | Real CLMM pool, tick arrays and position: `clmm_swap_v3_runtime.rs` and `local_flows.rs` (in-process, seven different hooks), `cargo xtask localnet e2e` (as for CPMM), and the devnet transactions listed in [devnet.md](devnet.md). Both directions, with refusals. |
 | CPMM `swap_base_input` (V1), CLMM `swap_v2` (V1) | unchanged; hooked mints rejected | host unit tests; V1 byte-identity pinned by SDK golden fixtures |
 | CPMM `swap_base_output`, `deposit`, `withdraw`, fee collection, `initialize*` | unsupported: the shared helper rejects hooked mints with a clear error | host unit tests |
 | CLMM positions, liquidity, rewards, fees | unsupported: the shared helper rejects hooked mints | host unit tests |

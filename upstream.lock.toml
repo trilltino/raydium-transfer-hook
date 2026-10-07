@@ -1,4 +1,4 @@
-# Machine-readable upstream source locks. See docs/upstream-sources.md.
+# Machine-readable upstream source locks. See docs/source-lock.md.
 #
 # Raydium source is NOT vendored in this repository. `cargo xtask upstream fetch`
 # clones these repositories into the git-ignored `target/upstream/` directory and
@@ -11,7 +11,7 @@
 #                    not in this one.
 #
 # These source-review revisions are independent of the Rust crate versions in this
-# workspace (see [executable_line] in docs/upstream-sources.md).
+# workspace (see [executable_line] in docs/source-lock.md).
 
 [cpmm]
 repository = "https://github.com/raydium-io/raydium-cp-swap"

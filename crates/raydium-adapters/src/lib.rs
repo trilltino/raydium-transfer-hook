@@ -11,7 +11,7 @@
 //! | [`token`] | Token-2022 mints with TransferHook / TransferFee extensions, and token accounts |
 //!
 //! The admin-only instructions (AmmConfig, support mints) exist only in the hook-support forks'
-//! `integration` builds; see `docs/upstream-sources.md`.
+//! `integration` builds; see `docs/source-lock.md`.
 
 pub mod clmm;
 pub mod cpmm;

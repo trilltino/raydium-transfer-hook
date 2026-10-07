@@ -49,7 +49,7 @@ The `integration` feature selects a program id, admin and fee-receiver/owner key
 builds can be deployed under ids you control. Default, `devnet` and `localnet` behavior is unchanged,
 and combining `integration` with either is a compile error. **The committed ids are ours; a fork
 sets its own**: see [forking.md](forking.md). The layouts of the two instructions are in
-[raydium-instructions.md](raydium-instructions.md).
+[transfer-surface-matrix.md](transfer-surface-matrix.md).
 
 ## Executable dependency line (this workspace)
 
@@ -85,10 +85,13 @@ Deployed artifacts are recorded with their SHA-256, size and source revision in
 * **Verified by execution:** the hooks against the real Token-2022 processor (success, rejection,
   rollback); CPMM `swap_base_input_v2` and CLMM `swap_v3` hooked swaps in both directions under
   ProgramTest with the real Raydium SBF binaries (the CPMM and CLMM runtime tests, and the driver
-  flows in `tests/program-test/tests/local_flows.rs`, which use the exact integration
-  artifacts); five independent hooks through both AMMs with no change to the SDK or builders; the
-  same flows on devnet ([devnet.md](devnet.md)).
-* ProgramTest is the real runtime executing real binaries, but it is not a validator process.
+  flows in `tests/program-test/tests/local_flows.rs`); seven independent hooks through both AMMs
+  with no change to the SDK or builders; the same flows on a real `solana-test-validator`
+  (`cargo xtask localnet e2e`, from a clean checkout with no private keys, run by CI); and on devnet
+  ([devnet.md](devnet.md)).
+* The local profile builds the forks with their `localnet` feature (upstream program ids, a
+  throwaway admin); devnet uses their `integration` feature (our ids and keys). Both are built from
+  the same locked commits.
 * The model crates (`hook-policy-model`, `reference-hook-model`, `integrations/*`) assert design
   facts only and are not runtime evidence.
 * LaunchLab: the deployed handler is not public. `integrations/launchlab` is a simulator and says so.
