@@ -16,7 +16,7 @@ mod tests {
         Pubkey as ModelKey, TransferContext,
     };
     use launchlab_hook_integration::{LaunchPhase, LaunchPolicySimulator, LaunchSimError};
-    use reference_hook_program::{HookEngine, HookError, HookModule, MintHookConfig};
+    use reference_hook_model::{HookEngine, HookError, HookModule, MintHookConfig};
     use transfer_hook_sdk::{
         build_clmm_swap_v2, build_cpmm_swap_base_input_v1,
         solana_program::pubkey::Pubkey,

@@ -20,7 +20,7 @@ package = "raydium-cp-swap"
 program_dir = "programs/cp-swap"
 hook_repository = "https://github.com/trilltino/raydium-cp-swap"
 hook_branch = "transfer-hook-support"
-hook_revision = "ec5862d8c735311d6fe88d3d19bd5f3637173db7"
+hook_revision = "75ddc09f102c8e3e4424058cee188bf8277949fc"
 
 [clmm]
 repository = "https://github.com/raydium-io/raydium-clmm"
@@ -29,7 +29,7 @@ package = "raydium-clmm"
 program_dir = "programs/amm"
 hook_repository = "https://github.com/trilltino/raydium-clmm"
 hook_branch = "transfer-hook-support"
-hook_revision = "b04b6ec85a7e85457cafca3fc56511d81beaba06"
+hook_revision = "40291d53d84c6a28991ed966aa2efd261843f662"
 
 [sdk]
 repository = "https://github.com/raydium-io/raydium-sdk-V2"

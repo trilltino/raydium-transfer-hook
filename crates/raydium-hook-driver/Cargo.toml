@@ -1,0 +1,34 @@
+[package]
+name = "raydium-hook-driver"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Builds and runs the Raydium + Transfer Hook end-to-end flows over any chain (RPC or ProgramTest)"
+
+[features]
+# `LocalChain`: run the same flows inside solana-program-test (used by tests).
+local = ["dep:solana-program-test"]
+
+[dependencies]
+solana-program = "=2.2.1"
+solana-sdk = "=2.2.2"
+solana-rpc-client = "=2.2.7"
+spl-token = "=7.0.0"
+spl-token-2022 = { version = "=7.0.0", features = ["no-entrypoint"] }
+spl-transfer-hook-interface = "=0.10.0"
+transfer-hook-sdk = { path = "../transfer-hook-sdk" }
+reference-hook-onchain = { path = "../../programs/reference-hook-onchain", features = ["no-entrypoint"] }
+arbitrary-test-hook = { path = "../../programs/arbitrary-test-hook", features = ["no-entrypoint"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+solana-program-test = { version = "=2.2.7", optional = true }
+
+[dev-dependencies]
+solana-program-test = "=2.2.7"
+
+[[test]]
+name = "local_flows"
+required-features = ["local"]

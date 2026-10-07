@@ -177,6 +177,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbitrary-test-hook"
+version = "0.1.0"
+dependencies = [
+ "solana-program",
+ "solana-program-test",
+ "solana-sdk",
+ "spl-tlv-account-resolution 0.10.0",
+ "spl-token",
+ "spl-token-2022",
+ "spl-transfer-hook-interface 0.10.0",
+ "tokio",
+ "transfer-hook-sdk",
+]
+
+[[package]]
 name = "ark-bn254"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2260,7 +2275,7 @@ name = "launchlab-hook-integration"
 version = "0.1.0"
 dependencies = [
  "hook-policy-model",
- "reference-hook-program",
+ "reference-hook-model",
  "transfer-hook-sdk",
 ]
 
@@ -3257,6 +3272,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "raydium-hook-cli"
+version = "0.1.0"
+dependencies = [
+ "raydium-hook-driver",
+ "sha2 0.10.9",
+ "solana-sdk",
+ "spl-token-2022",
+ "spl-transfer-hook-interface 0.10.0",
+ "tokio",
+ "transfer-hook-sdk",
+]
+
+[[package]]
+name = "raydium-hook-driver"
+version = "0.1.0"
+dependencies = [
+ "arbitrary-test-hook",
+ "reference-hook-onchain",
+ "serde",
+ "serde_json",
+ "solana-program",
+ "solana-program-test",
+ "solana-rpc-client",
+ "solana-sdk",
+ "spl-token",
+ "spl-token-2022",
+ "spl-transfer-hook-interface 0.10.0",
+ "tokio",
+ "transfer-hook-sdk",
+]
+
+[[package]]
 name = "rayon"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3286,6 +3333,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "reference-hook-model"
+version = "0.1.0"
+dependencies = [
+ "hook-policy-model",
+]
+
+[[package]]
 name = "reference-hook-onchain"
 version = "0.1.0"
 dependencies = [
@@ -3298,13 +3352,6 @@ dependencies = [
  "spl-transfer-hook-interface 0.10.0",
  "tokio",
  "transfer-hook-sdk",
-]
-
-[[package]]
-name = "reference-hook-program"
-version = "0.1.0"
-dependencies = [
- "hook-policy-model",
 ]
 
 [[package]]
@@ -7751,7 +7798,7 @@ dependencies = [
  "cpmm-hook-integration",
  "hook-policy-model",
  "launchlab-hook-integration",
- "reference-hook-program",
+ "reference-hook-model",
  "transfer-hook-sdk",
 ]
 

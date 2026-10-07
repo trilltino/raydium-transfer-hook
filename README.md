@@ -52,7 +52,7 @@ Official Raydium deployments do **not** contain these instructions. Per-surface 
 
 - `crates/hook-policy-model`: platform hook policy and account metadata types.
 - `crates/transfer-hook-sdk`: fresh per-transfer SPL account resolution; CPMM/CLMM instruction framing.
-- `programs/reference-hook`: reference rule model; `programs/reference-hook-onchain`: deployable Solana program.
+- `crates/reference-hook-model`: the rule model (not on-chain); `programs/reference-hook-onchain`: the deployable reference hook.
 - `integrations/`: CPMM, CLMM, LaunchLab flow **models** (not live Raydium tests).
 - `tests/e2e`: policy, resolver and modeled-flow tests.
 - `xtask`: `cargo xtask upstream {list,verify,fetch}`.

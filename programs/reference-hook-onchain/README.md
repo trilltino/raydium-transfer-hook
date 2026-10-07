@@ -9,7 +9,7 @@ One rule, nothing else: the `max-transfer-v1` template rejects a hooked transfer
 `amount` is greater than a per-mint `limit` (inclusive, so `amount == limit` passes).
 
 Allow lists, deny lists, timelocks, launch policies and platform-level configuration exist only as
-models in `programs/reference-hook` and `crates/hook-policy-model`. This program does not
+models in `crates/reference-hook-model` and `crates/hook-policy-model`. This program does not
 implement them.
 
 Raydium source is not part of this repository. This crate is tested against locally built SBF

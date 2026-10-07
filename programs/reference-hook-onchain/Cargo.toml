@@ -9,6 +9,10 @@ publish = false
 [lib]
 crate-type = ["cdylib", "lib"]
 
+[features]
+# Link this crate as a library without exporting the program entrypoint symbol.
+no-entrypoint = []
+
 [dependencies]
 solana-program = "=2.2.1"
 spl-tlv-account-resolution = "=0.10.0"

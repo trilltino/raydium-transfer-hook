@@ -12,7 +12,7 @@ model = []
 
 [dependencies]
 hook-policy-model = { path = "../../crates/hook-policy-model" }
-reference-hook-program = { path = "../../programs/reference-hook" }
+reference-hook-model = { path = "../../crates/reference-hook-model" }
 transfer-hook-sdk = { path = "../../crates/transfer-hook-sdk" }
 
 [dev-dependencies]

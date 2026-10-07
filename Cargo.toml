@@ -2,14 +2,18 @@
 members = [
     "crates/hook-policy-model",
     "crates/transfer-hook-sdk",
+    "crates/raydium-hook-driver",
+    "crates/raydium-hook-cli",
     "integrations/cpmm",
     "integrations/clmm",
     "integrations/launchlab",
-    "programs/reference-hook",
+    "crates/reference-hook-model",
     "programs/reference-hook-onchain",
+    "programs/arbitrary-test-hook",
     "tests/e2e",
     "xtask",
 ]
+exclude = ["templates/transfer-hook-starter"]
 resolver = "2"
 
 [workspace.package]
