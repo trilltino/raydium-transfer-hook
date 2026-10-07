@@ -1445,6 +1445,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fair-launch-hook"
+version = "0.1.0"
+dependencies = [
+ "hook-kit",
+ "solana-program",
+ "solana-program-test",
+ "solana-sdk",
+ "spl-tlv-account-resolution 0.10.0",
+ "spl-token-2022",
+ "spl-transfer-hook-interface 0.10.0",
+ "tokio",
+]
+
+[[package]]
 name = "fastbloom"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3319,6 +3333,7 @@ version = "0.1.0"
 dependencies = [
  "arbitrary-test-hook",
  "creator-commitment-hook",
+ "fair-launch-hook",
  "reference-hook-onchain",
  "serde",
  "serde_json",

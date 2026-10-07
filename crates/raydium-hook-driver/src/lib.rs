@@ -20,6 +20,6 @@ pub use chain::{Chain, DriverError, RpcChain};
 pub use env::{Environment, Evidence};
 pub use flow::{run_clmm, run_cpmm, FlowInputs};
 pub use hooks::{
-    ArbitraryHook, CreatorCommitmentHook, Direction, FollowUp, HookContext, HookSetup,
-    ReferenceHook, Refusal, RejectionPlan,
+    ArbitraryHook, CreatorCommitmentHook, Direction, FairLaunchHook, FollowUp, HookContext,
+    HookSetup, ReferenceHook, Refusal, RejectionPlan,
 };

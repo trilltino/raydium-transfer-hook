@@ -12,6 +12,7 @@ members = [
     "programs/reference-hook-onchain",
     "programs/arbitrary-test-hook",
     "templates/creator-commitment",
+    "templates/fair-launch",
     "tests/e2e",
     "xtask",
 ]

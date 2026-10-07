@@ -6,11 +6,7 @@ use solana_program::{
     system_program,
 };
 
-use crate::{
-    config::config_address,
-    error::CommitmentError,
-    rule::Schedule,
-};
+use crate::{config::config_address, error::CommitmentError, rule::Schedule};
 
 const INITIALIZE_TAG: u8 = 0;
 

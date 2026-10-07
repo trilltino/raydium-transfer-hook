@@ -28,6 +28,20 @@ impl<'a> LocalChain<'a> {
     }
 }
 
+/// `ProgramTest` does not enforce the packet limit a real cluster does, so enforce it here: a flow
+/// that only fits locally would fail on devnet.
+fn ensure_fits_in_a_packet(tx: &solana_sdk::transaction::Transaction) -> Result<()> {
+    // compact-u16 signature count (one byte below 128), the signatures, then the message.
+    let size = 1 + tx.signatures.len() * 64 + tx.message.serialize().len();
+    if size > solana_sdk::packet::PACKET_DATA_SIZE {
+        return Err(DriverError::new(format!(
+            "the transaction is {size} bytes, over the {} byte packet limit",
+            solana_sdk::packet::PACKET_DATA_SIZE
+        )));
+    }
+    Ok(())
+}
+
 fn banks_error(error: BanksClientError) -> DriverError {
     match error {
         BanksClientError::TransactionError(e) => DriverError::from_transaction_error(&e),
@@ -61,6 +75,7 @@ impl Chain for LocalChain<'_> {
             .await
             .map_err(banks_error)?;
         let tx = sign(&self.payer, instructions, signers, blockhash);
+        ensure_fits_in_a_packet(&tx)?;
         let signature = tx.signatures[0].to_string();
         self.context
             .banks_client
@@ -94,6 +109,7 @@ impl Chain for LocalChain<'_> {
             .await
             .map_err(banks_error)?;
         let tx = sign(&self.payer, instructions, signers, blockhash);
+        ensure_fits_in_a_packet(&tx)?;
         let outcome = self
             .context
             .banks_client

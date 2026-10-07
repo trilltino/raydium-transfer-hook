@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use raydium_hook_driver::{
     env::Programs, run_clmm, run_cpmm, ArbitraryHook, CreatorCommitmentHook, Environment,
-    FlowInputs, HookSetup, LocalChain, ReferenceHook,
+    FairLaunchHook, FlowInputs, HookSetup, LocalChain, ReferenceHook,
 };
 use solana_program_test::{ProgramTest, ProgramTestContext};
 use solana_sdk::{
@@ -52,6 +52,7 @@ fn setup() -> Setup {
         "reference_hook_onchain.so",
         "arbitrary_test_hook.so",
         "creator_commitment_hook.so",
+        "fair_launch_hook.so",
     ] {
         assert!(
             artifacts.join(file).exists(),
@@ -72,10 +73,13 @@ fn setup() -> Setup {
             clmm: Some(key("clmm-program").pubkey().to_string()),
             reference_hook: Some(key("hook-program").pubkey().to_string()),
             arbitrary_hook: Some(key("arbitrary-hook-program").pubkey().to_string()),
-            templates: [(
-                "creator_commitment".to_string(),
-                creator_commitment_program().to_string(),
-            )]
+            templates: [
+                (
+                    "creator_commitment".to_string(),
+                    creator_commitment_program().to_string(),
+                ),
+                ("fair_launch".to_string(), fair_launch_program().to_string()),
+            ]
             .into(),
         },
         admin: Some(deployer.pubkey().to_string()),
@@ -108,6 +112,7 @@ async fn context(setup: &Setup) -> ProgramTestContext {
         creator_commitment_program(),
         None,
     );
+    test.add_program("fair_launch_hook", fair_launch_program(), None);
     // The deployer is the programs' admin, so it signs and pays.
     test.add_account(
         setup.deployer.pubkey(),
@@ -127,9 +132,13 @@ async fn context(setup: &Setup) -> ProgramTestContext {
     context
 }
 
-/// The creator-commitment template needs no key on disk locally: any program id will do.
+/// The template hooks need no key on disk locally: any program id will do.
 fn creator_commitment_program() -> solana_sdk::pubkey::Pubkey {
     solana_sdk::pubkey::Pubkey::new_from_array([0xC0; 32])
+}
+
+fn fair_launch_program() -> solana_sdk::pubkey::Pubkey {
+    solana_sdk::pubkey::Pubkey::new_from_array([0xF1; 32])
 }
 
 async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
@@ -211,7 +220,10 @@ async fn clmm_with_an_unrelated_arbitrary_hook() {
 #[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
 async fn cpmm_with_the_creator_commitment_template() {
     let setup = setup();
-    let hook = CreatorCommitmentHook::new(setup.env.template_program("creator_commitment").unwrap(), 90);
+    let hook = CreatorCommitmentHook::new(
+        setup.env.template_program("creator_commitment").unwrap(),
+        90,
+    );
     run("cpmm", &hook, &setup).await;
 }
 
@@ -219,6 +231,25 @@ async fn cpmm_with_the_creator_commitment_template() {
 #[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
 async fn clmm_with_the_creator_commitment_template() {
     let setup = setup();
-    let hook = CreatorCommitmentHook::new(setup.env.template_program("creator_commitment").unwrap(), 90);
+    let hook = CreatorCommitmentHook::new(
+        setup.env.template_program("creator_commitment").unwrap(),
+        90,
+    );
+    run("clmm", &hook, &setup).await;
+}
+
+#[tokio::test]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+async fn cpmm_with_the_fair_launch_template() {
+    let setup = setup();
+    let hook = FairLaunchHook::new(setup.env.template_program("fair_launch").unwrap(), 150);
+    run("cpmm", &hook, &setup).await;
+}
+
+#[tokio::test]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+async fn clmm_with_the_fair_launch_template() {
+    let setup = setup();
+    let hook = FairLaunchHook::new(setup.env.template_program("fair_launch").unwrap(), 150);
     run("clmm", &hook, &setup).await;
 }

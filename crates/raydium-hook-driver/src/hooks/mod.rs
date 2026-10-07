@@ -4,6 +4,7 @@
 
 mod arbitrary;
 mod creator_commitment;
+mod fair_launch;
 mod reference;
 
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey, signature::Keypair};
@@ -12,6 +13,7 @@ use transfer_hook_sdk::SplTransferLeg;
 
 pub use arbitrary::ArbitraryHook;
 pub use creator_commitment::CreatorCommitmentHook;
+pub use fair_launch::FairLaunchHook;
 pub use reference::ReferenceHook;
 
 /// Which side of a swap the hooked token is on.

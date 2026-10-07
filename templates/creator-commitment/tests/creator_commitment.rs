@@ -39,7 +39,11 @@ fn program_id() -> Pubkey {
 
 async fn world() -> World {
     let id = program_id();
-    let test = ProgramTest::new("creator_commitment_hook", id, processor!(process_instruction));
+    let test = ProgramTest::new(
+        "creator_commitment_hook",
+        id,
+        processor!(process_instruction),
+    );
     World::start(
         test,
         id,
@@ -90,17 +94,35 @@ async fn initialize_rejects_bad_schedules_and_balances_with_exact_codes() {
         )
     };
 
-    let ix = init(&world, Schedule { locked_total: 0, ..SCHEDULE });
+    let ix = init(
+        &world,
+        Schedule {
+            locked_total: 0,
+            ..SCHEDULE
+        },
+    );
     assert_custom_error(
         world.send(&[ix], &[]).await,
         CommitmentError::ZeroLockedAmount.code(),
     );
-    let ix = init(&world, Schedule { end: 500, ..SCHEDULE });
+    let ix = init(
+        &world,
+        Schedule {
+            end: 500,
+            ..SCHEDULE
+        },
+    );
     assert_custom_error(
         world.send(&[ix], &[]).await,
         CommitmentError::InvalidSchedule.code(),
     );
-    let ix = init(&world, Schedule { locked_total: 1_001, ..SCHEDULE });
+    let ix = init(
+        &world,
+        Schedule {
+            locked_total: 1_001,
+            ..SCHEDULE
+        },
+    );
     assert_custom_error(
         world.send(&[ix], &[]).await,
         CommitmentError::InsufficientBalanceAtInit.code(),
@@ -137,7 +159,10 @@ async fn before_the_cliff_the_creator_can_only_move_what_is_above_the_floor() {
     world.set_unix_time(1_500).await;
 
     // 1000 held, 600 locked: 400 may leave, landing exactly on the floor.
-    world.transfer(CREATOR, HOLDER, 400, &[]).await.expect("down to the floor");
+    world
+        .transfer(CREATOR, HOLDER, 400, &[])
+        .await
+        .expect("down to the floor");
     assert_eq!(world.balance(CREATOR).await, 600);
 
     // One more token would breach it, and nothing moves.
@@ -156,11 +181,17 @@ async fn before_the_cliff_the_creator_can_only_move_what_is_above_the_floor() {
 #[tokio::test]
 async fn tokens_unlock_linearly_after_the_cliff() {
     let mut world = committed(SCHEDULE).await;
-    world.transfer(CREATOR, HOLDER, 400, &[]).await.expect("above the floor");
+    world
+        .transfer(CREATOR, HOLDER, 400, &[])
+        .await
+        .expect("above the floor");
 
     // Halfway through [1000, 11000]: half of 600 has unlocked, so 300 are still locked.
     world.set_unix_time(6_000).await;
-    world.transfer(CREATOR, HOLDER, 300, &[]).await.expect("the unlocked half");
+    world
+        .transfer(CREATOR, HOLDER, 300, &[])
+        .await
+        .expect("the unlocked half");
     assert_eq!(world.balance(CREATOR).await, 300);
     assert_custom_error(
         world.transfer(CREATOR, HOLDER, 1, &[]).await,
@@ -172,7 +203,10 @@ async fn tokens_unlock_linearly_after_the_cliff() {
 async fn after_the_end_everything_can_leave() {
     let mut world = committed(SCHEDULE).await;
     world.set_unix_time(11_000).await;
-    world.transfer(CREATOR, HOLDER, 1_000, &[]).await.expect("fully unlocked");
+    world
+        .transfer(CREATOR, HOLDER, 1_000, &[])
+        .await
+        .expect("fully unlocked");
     assert_eq!(world.balance(CREATOR).await, 0);
 }
 
@@ -182,11 +216,20 @@ async fn other_holders_are_unaffected_and_the_creator_can_receive() {
     world.set_unix_time(1_500).await;
 
     // A holder sends all they have, freely, to anyone, including the creator's account.
-    world.transfer(HOLDER, OTHER, 60, &[]).await.expect("holder to other");
-    world.transfer(HOLDER, CREATOR, 40, &[]).await.expect("creator receives");
+    world
+        .transfer(HOLDER, OTHER, 60, &[])
+        .await
+        .expect("holder to other");
+    world
+        .transfer(HOLDER, CREATOR, 40, &[])
+        .await
+        .expect("creator receives");
     assert_eq!(world.balance(CREATOR).await, 1_040);
     // The extra 40 is above the floor and can leave; the floor itself still cannot.
-    world.transfer(CREATOR, OTHER, 440, &[]).await.expect("down to the floor");
+    world
+        .transfer(CREATOR, OTHER, 440, &[])
+        .await
+        .expect("down to the floor");
     assert_custom_error(
         world.transfer(CREATOR, OTHER, 1, &[]).await,
         CommitmentError::VestingFloorBreached.code(),

@@ -1,9 +1,7 @@
 //! Small helpers shared by the flows: checks, transaction sending, account reads, hook setup.
 
 use solana_sdk::{
-    compute_budget::ComputeBudgetInstruction,
-    instruction::Instruction,
-    pubkey::Pubkey,
+    compute_budget::ComputeBudgetInstruction, instruction::Instruction, pubkey::Pubkey,
     signature::Keypair,
 };
 use transfer_hook_sdk::{
