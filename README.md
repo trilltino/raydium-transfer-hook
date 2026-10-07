@@ -17,9 +17,14 @@ live in forks pinned by `upstream.lock.toml`.
 5. **Create a hooked Token-2022 mint** and initialise your hook for it
 6. **Run it through Raydium CPMM and CLMM** with `raydium-hook e2e`
 
-The full guide is [`docs/authoring-hooks.md`](docs/authoring-hooks.md). Using the starter is
+The full guide is [`docs/writing-a-hook.md`](docs/writing-a-hook.md). Using the starter is
 optional: the repository also ships an unrelated hook (`programs/arbitrary-test-hook`) that runs
 through both AMMs with no change to the SDK or the Raydium builders.
+
+**Forking?** Writing and testing a hook needs only a Rust toolchain. Running it through real
+Raydium pools needs the two hook-aware Raydium builds made with *your own* keys, because the ones
+here bake in ours. [`docs/forking.md`](docs/forking.md) lists what to reuse, what to change and the
+steps, and `cargo xtask devnet-doc` regenerates the evidence page for your own deployment.
 
 ## Example hooks
 
@@ -36,7 +41,7 @@ The rest of the folder is plumbing you can leave alone (the shared parts live in
 
 Each has its own README with the rule, the accounts, every error code and the honest limits, and
 each runs through real Raydium CPMM and CLMM pools in the end-to-end flows. The standard they all
-follow is in [`docs/template-standard.md`](docs/template-standard.md).
+follow is in [`docs/writing-a-hook.md`](docs/writing-a-hook.md).
 
 ## Status
 
@@ -47,7 +52,8 @@ follow is in [`docs/template-standard.md`](docs/template-standard.md).
 | Hook refusal aborts the swap, balances and pool state unchanged | **Done** | Asserted for both AMMs, both legs |
 | An unrelated hook with no allowlist and no adapter changes | **Done** | `arbitrary-test-hook`: own program id, PDAs, errors; two extras; writes state |
 | Starter template | **Done** | Builds and passes standalone, from a copy outside the repository |
-| Integration devnet | **Deployed** | Our hook-aware builds under our own program ids; see [`docs/integration-devnet.md`](docs/integration-devnet.md) |
+| Three example hooks (creator commitment, fair launch, loyalty rewards) | **Done** | Unit, runtime (native and SBF) and Raydium flow tests for each; the flows run through both AMMs in-process and on devnet, see [`docs/devnet.md`](docs/devnet.md) |
+| Integration devnet | **Deployed** | Our hook-aware builds under our own program ids; see [`docs/devnet.md`](docs/devnet.md) |
 | Official Raydium (including its devnet) | **Not supported** | Their programs do not contain `swap_base_input_v2` / `swap_v3`. No upstream PR has been opened |
 | Liquidity deposit / withdraw, fee collection, pool creation with a hooked mint | **Rejected** | Those paths reject hooked mints with a clear error; the hook goes on after a pool has liquidity |
 | LaunchLab | **Blocked** | Its on-chain handler is not public; `integrations/launchlab` is a simulator, not an integration |
@@ -72,7 +78,7 @@ is no `solana-test-validator` on this Windows setup, so devnet is the real-clust
 | `integrations/` | CPMM and CLMM swap planners and a LaunchLab simulator (models) |
 | `environments/` | Cluster manifests: program ids, deployments, evidence |
 | `xtask` | `cargo xtask upstream list | verify | fetch` |
-| `docs/` | [architecture](docs/architecture.md), [source lock](docs/source-lock.md), [surface matrix](docs/transfer-surface-matrix.md), [devnet](docs/integration-devnet.md), [authoring](docs/authoring-hooks.md), [trust](docs/trust-boundary.md) |
+| `docs/` | Start at [docs/README.md](docs/README.md): [writing a hook](docs/writing-a-hook.md), [forking](docs/forking.md), [how it works](docs/how-it-works.md), [Raydium instructions](docs/raydium-instructions.md), [limits](docs/hook-limits.md), [trust](docs/trust-model.md), [upstream sources](docs/upstream-sources.md), [devnet evidence](docs/devnet.md) |
 
 ## Run it
 
@@ -86,8 +92,8 @@ cargo build-sbf --manifest-path programs\arbitrary-test-hook\Cargo.toml --sbf-ou
 foreach ($t in 'creator-commitment','fair-launch','loyalty-rewards') {
   cargo build-sbf --manifest-path templates\$t\Cargo.toml --sbf-out-dir target\integration-sbf
 }
-# (the CPMM and CLMM integration artifacts are built from the pinned forks: docs/integration-devnet.md)
-cargo test -p raydium-hook-driver --features local --test local_flows -- --ignored --nocapture
+# (the CPMM and CLMM integration artifacts are built from the pinned forks: docs/forking.md)
+cargo test -p program-test-flows --test local_flows -- --ignored --nocapture
 
 # the same flows on devnet
 raydium-hook e2e --env environments\devnet.json --keypair .keys\deployer.json `
@@ -104,4 +110,4 @@ A hook is an untrusted program and can refuse any transfer. The SDK checks trans
 (the mint points at the expected program, the validation list is owned by it and parses, the
 resolved accounts carry no unexpected privileges). It cannot judge a hook's economics, who can
 change its settings, or whether its program can be upgraded. See
-[`docs/trust-boundary.md`](docs/trust-boundary.md).
+[`docs/trust-model.md`](docs/trust-model.md).

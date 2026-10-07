@@ -12,7 +12,7 @@
   "admin": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
   "cpmm_fee_receiver": "CnoYEaFeS92rnvfY7i1WHY3yKnXgUQqs1xiC1eVj2aYS",
   "sources": {
-    "note": "The same integration artifacts as environments/devnet.json, executed in-process by crates/raydium-hook-driver/tests/local_flows.rs (no solana-test-validator exists on this Windows setup)."
+    "note": "The same integration artifacts as environments/devnet.json, executed in-process by tests/program-test/tests/local_flows.rs (no solana-test-validator exists on this Windows setup)."
   },
   "deployments": [],
   "evidence": []

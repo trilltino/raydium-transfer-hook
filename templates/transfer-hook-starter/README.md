@@ -57,7 +57,7 @@ repository ships a second, unrelated hook (`programs/arbitrary-test-hook`) to pr
    `tests/token_2022_transfer.rs` for a worked example). Pick the authority mode here.
 8. **Run it through Raydium.** Resolve each swap leg's hook accounts with the SDK in
    `crates/transfer-hook-sdk` and use the hook-aware CPMM `swap_base_input_v2` or CLMM
-   `swap_v3` instructions on a build that includes them (see `docs/integration-devnet.md`).
+   `swap_v3` instructions on a build that includes them (see `docs/forking.md`).
    You do not edit the SDK or the Raydium adapters for your hook.
 
 ## Things your rule must respect

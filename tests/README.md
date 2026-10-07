@@ -15,8 +15,8 @@ and fail loudly, not silently, when an artifact or key is missing.
 | `programs/arbitrary-test-hook/tests` | The unrelated hook: init, N+2 resolution through the unchanged SDK, state mutation, rollback of balances and its counter | nothing |
 | `templates/{creator-commitment,fair-launch,loyalty-rewards}/tests` | Each example hook inside real Token-2022 transfers: every boundary of the rule, exact error codes, rollback after each refusal, setup validation, direct-call refusal | nothing (SBF run when `SBF_OUT_DIR` is set) |
 | `crates/hook-kit` | Shared hook plumbing compiles and is exercised through the templates' tests | nothing |
-| `crates/raydium-hook-driver/tests/local_flows.rs` | The ten combinations (CPMM, CLMM) x (reference, arbitrary, creator-commitment, fair-launch, loyalty-rewards), with real admin instructions, against the exact artifacts deployed to devnet; each hook's refusals and follow-up steps (wait out a window, fund and claim) | `target/integration-sbf` artifacts and `.keys/` |
+| `tests/program-test/tests/local_flows.rs` | The ten combinations (CPMM, CLMM) x (reference, arbitrary, creator-commitment, fair-launch, loyalty-rewards), with real admin instructions, against the exact artifacts deployed to devnet; each hook's refusals and follow-up steps (wait out a window, fund and claim) | `target/integration-sbf` artifacts and `.keys/` |
 | `crates/transfer-hook-sdk` unit tests | Resolver, framers, V1 goldens | nothing |
-| `tests/e2e` | Model-level checks of policy, SDK and planners against an in-memory chain. Not an execution of any Raydium program despite the name | nothing |
+| `tests/models` | Model-level checks of policy, SDK and planners against an in-memory chain. Not an execution of any Raydium program despite the name | nothing |
 
 ProgramTest is the real runtime executing real binaries, but it is not a validator process.

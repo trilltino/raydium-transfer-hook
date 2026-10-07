@@ -1,4 +1,4 @@
-# Source lock and implementation boundary
+# Upstream sources
 
 **Raydium source is not vendored in this repository.** CP-Swap and CLMM are external programs. This
 repository records exactly which upstream revisions it was reviewed and tested against in
@@ -16,28 +16,10 @@ cargo xtask upstream fetch --hook --locked  # cpmm + clmm at the hook-support co
 ```
 
 Fetched trees are disposable build inputs. They are built with the upstream repository's own
-`Cargo.lock`, Anchor and Solana toolchain, never with this workspace's dependency graph.
-`verify` is a path-name heuristic plus a remote-existence check, not a content scan.
+`Cargo.lock`, Anchor and Solana toolchain, never with this workspace's dependency graph. `verify` is
+a path-name heuristic plus a remote-existence check, not a content scan.
 
-## Hook repository baseline
-
-| | |
-|---|---|
-| Repository | `trilltino/raydium-transfer-hook` |
-| Baseline revision for this work | `689e3e0a8b1c2ac4b900abc15a232a85254f0afe` |
-| Previous baseline (superseded) | `542081e4576c00a3cb74067d1562029b7f8885d0` |
-
-Implementation commits from the baseline forward:
-
-| Commit | Change |
-|---|---|
-| `1917778` | Remove vendored Raydium trees; add `upstream.lock.toml` and `cargo xtask upstream`; remove the account-union helper |
-| `656544d` | CPMM `swap_base_input_v2` runtime test asserts hook leg execution and failure origin |
-| `66aff29` | Harden the reference hook (versioned `HookConfig`, authority modes, atomic init); refactor the SDK (per-leg atomic resolution, structured errors, framing, V1 goldens) |
-| `2036b9e` | CLMM `swap_v3` runtime test against the real CLMM program |
-| `9cc41da` | Driver and CLI; the unrelated second hook; starter template; `integration` fork feature locked; crates modularised |
-
-## Upstream source-review locks
+## Source-review locks
 
 | Source | Revision | Role |
 |---|---|---|
@@ -60,13 +42,14 @@ No upstream pull request to `raydium-io` has been opened.
 | CPMM | [`trilltino/raydium-cp-swap`](https://github.com/trilltino/raydium-cp-swap) `transfer-hook-support` | `75ddc09f102c8e3e4424058cee188bf8277949fc` | `swap_base_input_v2`; the `integration` build feature |
 | CLMM | [`trilltino/raydium-clmm`](https://github.com/trilltino/raydium-clmm) `transfer-hook-support` | `40291d53d84c6a28991ed966aa2efd261843f662` | `swap_v3`; the `integration` build feature |
 
-Host unit tests (`cargo test --lib --locked`, upstream lockfile): CPMM 26 pass by default and 27
-with `--features integration`; CLMM 204 pass by default and 205 with `--features integration`.
+Host unit tests (`cargo test --lib --locked`, upstream lockfile): CPMM 26 pass by default and 27 with
+`--features integration`; CLMM 204 pass by default and 205 with `--features integration`.
 
-The `integration` feature selects our own program id, admin and fee-receiver/owner keys, so the
-hook-aware builds can be deployed under ids we control. Default, `devnet` and `localnet` behavior
-is unchanged and combining `integration` with either is a compile error. The ids and the build and
-deploy procedure are in [integration-devnet](integration-devnet.md).
+The `integration` feature selects a program id, admin and fee-receiver/owner keys, so the hook-aware
+builds can be deployed under ids you control. Default, `devnet` and `localnet` behavior is unchanged,
+and combining `integration` with either is a compile error. **The committed ids are ours; a fork
+sets its own**: see [forking.md](forking.md). The layouts of the two instructions are in
+[raydium-instructions.md](raydium-instructions.md).
 
 ## Executable dependency line (this workspace)
 
@@ -81,7 +64,7 @@ deploy procedure are in [integration-devnet](integration-devnet.md).
 | `spl-tlv-account-resolution` | `0.10.0` |
 | `solana-rpc-client` | `2.2.7` (already in the lock through ProgramTest) |
 
-Cargo.lock records the full resolution. Do not upgrade this line opportunistically. ProgramTest
+`Cargo.lock` records the full resolution. Do not upgrade this line opportunistically. ProgramTest
 2.2.7 bundles the Token-2022 8.0.0 SBF program, which the runtime tests use to exercise the real
 transfer-hook CPI. Raydium's own Anchor/Solana graph is intentionally **not** merged into this
 workspace.
@@ -92,22 +75,22 @@ workspace.
 |---|---|---|
 | CPMM (`raydium-cp-swap`) | `raydium-cp-swap`, lib `raydium_cp_swap` | `cargo build-sbf` (solana-cargo-build-sbf 4.0.0, platform-tools v1.53); host tests on cargo 1.96.1 |
 | CLMM (`raydium-clmm`) | `raydium-clmm`, lib `raydium_clmm` | same |
-| Hooks (this repo) | `reference-hook-onchain`, `arbitrary-test-hook` | same |
+| Hooks (this repo) | `reference-hook-onchain`, `arbitrary-test-hook`, the templates | same |
 
 Deployed artifacts are recorded with their SHA-256, size and source revision in
-`environments/devnet.json`.
+`environments/devnet.json`; rebuilding gives the same hash only if the toolchain matches.
 
 ## What is and is not verified
 
-- Verified by execution: the reference hook against the real Token-2022 processor (success,
-  rejection, rollback); CPMM `swap_base_input_v2` and CLMM `swap_v3` hooked swaps in both
-  directions under ProgramTest with the real Raydium SBF binaries (the CPMM and CLMM runtime
-  tests, and the driver flows in `crates/raydium-hook-driver/tests/local_flows.rs`, which use the
-  exact integration artifacts); an unrelated second hook through both AMMs with no change to the
-  SDK or builders; the same flows on devnet (see [integration-devnet](integration-devnet.md)).
-- ProgramTest is the real runtime executing real binaries, but it is not a validator process.
-- The model crates (`hook-policy-model`, `reference-hook-model`, `integrations/*`) assert design
+* **Verified by execution:** the hooks against the real Token-2022 processor (success, rejection,
+  rollback); CPMM `swap_base_input_v2` and CLMM `swap_v3` hooked swaps in both directions under
+  ProgramTest with the real Raydium SBF binaries (the CPMM and CLMM runtime tests, and the driver
+  flows in `tests/program-test/tests/local_flows.rs`, which use the exact integration
+  artifacts); five independent hooks through both AMMs with no change to the SDK or builders; the
+  same flows on devnet ([devnet.md](devnet.md)).
+* ProgramTest is the real runtime executing real binaries, but it is not a validator process.
+* The model crates (`hook-policy-model`, `reference-hook-model`, `integrations/*`) assert design
   facts only and are not runtime evidence.
-- LaunchLab: the deployed handler is not public. `integrations/launchlab` is a simulator and says
-  so. Real integration is **blocked**.
-- Official Raydium (including its devnet) does not contain the hook-aware instructions.
+* LaunchLab: the deployed handler is not public. `integrations/launchlab` is a simulator and says so.
+  Real integration is **blocked**.
+* Official Raydium (including its devnet) does not contain the hook-aware instructions.

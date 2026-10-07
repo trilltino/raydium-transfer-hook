@@ -72,7 +72,7 @@ SBF_OUT_DIR=target/integration-sbf cargo test -p creator-commitment-hook   # the
 
 Through Raydium (the trader's hooked-token account plays the creator): see
 `cpmm_with_the_creator_commitment_template` and `clmm_with_the_creator_commitment_template` in
-`crates/raydium-hook-driver/tests/local_flows.rs`. They check that normal swaps pass, a sale that
+`tests/program-test/tests/local_flows.rs`. They check that normal swaps pass, a sale that
 would breach the floor is refused with `0xA005` and rolls back, and the same sale succeeds once the
 schedule has ended.
 

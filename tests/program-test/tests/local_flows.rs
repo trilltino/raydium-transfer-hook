@@ -3,12 +3,12 @@
 //! instructions with the deployer key from `.keys/` (the integration builds bake that key in as
 //! admin). Both hooks (reference and the unrelated arbitrary one) run through both AMMs.
 //!
-//! Prerequisites (see docs/integration-devnet.md): build the four artifacts into
+//! Prerequisites (see docs/forking.md): build the four artifacts into
 //! `target/integration-sbf` and have `.keys/{deployer,cpmm-fee-receiver,...}.json`. The tests are
 //! `#[ignore]` and fail loudly, not silently, when a prerequisite is missing.
 //!
 //! ```text
-//! cargo test -p raydium-hook-driver --features local --test local_flows -- --ignored --nocapture
+//! cargo test -p program-test-flows --test local_flows -- --ignored --nocapture
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -190,7 +190,7 @@ async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn cpmm_with_the_reference_hook() {
     let setup = setup();
     let hook = ReferenceHook {
@@ -201,7 +201,7 @@ async fn cpmm_with_the_reference_hook() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn cpmm_with_an_unrelated_arbitrary_hook() {
     let setup = setup();
     let hook = ArbitraryHook {
@@ -212,7 +212,7 @@ async fn cpmm_with_an_unrelated_arbitrary_hook() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn clmm_with_the_reference_hook() {
     let setup = setup();
     let hook = ReferenceHook {
@@ -223,7 +223,7 @@ async fn clmm_with_the_reference_hook() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn clmm_with_an_unrelated_arbitrary_hook() {
     let setup = setup();
     let hook = ArbitraryHook {
@@ -234,7 +234,7 @@ async fn clmm_with_an_unrelated_arbitrary_hook() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn cpmm_with_the_creator_commitment_template() {
     let setup = setup();
     let hook = CreatorCommitmentHook::new(
@@ -245,7 +245,7 @@ async fn cpmm_with_the_creator_commitment_template() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn clmm_with_the_creator_commitment_template() {
     let setup = setup();
     let hook = CreatorCommitmentHook::new(
@@ -256,7 +256,7 @@ async fn clmm_with_the_creator_commitment_template() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn cpmm_with_the_fair_launch_template() {
     let setup = setup();
     let hook = FairLaunchHook::new(setup.env.template_program("fair_launch").unwrap(), 150);
@@ -264,7 +264,7 @@ async fn cpmm_with_the_fair_launch_template() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn clmm_with_the_fair_launch_template() {
     let setup = setup();
     let hook = FairLaunchHook::new(setup.env.template_program("fair_launch").unwrap(), 150);
@@ -276,7 +276,7 @@ fn loyalty_rewards_program() -> solana_sdk::pubkey::Pubkey {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn cpmm_with_the_loyalty_rewards_template() {
     let setup = setup();
     let hook = LoyaltyRewardsHook::new(setup.env.template_program("loyalty_rewards").unwrap(), 100);
@@ -284,7 +284,7 @@ async fn cpmm_with_the_loyalty_rewards_template() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
 async fn clmm_with_the_loyalty_rewards_template() {
     let setup = setup();
     let hook = LoyaltyRewardsHook::new(setup.env.template_program("loyalty_rewards").unwrap(), 100);

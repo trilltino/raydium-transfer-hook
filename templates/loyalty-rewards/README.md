@@ -82,7 +82,7 @@ SBF_OUT_DIR=target/integration-sbf cargo test -p loyalty-rewards-hook   # the re
 ```
 
 Through Raydium: `cpmm_with_the_loyalty_rewards_template` and
-`clmm_with_the_loyalty_rewards_template` in `crates/raydium-hook-driver/tests/local_flows.rs`. They
+`clmm_with_the_loyalty_rewards_template` in `tests/program-test/tests/local_flows.rs`. They
 check that swaps settle the registered holder, then fund the stream, let time pass, claim, and
 confirm the reward arrived in the holder's quote account.
 

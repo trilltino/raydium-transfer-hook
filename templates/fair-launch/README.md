@@ -58,7 +58,7 @@ SBF_OUT_DIR=target/integration-sbf cargo test -p fair-launch-hook   # the real S
 ```
 
 Through Raydium: `cpmm_with_the_fair_launch_template` and `clmm_with_the_fair_launch_template` in
-`crates/raydium-hook-driver/tests/local_flows.rs`. They check that ordinary swaps pass; that a buy
+`tests/program-test/tests/local_flows.rs`. They check that ordinary swaps pass; that a buy
 over the cap, three buys in one transaction, and a buy declaring a high priority fee are each
 refused with the hook's own code and roll back; and that the oversized buy succeeds after the
 window closes.

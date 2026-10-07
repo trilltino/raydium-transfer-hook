@@ -1,6 +1,7 @@
 //! Repository automation. Raydium source is never tracked here; `upstream` commands
 //! fetch exact locked revisions into the git-ignored `target/upstream/` directory.
 
+mod devnet_doc;
 mod upstream;
 
 use std::process::ExitCode;
@@ -14,7 +15,10 @@ commands:
                                      clone/checkout locked upstream revisions into target/upstream/
                                      (--hook checks out the hook-support revision where locked;
                                       --locked refuses dirty trees and unexpected commits)
-  upstream list                      print the locked repositories and revisions";
+  upstream list                      print the locked repositories and revisions
+  devnet-doc [--env FILE] [--out FILE]
+                                     render an environment manifest (default environments/devnet.json)
+                                     as an evidence page (default docs/devnet.md)";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -25,6 +29,7 @@ fn main() -> ExitCode {
         .as_slice()
     {
         ["upstream", rest @ ..] => upstream::run(rest),
+        ["devnet-doc", rest @ ..] => devnet_doc::run(rest),
         _ => Err(USAGE.into()),
     };
     match result {

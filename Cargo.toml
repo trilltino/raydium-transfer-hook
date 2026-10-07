@@ -12,9 +12,11 @@ members = [
     "programs/reference-hook-onchain",
     "programs/arbitrary-test-hook",
     "templates/creator-commitment",
+    "templates/anti-bundle",
     "templates/fair-launch",
     "templates/loyalty-rewards",
-    "tests/e2e",
+    "tests/models",
+    "tests/program-test",
     "xtask",
 ]
 exclude = ["templates/transfer-hook-starter"]
