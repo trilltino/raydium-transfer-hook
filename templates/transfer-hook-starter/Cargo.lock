@@ -177,21 +177,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arbitrary-test-hook"
-version = "0.1.0"
-dependencies = [
- "solana-program",
- "solana-program-test",
- "solana-sdk",
- "spl-tlv-account-resolution 0.10.0",
- "spl-token",
- "spl-token-2022",
- "spl-transfer-hook-interface 0.10.0",
- "tokio",
- "transfer-hook-sdk",
-]
-
-[[package]]
 name = "ark-bn254"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -787,14 +772,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clmm-hook-integration"
-version = "0.1.0"
-dependencies = [
- "hook-policy-model",
- "transfer-hook-sdk",
-]
-
-[[package]]
 name = "cmov"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -920,14 +897,6 @@ name = "core_detect"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
-
-[[package]]
-name = "cpmm-hook-integration"
-version = "0.1.0"
-dependencies = [
- "hook-policy-model",
- "transfer-hook-sdk",
-]
 
 [[package]]
 name = "cpufeatures"
@@ -1849,10 +1818,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hook-policy-model"
-version = "0.1.0"
-
-[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2268,15 +2233,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb26cec98cce3a3d96cbb7bced3c4b16e3d13f27ec56dbd62cbc8f39cfb9d653"
 dependencies = [
  "cpufeatures 0.2.17",
-]
-
-[[package]]
-name = "launchlab-hook-integration"
-version = "0.1.0"
-dependencies = [
- "hook-policy-model",
- "reference-hook-program",
- "transfer-hook-sdk",
 ]
 
 [[package]]
@@ -3298,28 +3254,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
  "bitflags 2.13.2",
-]
-
-[[package]]
-name = "reference-hook-onchain"
-version = "0.1.0"
-dependencies = [
- "solana-program",
- "solana-program-test",
- "solana-sdk",
- "spl-tlv-account-resolution 0.10.0",
- "spl-token",
- "spl-token-2022",
- "spl-transfer-hook-interface 0.10.0",
- "tokio",
- "transfer-hook-sdk",
-]
-
-[[package]]
-name = "reference-hook-program"
-version = "0.1.0"
-dependencies = [
- "hook-policy-model",
 ]
 
 [[package]]
@@ -7759,23 +7693,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "transfer-hook-e2e"
+name = "transfer-hook-starter"
 version = "0.1.0"
 dependencies = [
- "clmm-hook-integration",
- "cpmm-hook-integration",
- "hook-policy-model",
- "launchlab-hook-integration",
- "reference-hook-program",
- "transfer-hook-sdk",
-]
-
-[[package]]
-name = "transfer-hook-sdk"
-version = "0.1.0"
-dependencies = [
- "hook-policy-model",
  "solana-program",
+ "solana-program-test",
+ "solana-sdk",
  "spl-tlv-account-resolution 0.10.0",
  "spl-token",
  "spl-token-2022",
@@ -8367,14 +8290,6 @@ checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
 dependencies = [
  "libc",
  "rustix",
-]
-
-[[package]]
-name = "xtask"
-version = "0.1.0"
-dependencies = [
- "serde",
- "toml",
 ]
 
 [[package]]

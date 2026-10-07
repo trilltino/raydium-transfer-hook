@@ -1,18 +1,26 @@
-//! Shared scaffolding for the Raydium + Transfer Hook flow tests: the in-process environment (the
-//! exact SBF artifacts deployed to the integration devnet, the real admin key) and a runner that
-//! executes a flow and checks it recorded what its hooks declare.
+//! Shared scaffolding for the Raydium + Transfer Hook flow tests: an in-process chain loaded with
+//! the real SBF programs, and a runner that executes a flow and checks it recorded what its hooks
+//! declare.
 //!
 //! The tests themselves are in `tests/local_flows.rs` here, and in `tests/third-party-hook`.
 //!
-//! Prerequisites (see docs/forking.md): build the artifacts into `target/integration-sbf` and have
-//! `.keys/{deployer,cpmm-fee-receiver,...}.json`. The tests are `#[ignore]` and fail loudly, not
-//! silently, when a prerequisite is missing.
+//! Two profiles, chosen with `RTH_PROFILE`:
+//!
+//! * `localnet` (default): needs nothing outside a clean checkout. `cargo xtask localnet build`
+//!   writes the artifacts to `target/localnet-sbf`: the hook-support Raydium forks built with their
+//!   `localnet` feature (upstream program ids, admin = the throwaway key in
+//!   `tests/fixtures/localnet`) and this repository's hooks. Ids come from
+//!   `environments/localnet.json`.
+//! * `integration`: the exact artifacts deployed to the integration devnet, in
+//!   `target/integration-sbf`, signed with the real admin key from `.keys/` (see docs/forking.md).
+//!
+//! The tests are `#[ignore]` and fail loudly, not silently, when a prerequisite is missing.
 
 use std::path::{Path, PathBuf};
 
 use raydium_hook_driver::{
-    env::Programs, run_clmm, run_cpmm, ArbitraryHook, Direction, Environment, FlowInputs,
-    HookSetup, LocalChain, ReferenceHook,
+    env::Programs, run_clmm, run_cpmm, token::empty_wsol_account, ArbitraryHook, Direction,
+    Environment, FlowInputs, HookSetup, LocalChain, ReferenceHook,
 };
 use solana_program_test::{ProgramTest, ProgramTestContext};
 use solana_sdk::{
@@ -26,18 +34,31 @@ pub fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-pub fn key(name: &str) -> Keypair {
-    let path = root().join(".keys").join(format!("{name}.json"));
+fn read_key(path: PathBuf) -> Keypair {
     read_keypair_file(&path)
         .unwrap_or_else(|e| panic!("missing prerequisite {}: {e}", path.display()))
+}
+
+/// A key from the git-ignored `.keys/` (integration profile only).
+pub fn key(name: &str) -> Keypair {
+    read_key(root().join(".keys").join(format!("{name}.json")))
+}
+
+/// A throwaway key committed under `tests/fixtures/localnet` (never funded on a public cluster).
+pub fn fixture_key(name: &str) -> Keypair {
+    read_key(
+        root()
+            .join("tests/fixtures/localnet")
+            .join(format!("{name}.json")),
+    )
 }
 
 pub fn clone(keypair: &Keypair) -> Keypair {
     Keypair::from_bytes(&keypair.to_bytes()).expect("keypair bytes")
 }
 
-/// The template hooks: the key in `programs.templates`, the SBF artifact name, and a program id.
-/// They need no key on disk locally: any program id will do.
+/// The template hooks: the key in `programs.templates`, the SBF artifact name, and the program id
+/// the integration profile uses for them (any id will do in-process).
 pub const TEMPLATES: &[(&str, &str, [u8; 32])] = &[
     ("creator_commitment", "creator_commitment_hook", [0xC0; 32]),
     ("fair_launch", "fair_launch_hook", [0xF1; 32]),
@@ -46,22 +67,33 @@ pub const TEMPLATES: &[(&str, &str, [u8; 32])] = &[
     ("parent_spin_off", "parent_spin_off_hook", [0xE5; 32]),
 ];
 
+/// The program id of a template hook in the active profile.
 pub fn template_id(env_key: &str) -> Pubkey {
-    let (_, _, id) = TEMPLATES
-        .iter()
-        .find(|(key, _, _)| *key == env_key)
-        .unwrap_or_else(|| panic!("unknown template {env_key}"));
-    Pubkey::new_from_array(*id)
+    setup()
+        .env
+        .template_program(env_key)
+        .unwrap_or_else(|e| panic!("unknown template {env_key}: {e}"))
 }
 
 pub struct Setup {
     pub env: Environment,
     pub deployer: Keypair,
-    pub fee_receiver: Keypair,
+    /// The fee-receiver keypair (integration), or `None` when the fee-receiver account is seeded
+    /// at genesis instead (localnet: nobody holds that key).
+    pub fee_receiver: Option<Keypair>,
+    pub artifacts: PathBuf,
+}
+
+pub fn profile() -> String {
+    std::env::var("RTH_PROFILE").unwrap_or_else(|_| "localnet".into())
 }
 
 pub fn setup() -> Setup {
-    let artifacts = root().join("target/integration-sbf");
+    let setup = match profile().as_str() {
+        "localnet" => localnet_setup(),
+        "integration" => integration_setup(),
+        other => panic!("unknown RTH_PROFILE `{other}`: localnet or integration"),
+    };
     let required = [
         "raydium_cp_swap.so".to_string(),
         "raydium_clmm.so".to_string(),
@@ -71,13 +103,36 @@ pub fn setup() -> Setup {
     .into_iter()
     .chain(TEMPLATES.iter().map(|(_, name, _)| format!("{name}.so")));
     for file in required {
+        let path = setup.artifacts.join(&file);
         assert!(
-            artifacts.join(&file).exists(),
-            "missing artifact {}",
-            artifacts.join(&file).display()
+            path.exists(),
+            "missing artifact {} (run `cargo xtask localnet build`)",
+            path.display()
         );
     }
-    std::env::set_var("SBF_OUT_DIR", &artifacts);
+    std::env::set_var("SBF_OUT_DIR", &setup.artifacts);
+    setup
+}
+
+fn localnet_setup() -> Setup {
+    let mut env = Environment::load(root().join("environments/localnet.json"))
+        .expect("environments/localnet.json");
+    env.rpc_url = "in-process".into();
+    let deployer = fixture_key("admin");
+    assert_eq!(
+        env.admin.as_deref(),
+        Some(deployer.pubkey().to_string().as_str()),
+        "environments/localnet.json's admin must be tests/fixtures/localnet/admin.json"
+    );
+    Setup {
+        env,
+        deployer,
+        fee_receiver: None,
+        artifacts: root().join("target/localnet-sbf"),
+    }
+}
+
+fn integration_setup() -> Setup {
     let deployer = key("deployer");
     let fee_receiver = key("cpmm-fee-receiver");
     let env = Environment {
@@ -102,7 +157,8 @@ pub fn setup() -> Setup {
     Setup {
         env,
         deployer,
-        fee_receiver,
+        fee_receiver: Some(fee_receiver),
+        artifacts: root().join("target/integration-sbf"),
     }
 }
 
@@ -120,8 +176,8 @@ pub async fn context(setup: &Setup) -> ProgramTestContext {
         setup.env.arbitrary_hook_program().unwrap(),
         None,
     );
-    for (_, artifact, id) in TEMPLATES {
-        test.add_program(artifact, Pubkey::new_from_array(*id), None);
+    for (key, artifact, _) in TEMPLATES {
+        test.add_program(artifact, setup.env.template_program(key).unwrap(), None);
     }
     // The deployer is the programs' admin, so it signs and pays.
     test.add_account(
@@ -134,6 +190,12 @@ pub async fn context(setup: &Setup) -> ProgramTestContext {
             rent_epoch: 0,
         },
     );
+    if setup.fee_receiver.is_none() {
+        test.add_account(
+            setup.env.cpmm_fee_receiver_key().unwrap(),
+            empty_wsol_account(&setup.deployer.pubkey()),
+        );
+    }
     let context = test.start_with_context().await;
     // create_pool / swap require block_timestamp > open_time (0).
     let mut clock: solana_sdk::clock::Clock = context.banks_client.get_sysvar().await.unwrap();
@@ -157,7 +219,7 @@ pub async fn run_with(
 ) {
     let mut context = context(setup).await;
     let mut chain = LocalChain::with_payer(&mut context, clone(&setup.deployer));
-    let mut inputs = FlowInputs::new(&setup.env, hook, Some(&setup.fee_receiver))
+    let mut inputs = FlowInputs::new(&setup.env, hook, setup.fee_receiver.as_ref())
         .with_transfer_fee(transfer_fee_bps);
     if let Some(second) = second {
         inputs = inputs.with_second_hook(second);

@@ -110,7 +110,10 @@ pub struct RefusalSpec {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct GenericHookSpec {
-    pub program_id: String,
+    /// The hook program. May be left out when the caller supplies it (for example a setup file
+    /// shipped with a template, whose program id only exists once it is deployed).
+    #[serde(default)]
+    pub program_id: Option<String>,
     /// Instructions to send after the mint has been pointed at the hook, to initialise it.
     #[serde(default)]
     pub setup: Vec<InstructionSpec>,
@@ -244,20 +247,47 @@ impl GenericExternalHook {
     /// Parse a JSON description and check it end to end: every placeholder must exist, every key
     /// and hex string must parse. A description that passes cannot fail later.
     pub fn from_json(json: &str) -> Result<Self> {
+        Self::from_json_for(json, None)
+    }
+
+    /// Like [`Self::from_json`], with `program` taking the place of the description's
+    /// `program_id` (which may then be absent).
+    pub fn from_json_for(json: &str, program: Option<Pubkey>) -> Result<Self> {
         let spec: GenericHookSpec = serde_json::from_str(json)
             .map_err(|e| DriverError::new(format!("the hook description is not valid: {e}")))?;
-        let program = Pubkey::from_str(&spec.program_id)
-            .map_err(|e| DriverError::new(format!("`program_id` is not an address: {e}")))?;
+        let program = match (program, &spec.program_id) {
+            (Some(program), _) => program,
+            (None, Some(text)) => Pubkey::from_str(text)
+                .map_err(|e| DriverError::new(format!("`program_id` is not an address: {e}")))?,
+            (None, None) => {
+                return Err(DriverError::new(
+                    "the hook description has no `program_id` and none was given",
+                ))
+            }
+        };
         let hook = Self { spec, program };
         hook.validate()?;
         Ok(hook)
     }
 
     pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self> {
+        Self::from_file_for(path, None)
+    }
+
+    /// Like [`Self::from_file`], with `program` taking the place of the file's `program_id`.
+    pub fn from_file_for(
+        path: impl AsRef<std::path::Path>,
+        program: Option<Pubkey>,
+    ) -> Result<Self> {
         let path = path.as_ref();
         let json = std::fs::read_to_string(path)
             .map_err(|e| DriverError::new(format!("read {}: {e}", path.display())))?;
-        Self::from_json(&json)
+        Self::from_json_for(&json, program)
+    }
+
+    /// The hook program this description drives.
+    pub fn program_id(&self) -> Pubkey {
+        self.program
     }
 
     /// Resolve everything once against a dummy context, so mistakes surface at load time.

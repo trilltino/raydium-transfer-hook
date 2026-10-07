@@ -1,0 +1,86 @@
+# Deterministic CI from a clean checkout. Needs no secrets and no public cluster: the Raydium
+# programs are the hook-support forks pinned in upstream.lock.toml, fetched into the git-ignored
+# target/upstream and built with their `localnet` feature; the only key involved is the throwaway
+# admin committed under tests/fixtures/localnet. Devnet is a separate, manual workflow (devnet.yml).
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # Test binaries linking the Solana runtime are hundreds of MB each with debug info; without it the
+  # whole suite fits a hosted runner's disk.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  # The SBF toolchain the forks and hooks are built with (docs/source-lock.md).
+  AGAVE_VERSION: v4.0.0
+
+jobs:
+  check:
+    name: fmt, clippy, unit tests, upstream lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo fmt
+        run: |
+          cargo fmt --all -- --check
+          (cd templates/transfer-hook-starter && cargo fmt -- --check)
+      - name: cargo clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: workspace tests (unit, golden V1 ABI fixtures, real Token-2022 ProgramTest)
+        run: cargo test --locked --workspace
+      - name: starter template tests (standalone crate)
+        run: cargo test --locked --manifest-path templates/transfer-hook-starter/Cargo.toml
+      - name: upstream lock and no-vendored-source rule
+        run: cargo xtask upstream verify
+      - name: git status is clean (nothing fetched or generated is tracked)
+        run: git diff --exit-code && test -z "$(git status --porcelain)"
+
+  runtime:
+    name: SBF builds, Raydium runtime tests, local validator E2E
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cache the Solana toolchain and platform tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/solana
+            ~/.cache/solana
+          key: agave-${{ env.AGAVE_VERSION }}
+      - name: install the Solana toolchain
+        run: |
+          if [ ! -x ~/solana/solana-release/bin/cargo-build-sbf ]; then
+            mkdir -p ~/solana
+            curl -sSfL "https://github.com/anza-xyz/agave/releases/download/${AGAVE_VERSION}/solana-release-x86_64-unknown-linux-gnu.tar.bz2" \
+              | tar xj -C ~/solana
+          fi
+          echo "$HOME/solana/solana-release/bin" >> "$GITHUB_PATH"
+      - name: build every program (hook-support forks with `localnet`, and all hooks)
+        run: cargo xtask localnet build
+      - name: Raydium runtime tests (real CPMM/CLMM SBF + Token-2022 + hooks, in-process)
+        env:
+          RTH_PROFILE: localnet
+          SBF_OUT_DIR: ${{ github.workspace }}/target/localnet-sbf
+        run: |
+          cargo test -p reference-hook-onchain -- --ignored
+          cargo test -p program-test-flows -p third-party-hook-acceptance -- --ignored
+      - name: solana-test-validator E2E (every hook through CPMM and CLMM, and the starter built from source)
+        run: cargo xtask localnet e2e --skip-build
+      - name: git status is clean after fetching and building upstream
+        run: test -z "$(git status --porcelain)"

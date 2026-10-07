@@ -8552,8 +8552,11 @@ dependencies = [
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "raydium-adapters",
  "serde",
  "serde_json",
+ "solana-sdk",
  "toml",
 ]
 

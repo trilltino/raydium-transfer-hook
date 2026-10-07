@@ -371,7 +371,7 @@ async fn framed_swap(
 }
 
 #[tokio::test]
-#[ignore = "requires raydium_clmm.so and reference_hook_onchain.so in SBF_OUT_DIR"]
+#[ignore = "requires SBF_OUT_DIR=target/localnet-sbf after `cargo xtask localnet build`"]
 async fn clmm_sbf_v3_executes_both_token_2022_hook_legs_and_rolls_back_rejections() {
     let mut mint_0 = Keypair::new();
     let mut mint_1 = Keypair::new();

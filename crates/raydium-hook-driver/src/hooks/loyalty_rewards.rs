@@ -123,12 +123,13 @@ impl HookSetup for LoyaltyRewardsHook {
                 signers: Vec::new(),
             },
             // The holder is the only registered account (the pool never earns), so it takes the
-            // whole stream, less at most rounding dust.
+            // whole stream, less dust: the stream pays `floor(amount / duration)` per second, so
+            // `amount % duration` is never paid out, plus a few units of index rounding.
             FollowUp::ExpectChange {
                 label: "the quote rewards arrived (net of what was funded)".into(),
                 account: quote_account,
                 since: "quote before funding".into(),
-                min: -5,
+                min: -5 - (self.reward_amount % u64::from(self.duration_seconds.max(1))) as i64,
                 max: 0,
             },
         ]

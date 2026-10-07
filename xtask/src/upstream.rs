@@ -29,32 +29,32 @@ const FORBIDDEN_SEGMENTS: &[&str] = &[
 const REQUIRED_IGNORES: &[&str] = &["/target/", "/reference/"];
 
 #[derive(Debug, Deserialize)]
-struct Entry {
+pub(crate) struct Entry {
     repository: String,
     base_revision: String,
     hook_repository: Option<String>,
     hook_branch: Option<String>,
     hook_revision: Option<String>,
     package: Option<String>,
-    program_dir: Option<String>,
+    pub(crate) program_dir: Option<String>,
 }
 
-type Lock = BTreeMap<String, Entry>;
+pub(crate) type Lock = BTreeMap<String, Entry>;
 
-fn root() -> PathBuf {
+pub(crate) fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("xtask lives in the workspace root")
         .to_path_buf()
 }
 
-fn upstream_dir() -> PathBuf {
+pub(crate) fn upstream_dir() -> PathBuf {
     std::env::var_os("RAYDIUM_HOOK_UPSTREAM_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| root().join("target").join("upstream"))
 }
 
-fn load_lock() -> Result<Lock> {
+pub(crate) fn load_lock() -> Result<Lock> {
     let text = std::fs::read_to_string(root().join("upstream.lock.toml"))?;
     Ok(toml::from_str(&text)?)
 }
@@ -112,7 +112,7 @@ fn list() -> Result<()> {
     Ok(())
 }
 
-fn fetch(names: &[&str], hook: bool, locked: bool) -> Result<()> {
+pub(crate) fn fetch(names: &[&str], hook: bool, locked: bool) -> Result<()> {
     let lock = load_lock()?;
     let names: Vec<&str> = if names.is_empty() {
         DEFAULT_FETCH.to_vec()

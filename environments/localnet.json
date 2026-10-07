@@ -1,18 +1,25 @@
 {
-  "name": "local-integration",
+  "name": "localnet",
   "cluster": "localnet",
-  "rpc_url": "in-process (solana-program-test)",
+  "rpc_url": "http://127.0.0.1:8899",
   "kind": "integration",
   "programs": {
-    "cpmm": "7tRJH4mmEfNGGLf9E8qEvo3oSjq2b75DhSggb1Wz45fJ",
-    "clmm": "3dNJapViueBArDN3HbWKcEf2u6hfZQ3oDyh3GmUXJ8oD",
-    "reference_hook": "Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X",
-    "arbitrary_hook": "EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB"
+    "cpmm": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
+    "clmm": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+    "reference_hook": "2hNsfyQn2jC3f6iri65a6PSvZEDBbd7fdjCPofWZf9gr",
+    "arbitrary_hook": "8bboHNayvThtxJMHHuDP84NRVsHE7nR1oWuNWW5uFtLp",
+    "templates": {
+      "creator_commitment": "EsMwcMyXyWJp6dKPW1wrdwQvwZYQaFvC12CSuYASAr95",
+      "fair_launch": "DHFbvegDDqhtA2JQGzLkQQRMruG4a56eSEoYqRBvhcfp",
+      "anti_bundle": "2QgUsX212MgSAoGCU9iUcCpMBcBv9sBVE35zYsH3jXKs",
+      "loyalty_rewards": "9sTqvkE9nUEbNestwemnNm4xpdToMzJH2YsHfDQxDiCp",
+      "parent_spin_off": "HfHqWwZJR8QQL29M51SCTPpd9ch2hK7cDBWxCiWFpBWr"
+    }
   },
-  "admin": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
-  "cpmm_fee_receiver": "CnoYEaFeS92rnvfY7i1WHY3yKnXgUQqs1xiC1eVj2aYS",
+  "admin": "8hLCioUTm7bT8sBMxd7A5PweQZgVuQa6KHv4durmL6sk",
+  "cpmm_fee_receiver": "DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8",
   "sources": {
-    "note": "The same integration artifacts as environments/devnet.json, executed in-process by tests/program-test/tests/local_flows.rs (no solana-test-validator exists on this Windows setup)."
+    "note": "Keyless profile: needs nothing that is not in a clean checkout. CPMM and CLMM are the hook-support forks pinned in upstream.lock.toml, built with their `localnet` feature (upstream program ids, admin baked in from tests/fixtures/localnet/admin.json at build time). Hook program ids are the public keys of the throwaway keypairs in tests/fixtures/localnet. The CPMM pool-creation fee receiver is upstream's mainnet address, injected as an empty wrapped-SOL account at genesis. Build with `cargo xtask localnet build`; run with `cargo xtask localnet e2e` (a real solana-test-validator) or the in-process tests."
   },
   "deployments": [],
   "evidence": []

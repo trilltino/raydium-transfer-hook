@@ -7,7 +7,7 @@ const CLMM_PROGRAM_ID: solana_sdk::pubkey::Pubkey =
     pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
 #[tokio::test]
-#[ignore = "requires CP-Swap and CLMM SBF artifacts in SBF_OUT_DIR"]
+#[ignore = "requires SBF_OUT_DIR=target/localnet-sbf after `cargo xtask localnet build`"]
 async fn loads_external_hook_aware_cpmm_and_clmm_sbf_programs() {
     let mut program_test = ProgramTest::default();
     program_test.add_program("raydium_cp_swap", CPMM_PROGRAM_ID, None);

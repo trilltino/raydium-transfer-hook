@@ -184,6 +184,30 @@ pub fn create_wsol_account_instructions(
     ]
 }
 
+/// An empty, rent-exempt wrapped-SOL (SPL Token) account owned by `owner`, as it would be after
+/// [`create_wsol_account_instructions`]. For seeding a test chain's genesis with an account at an
+/// address nobody holds the key to (the CPMM pool-creation fee receiver of a `localnet` build).
+pub fn empty_wsol_account(owner: &Pubkey) -> solana_sdk::account::Account {
+    let lamports = Rent::default().minimum_balance(spl_token::state::Account::LEN);
+    let state = spl_token::state::Account {
+        mint: spl_token::native_mint::id(),
+        owner: *owner,
+        amount: 0,
+        state: spl_token::state::AccountState::Initialized,
+        is_native: solana_program::program_option::COption::Some(lamports),
+        ..Default::default()
+    };
+    let mut data = vec![0; spl_token::state::Account::LEN];
+    spl_token::state::Account::pack(state, &mut data).expect("pack wSOL account");
+    solana_sdk::account::Account {
+        lamports,
+        data,
+        owner: spl_token::id(),
+        executable: false,
+        rent_epoch: 0,
+    }
+}
+
 /// Token amount of a Token-2022 account's raw data.
 pub fn token_amount(data: &[u8]) -> Option<u64> {
     use spl_token_2022::extension::StateWithExtensions;

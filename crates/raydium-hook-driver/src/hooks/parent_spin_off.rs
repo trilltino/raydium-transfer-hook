@@ -48,6 +48,9 @@ impl HookSetup for ParentSpinOffHook {
     fn follow_up(&self, ctx: &HookContext) -> Vec<FollowUp> {
         let mut steps = self.inner.follow_up(ctx);
         // Right after the funding step (`Remember`, then the `Send` that funds), try to fund again.
+        // One token less than the first funding: the program refuses any second funding before it
+        // looks at the amount, and an identical transaction under the same blockhash would be
+        // dropped as a duplicate before the hook ever ran.
         let [_, quote_account] = ctx.trader_accounts;
         steps.insert(
             2,
@@ -60,7 +63,7 @@ impl HookSetup for ParentSpinOffHook {
                     &ctx.hooked_mint,
                     &ctx.quote_mint,
                     &spl_token_2022::id(),
-                    self.inner.reward_amount,
+                    self.inner.reward_amount - 1,
                     self.inner.duration_seconds,
                 )],
                 signers: Vec::new(),

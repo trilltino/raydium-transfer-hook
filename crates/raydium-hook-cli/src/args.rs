@@ -33,15 +33,17 @@ build, ship and run a hook
 
 run it through Raydium
   e2e          --env FILE --keypair FILE [--fee-receiver-keypair FILE] [--amm cpmm|clmm|all]
-               [--hook NAME|all | --hook-dir DIR [--setup FILE] | --setup FILE]
+               [--hook NAME|all | --hook-dir DIR [--setup FILE] [--keys DIR] | --setup FILE]
                [--second-hook NAME] [--transfer-fee-bps N] [--keep-state FILE]
                [--vest-seconds N] [--window-seconds N] [--reward-seconds N] [--record]
                Run the checked end-to-end flows: admin setup, hooked mint, real pool, hooked swaps
                in both directions, the hook's refusals with rollback, its own follow-up steps.
                NAME: reference, arbitrary, creator-commitment, fair-launch, anti-bundle,
                loyalty-rewards, parent-spin-off. --hook-dir builds and deploys a hook you wrote
-               (the starter's setup ABI, or --setup for any other). Prints a results table and
-               exits non-zero on any failure. --keep-state saves the pool for `cpmm swap`.
+               and sets it up from DIR/setup.json (or --setup FILE); --setup alone runs a deployed
+               hook known only by that description. Prints a results table derived from what
+               happened and exits non-zero on any failure. --keep-state saves the pool for
+               `cpmm swap`. --record writes evidence (and a --hook-dir deployment) to the env file.
   cpmm swap    --env FILE --keypair FILE --state FILE --amount N [--direction in|out]
   clmm swap    --env FILE --keypair FILE --state FILE --amount N [--direction in|out]
                [--min-out N] [--allow-writable KEY,KEY | --allow-all-writable] [--simulate-only]

@@ -7,12 +7,6 @@
 //! holding `transfer_hook_starter.so`, in which case ProgramTest runs the SBF build.
 
 use {
-    transfer_hook_starter::{
-        config_address, config_extra_account_meta, initialize_hook_instruction,
-        process_instruction, set_config_authority_instruction, update_config_instruction,
-        validation_list_address, AuthorityMode, HookConfig, HookError, InitializeHookArgs,
-        MAX_PARAMS_LEN, TEMPLATE_MAX_TRANSFER_V1, VALIDATION_LIST_LEN,
-    },
     solana_program_test::{processor, BanksClientError, ProgramTest, ProgramTestContext},
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -34,6 +28,12 @@ use {
         state::{Account as TokenAccount, AccountState, Mint},
     },
     spl_transfer_hook_interface::instruction::ExecuteInstruction,
+    transfer_hook_starter::{
+        config_address, config_extra_account_meta, initialize_hook_instruction,
+        process_instruction, set_config_authority_instruction, update_config_instruction,
+        validation_list_address, AuthorityMode, HookConfig, HookError, InitializeHookArgs,
+        MAX_PARAMS_LEN, TEMPLATE_MAX_TRANSFER_V1, VALIDATION_LIST_LEN,
+    },
 };
 
 const HOOK: Pubkey = Pubkey::new_from_array([47; 32]);

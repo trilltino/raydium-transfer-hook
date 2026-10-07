@@ -23,14 +23,34 @@ fn main() {
 }
 
 async fn run(args: &[String]) -> Res<()> {
-    let Some((command, rest)) = args.split_first() else {
-        return Err(USAGE.into());
+    let words: Vec<&str> = args.iter().take(2).map(String::as_str).collect();
+    // Two-word commands (`hook build`, `cpmm swap`, ...) consume both words before the flags.
+    let (command, rest) = match words.as_slice() {
+        [group @ ("hook" | "mint" | "cpmm" | "clmm" | "env" | "template"), action, ..] => {
+            (format!("{group} {action}"), &args[2..])
+        }
+        [single, ..] => (single.to_string(), &args[1..]),
+        [] => return Err(USAGE.into()),
     };
     let flags = parse(rest);
     match command.as_str() {
         "deploy" => commands::deploy::deploy(&flags).await,
         "e2e" => commands::e2e::e2e(&flags).await,
-        "inspect" => commands::inspect::inspect(&flags).await,
+        "inspect" | "hook inspect" => commands::hook::inspect_hook(&flags).await,
+        "hook build" => commands::hook::build(&flags),
+        "hook deploy" => commands::hook::deploy(&flags).await,
+        "hook setup" => commands::hook::setup(&flags).await,
+        "mint create" => commands::mint::create(&flags).await,
+        "cpmm swap" => commands::swap::swap("cpmm", &flags).await,
+        "clmm swap" => commands::swap::swap("clmm", &flags).await,
+        "env probe" => commands::probe::probe(&flags).await,
+        "template id" => commands::template::id(&flags),
+        "template publish" => commands::template::publish_descriptor(&flags).await,
+        "template show" => commands::template::show(&flags).await,
+        "help" | "--help" | "-h" => {
+            println!("{USAGE}");
+            Ok(())
+        }
         _ => Err(USAGE.into()),
     }
 }

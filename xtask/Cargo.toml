@@ -10,3 +10,6 @@ publish = false
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.5"
+base64 = "0.22"
+raydium-adapters = { path = "../crates/raydium-adapters" }
+solana-sdk = "=2.2.2"

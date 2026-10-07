@@ -44,7 +44,7 @@ fn description(setup: &Setup) -> String {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+#[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
 async fn cpmm_runs_a_hook_known_only_by_its_description() {
     let s = setup();
     let hook = GenericExternalHook::from_json(&description(&s)).unwrap();
@@ -52,7 +52,7 @@ async fn cpmm_runs_a_hook_known_only_by_its_description() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+#[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
 async fn clmm_runs_a_hook_known_only_by_its_description() {
     let s = setup();
     let hook = GenericExternalHook::from_json(&description(&s)).unwrap();
@@ -62,7 +62,7 @@ async fn clmm_runs_a_hook_known_only_by_its_description() {
 /// The described hook on the second mint, next to a different hook on the first: two unrelated
 /// programs on the two legs of one swap, one of which the stack was never told about.
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+#[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
 async fn cpmm_runs_a_described_hook_beside_another_hook() {
     let s = setup();
     let described = GenericExternalHook::from_json(&description(&s)).unwrap();
@@ -70,7 +70,7 @@ async fn cpmm_runs_a_described_hook_beside_another_hook() {
 }
 
 #[tokio::test]
-#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+#[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
 async fn clmm_runs_a_described_hook_beside_another_hook() {
     let s = setup();
     let described = GenericExternalHook::from_json(&description(&s)).unwrap();

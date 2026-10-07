@@ -17,7 +17,7 @@ use raydium_hook_driver::{
 macro_rules! flows {
     ($($name:ident: $amm:literal, |$setup:ident| $hook:expr;)+) => {$(
         #[tokio::test]
-        #[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+        #[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
         async fn $name() {
             let $setup = setup();
             let hook = $hook;
@@ -79,7 +79,7 @@ flows! {
 macro_rules! combos {
     ($($name:ident: $amm:literal, |$s:ident| ($first:expr, $second:expr, $fee:expr);)+) => {$(
         #[tokio::test]
-        #[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+        #[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
         async fn $name() {
             let $s = setup();
             let (first, second) = ($first, $second);
@@ -103,7 +103,7 @@ combos! {
 macro_rules! fee_flows {
     ($($name:ident: $amm:literal;)+) => {$(
         #[tokio::test]
-        #[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+        #[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
         async fn $name() {
             let s = setup();
             run_with($amm, &reference(&s), None, 500, &s).await;

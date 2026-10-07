@@ -1,8 +1,4 @@
 use {
-    transfer_hook_starter::{
-        config_address, initialize_hook_instruction, process_instruction, AuthorityMode, HookError,
-        InitializeHookArgs,
-    },
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
         instruction::{AccountMeta, InstructionError},
@@ -18,6 +14,10 @@ use {
         },
         instruction as token_instruction,
         state::{Account as TokenAccount, Mint},
+    },
+    transfer_hook_starter::{
+        config_address, initialize_hook_instruction, process_instruction, AuthorityMode, HookError,
+        InitializeHookArgs,
     },
 };
 

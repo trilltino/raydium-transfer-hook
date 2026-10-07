@@ -386,7 +386,7 @@ async fn framed_swap(
 }
 
 #[tokio::test]
-#[ignore = "requires CPMM and reference-hook SBF artifacts in SBF_OUT_DIR"]
+#[ignore = "requires SBF_OUT_DIR=target/localnet-sbf after `cargo xtask localnet build`"]
 async fn cpmm_sbf_v2_executes_both_token_2022_hook_legs_and_rolls_back_output_rejection() {
     let mut input_mint = Keypair::new();
     let mut output_mint = Keypair::new();

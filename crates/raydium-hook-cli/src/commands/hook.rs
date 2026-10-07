@@ -27,19 +27,28 @@ use crate::args::{Flags, Res};
 /// `hook build DIR [--out DIR]`
 pub(crate) fn build(flags: &Flags) -> Res<()> {
     let dir = PathBuf::from(flags.first_positional("the hook's directory")?);
+    let out = PathBuf::from(flags.get("out").unwrap_or("target/hook-build"));
+    build_dir(&dir, &out)?;
+    println!(
+        "\nnext: raydium-hook hook deploy --env ENV --keypair KEY --so <artifact> --name NAME"
+    );
+    Ok(())
+}
+
+/// Build the hook in `dir` with `cargo build-sbf` into `out` and return the fresh artifacts.
+pub(crate) fn build_dir(dir: &Path, out: &Path) -> Res<Vec<PathBuf>> {
     let manifest = dir.join("Cargo.toml");
     if !manifest.exists() {
         return Err(format!("{} does not exist", manifest.display()));
     }
-    let out = PathBuf::from(flags.get("out").unwrap_or("target/hook-build"));
-    fs::create_dir_all(&out).map_err(|e| format!("create {}: {e}", out.display()))?;
+    fs::create_dir_all(out).map_err(|e| format!("create {}: {e}", out.display()))?;
     let started = SystemTime::now();
     println!("building {} ...", manifest.display());
     let status = Command::new("cargo")
         .args(["build-sbf", "--manifest-path"])
         .arg(&manifest)
         .arg("--sbf-out-dir")
-        .arg(&out)
+        .arg(out)
         .status()
         .map_err(|e| {
             format!("could not run `cargo build-sbf`: {e} (is the Solana toolchain installed?)")
@@ -48,7 +57,7 @@ pub(crate) fn build(flags: &Flags) -> Res<()> {
         return Err("`cargo build-sbf` failed".into());
     }
     let mut built = Vec::new();
-    for entry in fs::read_dir(&out).map_err(|e| e.to_string())? {
+    for entry in fs::read_dir(out).map_err(|e| e.to_string())? {
         let path = entry.map_err(|e| e.to_string())?.path();
         let fresh = fs::metadata(&path)
             .and_then(|m| m.modified())
@@ -61,8 +70,8 @@ pub(crate) fn build(flags: &Flags) -> Res<()> {
     if built.is_empty() {
         return Err(format!("no .so was produced in {}", out.display()));
     }
-    for so in built {
-        let bytes = fs::read(&so).map_err(|e| e.to_string())?;
+    for so in &built {
+        let bytes = fs::read(so).map_err(|e| e.to_string())?;
         println!("\nartifact  {}", so.display());
         println!("  bytes   {}", bytes.len());
         println!("  sha256  {:x}", Sha256::digest(&bytes));
@@ -76,10 +85,7 @@ pub(crate) fn build(flags: &Flags) -> Res<()> {
             );
         }
     }
-    println!(
-        "\nnext: raydium-hook hook deploy --env ENV --keypair KEY --so <artifact> --name NAME"
-    );
-    Ok(())
+    Ok(built)
 }
 
 /// The program keypair to deploy under: given, else under `--keys`, else the one `cargo build-sbf`
@@ -106,10 +112,27 @@ fn program_keypair(flags: &Flags, so: &Path, name: &str) -> Res<(PathBuf, bool)>
 /// `hook deploy --env FILE --keypair FILE --so FILE --name NAME`
 pub(crate) async fn deploy(flags: &Flags) -> Res<()> {
     let (env_path, mut env) = load_env(flags)?;
-    let deployer_path = flags.need("keypair")?;
     let so = PathBuf::from(flags.need("so")?);
     let name = flags.need("name")?;
-    let (keypair_path, created) = program_keypair(flags, &so, name)?;
+    let program = deploy_into(&mut env, flags, &so, name).await?;
+    env.save(&env_path).map_err(|e| e.to_string())?;
+    println!(
+        "\nprogram id {program} recorded in {env_path} as `{}`",
+        name.replace('-', "_")
+    );
+    Ok(())
+}
+
+/// Deploy the artifact `so` as `name` (`--keypair` pays; the program keypair comes from
+/// `--program-keypair`, `--keys` or beside the artifact) and record it in `env` (not saved).
+pub(crate) async fn deploy_into(
+    env: &mut Environment,
+    flags: &Flags,
+    so: &Path,
+    name: &str,
+) -> Res<Pubkey> {
+    let deployer_path = flags.need("keypair")?;
+    let (keypair_path, created) = program_keypair(flags, so, name)?;
     let program_keypair = read_keypair_file(&keypair_path)
         .map_err(|e| format!("cannot read {}: {e}", keypair_path.display()))?;
     if created {
@@ -118,11 +141,11 @@ pub(crate) async fn deploy(flags: &Flags) -> Res<()> {
     let program = program_keypair.pubkey();
     let toolchain = toolchain();
     let deployed = deploy_program(
-        &env,
+        env,
         deployer_path,
         &Program {
             name,
-            so: &so,
+            so,
             program_keypair: &keypair_path,
             program,
             source: format!("local build of {}", so.display()),
@@ -138,12 +161,7 @@ pub(crate) async fn deploy(flags: &Flags) -> Res<()> {
     env.programs
         .templates
         .insert(name.replace('-', "_"), program.to_string());
-    env.save(&env_path).map_err(|e| e.to_string())?;
-    println!(
-        "\nprogram id {program} recorded in {env_path} as `{}`",
-        name.replace('-', "_")
-    );
-    Ok(())
+    Ok(program)
 }
 
 /// The program id for a hook `kind`: `--program`, else the environment's.
