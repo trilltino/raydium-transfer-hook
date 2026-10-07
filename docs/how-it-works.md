@@ -97,7 +97,7 @@ Program ids are never constants in code. Each environment is a manifest in `envi
 |---|---|---|
 | `devnet.json` | Our hook-aware Raydium builds (`integration` feature) under our own ids, plus the hooks | The hooked-swap demo on a real cluster |
 | `localnet.json` | The same artifacts, in-process | `crates/raydium-hook-driver/tests/local_flows.rs` |
-| `official-devnet.json` | Raydium's own devnet programs | Compatibility checks only. They do not contain the hook-aware instructions, and the driver refuses to send them any |
+| `raydium-devnet.json` | Raydium's own devnet programs | Compatibility checks only. They do not contain the hook-aware instructions, and the driver refuses to send them any |
 
 ## What the evidence is
 

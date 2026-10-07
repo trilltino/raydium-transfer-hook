@@ -10,6 +10,10 @@ pub enum PolicyError {
     ZeroHookProgram,
     ConfigurationImmutable,
     UnauthorizedActor,
+    /// A policy byte in the stored settings is not a known value.
+    UnknownPolicyByte,
+    /// The hook program is locked after the first hooked mint and cannot be changed or cleared.
+    HookIdentityLocked,
 }
 
 impl fmt::Display for PolicyError {
@@ -23,6 +27,10 @@ impl fmt::Display for PolicyError {
             Self::ZeroHookProgram => "the platform hook program must not be the zero key",
             Self::ConfigurationImmutable => "the hook configuration is immutable after launch",
             Self::UnauthorizedActor => "the actor may not change this hook configuration",
+            Self::UnknownPolicyByte => "a stored hook policy byte is not a known value",
+            Self::HookIdentityLocked => {
+                "the hook program is locked after the first hooked mint; create another platform"
+            }
         };
         f.write_str(message)
     }

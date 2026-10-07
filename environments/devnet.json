@@ -11,7 +11,9 @@
     "templates": {
       "creator_commitment": "EMN2CsndkRBFzf5qjQFzSRnbM8JJmWDowmisDdMNNBK6",
       "fair_launch": "7xyk1AQg7xCaQucPgWs13hmAs4dmD214raNgEZhLPQSu",
-      "loyalty_rewards": "Dn34iBwWW3vSheCafjqfP568hwvS1tGgDiqsUeHrTyL"
+      "loyalty_rewards": "Dn34iBwWW3vSheCafjqfP568hwvS1tGgDiqsUeHrTyL",
+      "anti_bundle": "Aadi4nTDsYQhY23CA6LGzNph5obmw7TgeSbxKbh9K3CM",
+      "parent_spin_off": "8gY1t2Cjtb6SDuFdPG17SuovTC6WJcLf8K8Yoy7X1d8X"
     }
   },
   "admin": "QHgnAZswA5wt8ABUv5n7yM4FXFJdNwLsNYXKSVKB1Pm",
@@ -23,6 +25,8 @@
     "creator_commitment": "trilltino/raydium-transfer-hook templates/creator-commitment @ 7d66dd0",
     "fair_launch": "trilltino/raydium-transfer-hook templates/fair-launch @ 7d66dd0",
     "loyalty_rewards": "trilltino/raydium-transfer-hook templates/loyalty-rewards @ 7d66dd0",
+    "anti_bundle": "trilltino/raydium-transfer-hook templates/anti-bundle @ 8b60f1d",
+    "parent_spin_off": "trilltino/raydium-transfer-hook templates/parent-spin-off @ 8b60f1d",
     "reference_hook": "trilltino/raydium-transfer-hook programs/reference-hook-onchain @ 9cc41da"
   },
   "deployments": [

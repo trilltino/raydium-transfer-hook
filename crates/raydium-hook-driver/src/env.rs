@@ -34,6 +34,13 @@ pub struct Deployment {
     pub artifact_bytes: u64,
     pub upgrade_authority: String,
     pub source: String,
+    /// SHA-256 of the `Cargo.lock` the artifact was built with (the workspace's for the hooks, the
+    /// upstream repository's own for the Raydium builds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lockfile_sha256: Option<String>,
+    /// The build toolchain (`cargo build-sbf --version`), so the artifact hash can be reproduced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain: Option<String>,
 }
 
 /// One executed step of an end-to-end run, recorded as evidence.

@@ -6,11 +6,13 @@
 #![forbid(unsafe_code)]
 
 mod error;
+mod overlay;
 mod platform;
 mod policy;
 mod types;
 
 pub use error::PolicyError;
+pub use overlay::{PlatformHookOverlay, FLAG_IDENTITY_LOCKED, OVERLAY_LEN, RESERVED_HOOK_BYTES};
 pub use platform::{ConfigActor, LaunchConfig, PlatformConfig, PolicyDecision};
 pub use policy::{HookAuthorityPolicy, HookPolicy, HookPreset};
 pub use types::{Pubkey, TransferContext};

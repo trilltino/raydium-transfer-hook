@@ -198,16 +198,44 @@ fn render(env: &Value, env_path: &str) -> Result<String, String> {
         .iter()
         .map(|d| {
             let sha = str_of(d, "artifact_sha256");
+            let lock = str_of(d, "lockfile_sha256");
+            let lock = if lock.is_empty() {
+                "n/a".to_string()
+            } else {
+                format!("`{}…`", &lock[..lock.len().min(12)])
+            };
             format!(
-                "| {} | {} | {} | `{}…` | {} |\n",
+                "| {} | {} | {} | `{}…` | {} | {} |\n",
                 str_of(d, "name"),
                 links.account(str_of(d, "program_id")),
                 thousands(d.get("artifact_bytes").and_then(Value::as_u64).unwrap_or(0)),
                 &sha[..sha.len().min(12)],
+                lock,
                 links.tx(str_of(d, "signature"))
             )
         })
         .collect();
+    // Each distinct build toolchain recorded, so the artifact hashes can be reproduced.
+    let mut toolchains: Vec<String> = deployments
+        .iter()
+        .map(|d| str_of(d, "toolchain").to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    toolchains.sort();
+    toolchains.dedup();
+    let toolchain_note = if toolchains.is_empty() {
+        "No build toolchain was recorded for these deployments (they predate the field)."
+            .to_string()
+    } else {
+        format!(
+            "Built with: {}.",
+            toolchains
+                .iter()
+                .map(|t| format!("`{t}`"))
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+    };
 
     let all_runs = runs(&evidence);
     let run_rows: String = all_runs
@@ -280,9 +308,11 @@ Machine-readable copy, with every transaction: [`{env_path}`](../{env_path}).
 
 ## Deployed artifacts
 
-| Name | Program | Bytes | SHA-256 | Deploy transaction |
-|---|---|---|---|---|
+| Name | Program | Bytes | SHA-256 | Cargo.lock SHA-256 | Deploy transaction |
+|---|---|---|---|---|---|
 {artifact_rows}
+{toolchain_note} A hash that does not match after a rebuild usually means a different toolchain or lockfile.
+
 Rent is a refundable deposit held by each program-data account, about 5.1 SOL per MB of program
 (a 140 KB hook is about 0.7 SOL, the 1.15 MB CLMM about 5.9). Closing a program returns it to the
 upgrade authority.

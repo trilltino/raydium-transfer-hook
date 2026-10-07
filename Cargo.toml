@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/hook-kit",
+    "crates/hook-template-sdk",
     "crates/hook-policy-model",
     "crates/transfer-hook-sdk",
     "crates/raydium-hook-driver",
@@ -11,6 +12,7 @@ members = [
     "crates/reference-hook-model",
     "programs/reference-hook-onchain",
     "programs/arbitrary-test-hook",
+    "programs/hook-template-registry",
     "templates/creator-commitment",
     "templates/anti-bundle",
     "templates/fair-launch",
