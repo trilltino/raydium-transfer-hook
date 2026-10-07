@@ -4,7 +4,7 @@ use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
     instruction::Instruction,
     pubkey::Pubkey,
-    signature::{Keypair, Signer},
+    signature::Keypair,
 };
 use transfer_hook_sdk::{
     resolve_leg, FetchError, LegHook, LegRole, PrivilegePolicy, ResolveOptions, SplAccount,
@@ -14,7 +14,7 @@ use transfer_hook_sdk::{
 use super::recorder::Recorder;
 use crate::{
     chain::{Chain, DriverError, Result},
-    hooks::HookSetup,
+    hooks::{HookContext, HookSetup},
     token,
 };
 
@@ -34,6 +34,37 @@ pub(super) fn with_budget(mut instructions: Vec<Instruction>) -> Vec<Instruction
         ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNITS),
     );
     instructions
+}
+
+/// [`with_budget`] plus a compute-unit price (micro-lamports per unit), as a wallet sets a
+/// priority fee. A zero price adds nothing.
+pub(super) fn with_budget_and_price(
+    instructions: Vec<Instruction>,
+    micro_lamports: u64,
+) -> Vec<Instruction> {
+    let mut out = with_budget(instructions);
+    if micro_lamports > 0 {
+        out.insert(
+            1,
+            ComputeBudgetInstruction::set_compute_unit_price(micro_lamports),
+        );
+    }
+    out
+}
+
+/// Unix time on the cluster, read from the Clock sysvar account.
+pub(super) async fn chain_time<C: Chain>(chain: &mut C) -> Result<i64> {
+    let clock = chain
+        .account(&solana_sdk::sysvar::clock::id())
+        .await?
+        .ok_or_else(|| DriverError::new("the Clock sysvar account is missing"))?;
+    // Clock: slot, epoch_start_timestamp, epoch, leader_schedule_epoch, unix_timestamp (8 bytes each).
+    clock
+        .data
+        .get(32..40)
+        .and_then(|bytes| bytes.try_into().ok())
+        .map(i64::from_le_bytes)
+        .ok_or_else(|| DriverError::new("the Clock sysvar account is malformed"))
 }
 
 pub(super) async fn send_step<C: Chain>(
@@ -109,11 +140,10 @@ pub(super) async fn enable_hook<C: Chain>(
     chain: &mut C,
     rec: &mut Recorder,
     hook: &dyn HookSetup,
-    mint: &Pubkey,
+    ctx: &HookContext,
 ) -> Result<()> {
-    let payer = chain.payer().pubkey();
     let sent = chain
-        .send(&hook.enable_instructions(mint, &payer, &payer), &[])
+        .send(&hook.enable_instructions(ctx), &[])
         .await
         .map_err(|e| DriverError::new(format!("enabling the hook failed: {e}")))?;
     rec.push(

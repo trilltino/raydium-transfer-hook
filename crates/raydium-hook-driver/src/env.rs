@@ -19,6 +19,9 @@ pub struct Programs {
     pub reference_hook: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arbitrary_hook: Option<String>,
+    /// The template hooks (`creator_commitment`, `fair_launch`, `loyalty_rewards`), by name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub templates: BTreeMap<String, String>,
 }
 
 /// One on-chain deployment, recorded as evidence.
@@ -105,6 +108,14 @@ impl Environment {
 
     pub fn arbitrary_hook_program(&self) -> Result<Pubkey> {
         parse("programs.arbitrary_hook", &self.programs.arbitrary_hook)
+    }
+
+    /// The program id of a template hook, by its key in `programs.templates`.
+    pub fn template_program(&self, name: &str) -> Result<Pubkey> {
+        parse(
+            &format!("programs.templates.{name}"),
+            &self.programs.templates.get(name).cloned(),
+        )
     }
 
     pub fn admin_key(&self) -> Result<Pubkey> {

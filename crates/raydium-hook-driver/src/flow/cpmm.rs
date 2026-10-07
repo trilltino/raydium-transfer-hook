@@ -8,7 +8,7 @@ use crate::{
     chain::{Chain, DriverError, Result},
     cpmm::{Cpmm, CpmmPool},
     env::Evidence,
-    hooks::HookSetup,
+    hooks::{HookContext, HookSetup},
     token,
 };
 
@@ -16,6 +16,7 @@ const CPMM_SEED_AMOUNT: u64 = 1_000_000;
 
 pub(super) struct CpmmSwaps<'a> {
     pub(super) hook: &'a dyn HookSetup,
+    pub(super) ctx: HookContext,
     pub(super) cpmm: Cpmm,
     pub(super) pool: CpmmPool,
     pub(super) world: &'a World,
@@ -41,16 +42,14 @@ impl SwapBuilder for CpmmSwaps<'_> {
         let (input_leg, output_leg) = legs(
             chain,
             self.hook,
+            &self.ctx,
             hooked_in,
-            &self.world.hooked.pubkey(),
             &accounts.input_token_mint,
             &accounts.output_token_mint,
             in_account,
             out_account,
             accounts.input_vault,
             accounts.output_vault,
-            payer,
-            self.pool.authority,
             amount_in,
             expected_out,
         )
@@ -155,14 +154,23 @@ pub async fn run_cpmm<C: Chain>(chain: &mut C, inputs: &FlowInputs<'_>) -> Resul
     chain.advance_time(5).await?;
 
     // 4. Hook on, 5-6. Swap checks.
-    enable_hook(chain, &mut rec, inputs.hook, &world.hooked.pubkey()).await?;
+    let ctx = HookContext {
+        payer,
+        hooked_mint: world.hooked.pubkey(),
+        quote_mint: world.quote.pubkey(),
+        trader_accounts: [world.trader[0].pubkey(), world.trader[1].pubkey()],
+        pool_authority: pool.authority,
+        vaults: [pool.vault_0, pool.vault_1],
+        now: chain_time(chain).await?,
+    };
+    enable_hook(chain, &mut rec, inputs.hook, &ctx).await?;
     let kit = SwapKit {
         hook: inputs.hook,
-        hooked_mint: world.hooked.pubkey(),
-        trader: [world.trader[0].pubkey(), world.trader[1].pubkey()],
+        ctx: ctx.clone(),
     };
     let builder = CpmmSwaps {
         hook: inputs.hook,
+        ctx,
         cpmm,
         pool,
         world: &world,

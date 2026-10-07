@@ -13,13 +13,14 @@ use crate::{
     chain::{Chain, DriverError, Result},
     clmm::{Clmm, ClmmPool, MEMO_PROGRAM_ID},
     env::Evidence,
-    hooks::HookSetup,
+    hooks::{HookContext, HookSetup},
 };
 
 const CLMM_LIQUIDITY: u128 = 100_000_000_000;
 
 pub(super) struct ClmmSwaps<'a> {
     pub(super) hook: &'a dyn HookSetup,
+    pub(super) ctx: HookContext,
     pub(super) clmm: Clmm,
     pub(super) pool: ClmmPool,
     pub(super) world: &'a World,
@@ -58,16 +59,14 @@ impl SwapBuilder for ClmmSwaps<'_> {
         let (input_leg, output_leg) = legs(
             chain,
             self.hook,
+            &self.ctx,
             hooked_in,
-            &self.world.hooked.pubkey(),
             &input_mint,
             &output_mint,
             in_account,
             out_account,
             input_vault,
             output_vault,
-            payer,
-            self.pool.pool_state,
             amount_in,
             expected_out,
         )
@@ -209,14 +208,24 @@ pub async fn run_clmm<C: Chain>(chain: &mut C, inputs: &FlowInputs<'_>) -> Resul
         format!("vault_0 {} vault_1 {}", seeded.0, seeded.1),
     );
 
-    enable_hook(chain, &mut rec, inputs.hook, &world.hooked.pubkey()).await?;
+    let ctx = HookContext {
+        payer,
+        hooked_mint: world.hooked.pubkey(),
+        quote_mint: world.quote.pubkey(),
+        trader_accounts: [world.trader[0].pubkey(), world.trader[1].pubkey()],
+        // In CLMM the pool-state PDA owns both vaults.
+        pool_authority: pool.pool_state,
+        vaults: [pool.vault_0, pool.vault_1],
+        now: chain_time(chain).await?,
+    };
+    enable_hook(chain, &mut rec, inputs.hook, &ctx).await?;
     let kit = SwapKit {
         hook: inputs.hook,
-        hooked_mint: world.hooked.pubkey(),
-        trader: [world.trader[0].pubkey(), world.trader[1].pubkey()],
+        ctx: ctx.clone(),
     };
     let builder = ClmmSwaps {
         hook: inputs.hook,
+        ctx,
         clmm,
         pool,
         world: &world,

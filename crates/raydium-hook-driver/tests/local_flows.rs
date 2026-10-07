@@ -14,8 +14,8 @@
 use std::path::{Path, PathBuf};
 
 use raydium_hook_driver::{
-    env::Programs, run_clmm, run_cpmm, ArbitraryHook, Environment, FlowInputs, HookSetup,
-    LocalChain, ReferenceHook,
+    env::Programs, run_clmm, run_cpmm, ArbitraryHook, CreatorCommitmentHook, Environment,
+    FlowInputs, HookSetup, LocalChain, ReferenceHook,
 };
 use solana_program_test::{ProgramTest, ProgramTestContext};
 use solana_sdk::{
@@ -51,6 +51,7 @@ fn setup() -> Setup {
         "raydium_clmm.so",
         "reference_hook_onchain.so",
         "arbitrary_test_hook.so",
+        "creator_commitment_hook.so",
     ] {
         assert!(
             artifacts.join(file).exists(),
@@ -71,6 +72,11 @@ fn setup() -> Setup {
             clmm: Some(key("clmm-program").pubkey().to_string()),
             reference_hook: Some(key("hook-program").pubkey().to_string()),
             arbitrary_hook: Some(key("arbitrary-hook-program").pubkey().to_string()),
+            templates: [(
+                "creator_commitment".to_string(),
+                creator_commitment_program().to_string(),
+            )]
+            .into(),
         },
         admin: Some(deployer.pubkey().to_string()),
         cpmm_fee_receiver: Some(fee_receiver.pubkey().to_string()),
@@ -97,6 +103,11 @@ async fn context(setup: &Setup) -> ProgramTestContext {
         setup.env.arbitrary_hook_program().unwrap(),
         None,
     );
+    test.add_program(
+        "creator_commitment_hook",
+        creator_commitment_program(),
+        None,
+    );
     // The deployer is the programs' admin, so it signs and pays.
     test.add_account(
         setup.deployer.pubkey(),
@@ -114,6 +125,11 @@ async fn context(setup: &Setup) -> ProgramTestContext {
     clock.unix_timestamp = 1_700_000_000;
     context.set_sysvar(&clock);
     context
+}
+
+/// The creator-commitment template needs no key on disk locally: any program id will do.
+fn creator_commitment_program() -> solana_sdk::pubkey::Pubkey {
+    solana_sdk::pubkey::Pubkey::new_from_array([0xC0; 32])
 }
 
 async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
@@ -142,8 +158,8 @@ async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
             .iter()
             .filter(|e| e.step.starts_with("hook refused swap"))
             .count()
-            == 2,
-        "the flow must record both refused swaps"
+            == hook.refusals().len(),
+        "the flow must record every refusal the hook declares"
     );
 }
 
@@ -188,5 +204,21 @@ async fn clmm_with_an_unrelated_arbitrary_hook() {
         program_id: setup.env.arbitrary_hook_program().unwrap(),
         max_per_slot: 2,
     };
+    run("clmm", &hook, &setup).await;
+}
+
+#[tokio::test]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+async fn cpmm_with_the_creator_commitment_template() {
+    let setup = setup();
+    let hook = CreatorCommitmentHook::new(setup.env.template_program("creator_commitment").unwrap(), 90);
+    run("cpmm", &hook, &setup).await;
+}
+
+#[tokio::test]
+#[ignore = "needs target/integration-sbf artifacts and .keys (see docs/integration-devnet.md)"]
+async fn clmm_with_the_creator_commitment_template() {
+    let setup = setup();
+    let hook = CreatorCommitmentHook::new(setup.env.template_program("creator_commitment").unwrap(), 90);
     run("clmm", &hook, &setup).await;
 }

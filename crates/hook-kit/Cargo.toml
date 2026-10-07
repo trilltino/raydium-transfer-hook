@@ -1,0 +1,30 @@
+[package]
+name = "hook-kit"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Plumbing every Token-2022 Transfer Hook needs: Execute prelude, mint and token reads, PDA creation"
+
+[features]
+# In-process test helpers (a Token-2022 mint with a hook, funded accounts, transfers that resolve
+# the hook's accounts through the SDK).
+test-support = [
+    "dep:solana-program-test",
+    "dep:solana-sdk",
+    "dep:spl-token",
+    "dep:tokio",
+    "dep:transfer-hook-sdk",
+]
+
+[dependencies]
+solana-program = "=2.2.1"
+spl-tlv-account-resolution = "=0.10.0"
+spl-token-2022 = { version = "=7.0.0", features = ["no-entrypoint"] }
+spl-transfer-hook-interface = "=0.10.0"
+solana-program-test = { version = "=2.2.7", optional = true }
+solana-sdk = { version = "=2.2.2", optional = true }
+spl-token = { version = "=7.0.0", optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
+transfer-hook-sdk = { path = "../transfer-hook-sdk", optional = true }
