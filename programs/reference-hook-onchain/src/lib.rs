@@ -5,7 +5,7 @@
 //!
 //! A single rule template, `max-transfer-v1`: a hooked transfer of `amount > limit` is rejected
 //! with [`HookError::TransferExceedsLimit`]. Nothing else is enforced. Allow/deny lists,
-//! timelocks and platform-level policy exist only as models in `crates/reference-hook-model`.
+//! timelocks and platform-level policy exist only as models in `crates/hook-policy-model`.
 //!
 //! # Module map
 //!

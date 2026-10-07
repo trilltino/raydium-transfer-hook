@@ -30,9 +30,8 @@ any Transfer Hook program                   one of the examples, or yours
 | `crates/hook-kit` | What every hook needs: the `Execute` prelude, mint and token reads, PDA creation, an in-process test world. |
 | `templates/` | The five example hooks and the starter. The rule of each is `src/rule.rs`. |
 | `programs/` | The reference hook and the arbitrary test hook. |
-| `crates/hook-policy-model`, `crates/reference-hook-model` | Pure-Rust models of platform policy and hook rules. Not on-chain. |
+| `crates/hook-policy-model` | A pure-Rust model of platform policy. Not on-chain. |
 | `integrations/{cpmm,clmm}` | Plan a swap's two legs and delegate framing to the SDK. Model only. |
-| `integrations/launchlab` | A launch-policy simulator. Model only: LaunchLab's handlers are not public. |
 | `environments/` | Cluster manifests: program ids, deployments, recorded evidence. |
 | `xtask` | `cargo xtask upstream {list,verify,fetch}` and `cargo xtask devnet-doc`. |
 

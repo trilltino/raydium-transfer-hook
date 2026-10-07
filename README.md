@@ -81,7 +81,7 @@ of the forks, under our program ids) < `official Raydium` (Raydium's own deploym
 | CPMM exact-output swap, pool creation with a live hook, deposit, withdraw, protocol and fund fee collection | **Devnet verified** (`_v2` instructions in the CPMM fork) | Each takes the hook slices of both token transfers, framed like the swaps. [`docs/transfer-surface-matrix.md`](docs/transfer-surface-matrix.md) says exactly what ran where; the original instructions still reject hooked mints |
 | CLMM liquidity, positions and fees; CPMM creator-fee collection | **Not supported** (CLMM) / **unit-tested only** (CPMM creator fees) | CLMM rejects hooked mints on those paths with a clear error. CPMM creator-fee collection has a fork instruction and a tested framer, but no runtime test: [`docs/transfer-surface-matrix.md`](docs/transfer-surface-matrix.md) |
 | Creating a pool with a hooked mint | **Needs the pool admin's per-mint record** | Upstream's mint admission requires a `SupportMintAssociated` record for any mint with a TransferHook. Per mint, not per hook program: [`docs/permissionless-hooks.md`](docs/permissionless-hooks.md) |
-| LaunchLab | **Blocked** | Its on-chain handler is not public; `integrations/launchlab` is a simulator, not an integration |
+| LaunchLab | **Blocked** | Its on-chain handler is not public, so there is nothing to patch or test |
 | Hook-thickness benchmarks (accounts, compute, v0/v1, contention) | **Partial** | Measured compute and sizes in [`docs/hook-thickness.md`](docs/hook-thickness.md); no benchmark suite yet ([`benches/`](benches)) |
 
 ## The CLI
@@ -96,7 +96,6 @@ of the forks, under our program ids) < `official Raydium` (Raydium's own deploym
 | `e2e` | The checked end-to-end flows and the results table (`--hook NAME|all`, `--hook-dir DIR`, `--setup FILE`, `--second-hook`, `--transfer-fee-bps`, `--keep-state`, `--record`) |
 | `cpmm swap`, `clmm swap` | Swap on a pool `e2e --keep-state` left: resolve each leg, simulate, explain a refusal, send |
 | `inspect MINT`, `env probe` | Transport readiness of a mint; whether a cluster's Raydium programs have the hook-aware instructions |
-| `template id / publish / show` | The optional template descriptor standard (metadata, never permission) |
 | `deploy` | Deploy every program an environment lists, recording hashes and toolchain |
 
 ## Repository automation
@@ -123,10 +122,10 @@ third-party-hook-acceptance -- --ignored` after `cargo xtask localnet build`
 | `crates/raydium-hook-driver` | Hook setup providers (including the generic JSON one) and the checked end-to-end flows, over RPC or in-process |
 | `crates/raydium-hook-cli` | `raydium-hook` |
 | `crates/hook-kit` | Shared hook plumbing and an in-process test world |
-| `crates/hook-policy-model`, `crates/reference-hook-model`, `crates/hook-template-sdk` | Platform policy model, rule model, template descriptor client |
+| `crates/hook-policy-model` | Platform policy model (types the SDK turns into resolution options) |
 | `programs/` | The reference hook, the unrelated arbitrary hook, the template descriptor registry |
 | `templates/` | The starter and the five example hooks |
-| `integrations/` | CPMM and CLMM swap planners and a LaunchLab simulator (models) |
+| `integrations/` | CPMM and CLMM swap planners (models) |
 | `environments/` | Cluster manifests: `localnet.json` (keyless), `devnet.json` (integration), `raydium-devnet.json` (official) |
 | `tests/` | In-process flows, third-party acceptance tests, the localnet fixtures |
 | `xtask` | Upstream locks, localnet, devnet deployment, evidence page |

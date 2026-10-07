@@ -7,7 +7,7 @@
 //! SDK, or in this repository requires a hook to be described, and the existence of a descriptor
 //! says nothing about whether a hook is allowed, safe, tested or audited. Anyone may publish a
 //! descriptor for any program, including one they did not write; what a reader may conclude from
-//! a descriptor is decided by `hook-template-sdk`'s trust assessment, not by this program.
+//! a descriptor is decided by the reader, not by this program.
 //!
 //! | Module | Role |
 //! |---|---|

@@ -12,7 +12,6 @@ name = "raydium-hook"
 path = "src/main.rs"
 
 [dependencies]
-hook-template-sdk = { path = "../hook-template-sdk" }
 raydium-adapters = { path = "../raydium-adapters" }
 raydium-hook-driver = { path = "../raydium-hook-driver" }
 transfer-hook-sdk = { path = "../transfer-hook-sdk" }

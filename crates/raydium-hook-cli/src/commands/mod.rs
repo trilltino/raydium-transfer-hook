@@ -8,7 +8,6 @@ pub(crate) mod mint;
 pub(crate) mod probe;
 pub(crate) mod swap;
 pub(crate) mod table;
-pub(crate) mod template;
 
 use raydium_hook_driver::{Environment, RpcChain};
 

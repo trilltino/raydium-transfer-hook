@@ -88,8 +88,8 @@ not work on v1 transactions at all.
 
 ## Platform policy models (not on-chain)
 
-`hook-policy-model` and `reference-hook-model` describe how a platform could select a hook. They are
-design labels, not deployed access controls.
+`hook-policy-model` describes how a platform could select a hook. It is a design label, not a
+deployed access control.
 
 A platform selects at most one hook program. A launch can choose a supported preset or parameters
 within that engine; it cannot replace the platform-selected program.

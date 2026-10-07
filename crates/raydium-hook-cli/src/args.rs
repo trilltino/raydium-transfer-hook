@@ -61,13 +61,6 @@ inspect and check
                Does each Raydium program in the environment recognise the hook-aware instructions
                (swap_base_input_v2, swap_v3)? Nothing is sent; it simulates a malformed call.
 
-describe a template (optional metadata, never permission)
-  template id  MANIFEST.json
-               The content-derived template id of a manifest.
-  template publish --env FILE --keypair FILE --registry PROGRAM --hook PROGRAM --manifest FILE
-               [--flags N]
-  template show    --rpc URL --registry PROGRAM --hook PROGRAM --manifest FILE --publisher KEY
-
 deploy the whole environment
   deploy       --env FILE --keypair FILE --artifacts DIR --keys DIR [--only NAME]
                Deploy every program the environment lists (skipping ones already deployed) and

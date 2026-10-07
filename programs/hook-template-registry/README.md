@@ -8,8 +8,8 @@ which hook program and template**. Hashes and keys only; the manifest itself liv
 > or audited. Anyone can publish one for any program, including one they did not write. This
 > program has no owner, no allowlist and no instruction only a registry operator can call.
 
-The off-chain half (manifests, ids, what a reader may conclude) is
-[`crates/hook-template-sdk`](../../crates/hook-template-sdk).
+The off-chain half (manifests, ids, what a reader may conclude) used to live in
+`crates/hook-template-sdk`, which has been removed; nothing in this repository reads descriptors now.
 
 ## The descriptor
 

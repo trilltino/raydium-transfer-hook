@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "crates/hook-kit",
-    "crates/hook-template-sdk",
     "crates/hook-policy-model",
     "crates/transfer-hook-sdk",
     "crates/raydium-adapters",
@@ -9,8 +8,6 @@ members = [
     "crates/raydium-hook-cli",
     "integrations/cpmm",
     "integrations/clmm",
-    "integrations/launchlab",
-    "crates/reference-hook-model",
     "programs/reference-hook-onchain",
     "programs/arbitrary-test-hook",
     "programs/bench-hook",
@@ -21,7 +18,6 @@ members = [
     "templates/loyalty-rewards",
     "templates/parent-spin-off",
     "benches/harness",
-    "tests/models",
     "tests/program-test",
     "tests/third-party-hook",
     "xtask",

@@ -26,7 +26,7 @@ async fn run(args: &[String]) -> Res<()> {
     let words: Vec<&str> = args.iter().take(2).map(String::as_str).collect();
     // Two-word commands (`hook build`, `cpmm swap`, ...) consume both words before the flags.
     let (command, rest) = match words.as_slice() {
-        [group @ ("hook" | "mint" | "cpmm" | "clmm" | "env" | "template"), action, ..] => {
+        [group @ ("hook" | "mint" | "cpmm" | "clmm" | "env"), action, ..] => {
             (format!("{group} {action}"), &args[2..])
         }
         [single, ..] => (single.to_string(), &args[1..]),
@@ -44,9 +44,6 @@ async fn run(args: &[String]) -> Res<()> {
         "cpmm swap" => commands::swap::swap("cpmm", &flags).await,
         "clmm swap" => commands::swap::swap("clmm", &flags).await,
         "env probe" => commands::probe::probe(&flags).await,
-        "template id" => commands::template::id(&flags),
-        "template publish" => commands::template::publish_descriptor(&flags).await,
-        "template show" => commands::template::show(&flags).await,
         "help" | "--help" | "-h" => {
             println!("{USAGE}");
             Ok(())

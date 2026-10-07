@@ -31,7 +31,6 @@ cargo xtask localnet e2e --skip-build        # the same flows on a real solana-t
 | `templates/transfer-hook-starter/tests/setup_json.rs` | The starter's `setup.json` matches its real `InitializeHook` encoding and error code | nothing |
 | `cargo xtask localnet e2e` | Every hook, and the starter built from source, through both AMMs on a real `solana-test-validator` | the Solana CLI |
 | `crates/transfer-hook-sdk` unit tests | Resolver, framers, V1 goldens | nothing |
-| `tests/models` | Model-level checks of policy, SDK and planners against an in-memory chain. Not an execution of any Raydium program despite the name | nothing |
 
 ProgramTest is the real runtime executing real binaries; `cargo xtask localnet e2e` is a real
 validator process driven over RPC. CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml))

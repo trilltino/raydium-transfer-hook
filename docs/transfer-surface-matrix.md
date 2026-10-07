@@ -64,7 +64,7 @@ own program ids ([devnet.md](devnet.md)). No row is "official Raydium deployed".
 | CPMM `swap_base_output` (V1), `deposit`, `withdraw`, fee collection, `initialize*` (the original instructions) | unchanged; hooked mints rejected | host unit tests; the `_v2` instructions above are the hook-aware ones |
 | CLMM positions, liquidity, rewards, fees | unsupported: the shared helper rejects hooked mints | host unit tests |
 | CLMM limit orders (open, increase, settle) | unsupported: explicit rejection | host unit tests |
-| LaunchLab | **blocked** | The on-chain handler is closed source, so nothing can be patched or tested; `integrations/launchlab` is a simulator, not an integration |
+| LaunchLab | **blocked** | The on-chain handler is closed source, so nothing can be patched or tested |
 
 **Pool creation with a hooked mint is gated upstream.** CPMM `initialize` and CLMM `create_pool` admit a
 Token-2022 mint only if its extensions are on a short list (`TransferHook` is not) or the pool admin
