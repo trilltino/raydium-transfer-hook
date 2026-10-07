@@ -7,3 +7,5 @@ Thumbs.db
 
 # Fetched upstream trees and caches (never tracked)
 /.cache/
+/reference/
+/.keys/

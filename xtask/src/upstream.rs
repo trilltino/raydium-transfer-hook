@@ -26,7 +26,7 @@ const FORBIDDEN_SEGMENTS: &[&str] = &[
 ];
 
 /// Ignore rules that keep fetched upstream trees out of Git.
-const REQUIRED_IGNORES: &[&str] = &["/target/"];
+const REQUIRED_IGNORES: &[&str] = &["/target/", "/reference/"];
 
 #[derive(Debug, Deserialize)]
 struct Entry {

@@ -11,3 +11,4 @@ hook-policy-model = { path = "../../crates/hook-policy-model" }
 transfer-hook-sdk = { path = "../../crates/transfer-hook-sdk" }
 
 [dev-dependencies]
+transfer-hook-sdk = { path = "../../crates/transfer-hook-sdk", features = ["test-utils"] }

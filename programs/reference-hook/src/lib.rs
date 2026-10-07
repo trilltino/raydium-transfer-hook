@@ -1,3 +1,7 @@
+//! MODEL ONLY: a pure-Rust model of hook policy rules. The deployable program is
+//! `reference-hook-onchain`, which enforces only a subset (see its README); the
+//! allow/deny lists, authority and timelock behavior here are not on-chain.
+
 #![forbid(unsafe_code)]
 
 use std::fmt;

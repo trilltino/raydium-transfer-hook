@@ -1,133 +1,86 @@
+//! MODEL ONLY: end-to-end tests of the SDK, the integration planners, and the
+//! policy model against an in-memory chain of real Token-2022 mint bytes and
+//! real `ExtraAccountMetaList` accounts. No Raydium program is executed here;
+//! runtime evidence lives in `programs/reference-hook-onchain/tests`.
+
 #![forbid(unsafe_code)]
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
-    use clmm_hook_integration::resolve_swap_v2_remaining_accounts;
-    use cpmm_hook_integration::{resolve_deposit, resolve_swap_base_input, resolve_withdraw};
+    use clmm_hook_integration::{clmm_swap_legs, plan_clmm_swap_v3};
+    use cpmm_hook_integration::{cpmm_swap_legs, plan_cpmm_swap_base_input};
     use hook_policy_model::{
-        AccountMeta, HookAuthorityPolicy, HookPolicy, HookPreset, LaunchConfig, PlatformConfig,
-        Pubkey, TransferContext,
+        HookAuthorityPolicy, HookPolicy, HookPreset, LaunchConfig, PlatformConfig, PolicyError,
+        Pubkey as ModelKey, TransferContext,
     };
-    use launchlab_hook_integration::{LaunchLabLifecycle, LaunchPhase};
+    use launchlab_hook_integration::{LaunchPhase, LaunchPolicySimulator, LaunchSimError};
     use reference_hook_program::{HookEngine, HookError, HookModule, MintHookConfig};
     use transfer_hook_sdk::{
-        MintAccount, SourceError, TransferHookAccountSource, TransferHookResolver,
-        ValidationListAccount,
+        build_clmm_swap_v2, build_cpmm_swap_base_input_v1,
+        solana_program::pubkey::Pubkey,
+        spl_tlv_account_resolution::account::ExtraAccountMeta,
+        testing::{block_on, MemoryChain},
+        ClmmSwapAccounts, ClmmSwapArgs, CpmmSwapAccounts, FrameError, LegRole, ResolveOptions,
+        SplResolveError, CLMM_SWAP_V2_DISCRIMINATOR, CLMM_SWAP_V3_DISCRIMINATOR,
+        CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR, CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR,
     };
 
-    const TOKEN_2022: Pubkey = [9; 32];
-    const TOKEN_PROGRAM: Pubkey = [8; 32];
-
-    fn key(byte: u8) -> Pubkey {
-        [byte; 32]
+    fn model_key(key: Pubkey) -> ModelKey {
+        key.to_bytes()
     }
 
-    fn validation_address(hook_program: Pubkey, mint: Pubkey) -> Pubkey {
-        let mut address = [0; 32];
-        for (index, byte) in address.iter_mut().enumerate() {
-            *byte = hook_program[index]
-                .wrapping_add(mint[index].wrapping_mul(17))
-                .wrapping_add(index as u8);
-        }
-        address
-    }
-
-    fn transfer(source: u8, mint: u8, destination: u8, amount: u64) -> TransferContext {
-        TransferContext {
-            source: key(source),
-            mint: key(mint),
-            destination: key(destination),
-            authority: key(6),
-            amount,
+    fn cpmm_accounts() -> CpmmSwapAccounts {
+        CpmmSwapAccounts {
+            payer: Pubkey::new_unique(),
+            authority: Pubkey::new_unique(),
+            amm_config: Pubkey::new_unique(),
+            pool_state: Pubkey::new_unique(),
+            input_token_account: Pubkey::new_unique(),
+            output_token_account: Pubkey::new_unique(),
+            input_vault: Pubkey::new_unique(),
+            output_vault: Pubkey::new_unique(),
+            input_token_program: transfer_hook_sdk::spl_token_2022::id(),
+            output_token_program: transfer_hook_sdk::spl_token_2022::id(),
+            input_token_mint: Pubkey::new_unique(),
+            output_token_mint: Pubkey::new_unique(),
+            observation_state: Pubkey::new_unique(),
         }
     }
 
-    #[derive(Default)]
-    struct MemorySource {
-        mints: HashMap<Pubkey, MintAccount>,
-        lists: HashMap<Pubkey, ValidationListAccount>,
-        extras: HashMap<Pubkey, Vec<AccountMeta>>,
-        fetch_mint_count: usize,
-        fetch_list_count: usize,
-        resolved_contexts: Vec<TransferContext>,
-    }
-
-    impl MemorySource {
-        fn add_mint(
-            &mut self,
-            mint: Pubkey,
-            hook_program: Option<Pubkey>,
-            extras: Vec<AccountMeta>,
-        ) {
-            self.mints.insert(
-                mint,
-                MintAccount {
-                    key: mint,
-                    owner: TOKEN_2022,
-                    data_len: 82,
-                    transfer_hook_program: hook_program,
-                },
-            );
-            if let Some(hook_program) = hook_program {
-                let address = validation_address(hook_program, mint);
-                self.lists.insert(
-                    address,
-                    ValidationListAccount {
-                        key: address,
-                        owner: hook_program,
-                        mint,
-                        data_len: 12,
-                        has_execute_discriminator: true,
-                    },
-                );
-                self.extras.insert(mint, extras);
-            }
+    fn clmm_accounts() -> ClmmSwapAccounts {
+        ClmmSwapAccounts {
+            payer: Pubkey::new_unique(),
+            amm_config: Pubkey::new_unique(),
+            pool_state: Pubkey::new_unique(),
+            input_token_account: Pubkey::new_unique(),
+            output_token_account: Pubkey::new_unique(),
+            input_vault: Pubkey::new_unique(),
+            output_vault: Pubkey::new_unique(),
+            observation_state: Pubkey::new_unique(),
+            token_program: transfer_hook_sdk::spl_token::id(),
+            token_program_2022: transfer_hook_sdk::spl_token_2022::id(),
+            memo_program: Pubkey::new_unique(),
+            input_vault_mint: Pubkey::new_unique(),
+            output_vault_mint: Pubkey::new_unique(),
         }
     }
 
-    impl TransferHookAccountSource for MemorySource {
-        fn validation_list_address(&self, hook_program: Pubkey, mint: Pubkey) -> Pubkey {
-            validation_address(hook_program, mint)
-        }
-
-        fn fetch_mint(&mut self, mint: Pubkey) -> Result<Option<MintAccount>, SourceError> {
-            self.fetch_mint_count += 1;
-            Ok(self.mints.get(&mint).cloned())
-        }
-
-        fn fetch_validation_list(
-            &mut self,
-            address: Pubkey,
-        ) -> Result<Option<ValidationListAccount>, SourceError> {
-            self.fetch_list_count += 1;
-            Ok(self.lists.get(&address).cloned())
-        }
-
-        fn resolve_extra_accounts(
-            &mut self,
-            validation_list: &ValidationListAccount,
-            transfer: TransferContext,
-        ) -> Result<Vec<AccountMeta>, SourceError> {
-            self.resolved_contexts.push(transfer);
-            self.extras
-                .get(&validation_list.mint)
-                .cloned()
-                .ok_or_else(|| SourceError("missing test meta list".into()))
-        }
+    fn extra(key: &Pubkey, writable: bool) -> ExtraAccountMeta {
+        ExtraAccountMeta::new_with_pubkey(key, false, writable).unwrap()
     }
 
-    fn hook_engine(mint: u8, hook_program: u8, denied: Vec<Pubkey>) -> HookEngine {
+    fn hook_engine(mint: ModelKey, hook_program: ModelKey, denied: Vec<ModelKey>) -> HookEngine {
         let enabled_modules = if denied.is_empty() {
             Vec::new()
         } else {
             vec![HookModule::AddressDenyList]
         };
         HookEngine::initialize(MintHookConfig {
-            mint: key(mint),
-            hook_program: key(hook_program),
-            platform_authority: key(3),
+            mint,
+            hook_program,
+            platform_authority: [3; 32],
             authority_policy: HookAuthorityPolicy::PlatformRetained,
             allowed_modules: vec![
                 HookModule::TransferLimit,
@@ -142,23 +95,23 @@ mod tests {
         .unwrap()
     }
 
-    fn optional_platform() -> PlatformConfig {
+    fn optional_platform(hook: ModelKey) -> PlatformConfig {
         PlatformConfig::new(
-            Some(key(7)),
+            Some(hook),
             HookPolicy::Optional,
             HookAuthorityPolicy::PlatformRetained,
         )
     }
 
     #[test]
-    fn no_hook_and_policy_failures_are_explicit() {
-        let no_engine = PlatformConfig::without_program(
-            HookPolicy::Optional,
-            HookAuthorityPolicy::PlatformRetained,
-        );
+    fn policy_failures_are_explicit_and_no_hook_launches_trade_without_setup() {
         assert_eq!(
-            no_engine.validate_launch(LaunchConfig::with_preset(HookPreset::FairLaunch)),
-            Err(hook_policy_model::PolicyError::PresetWithoutHook)
+            PlatformConfig::without_program(
+                HookPolicy::Optional,
+                HookAuthorityPolicy::PlatformRetained
+            )
+            .validate_launch(LaunchConfig::with_preset(HookPreset::FairLaunch)),
+            Err(PolicyError::PresetWithoutHook)
         );
         assert_eq!(
             PlatformConfig::without_program(
@@ -166,236 +119,345 @@ mod tests {
                 HookAuthorityPolicy::PlatformRetained
             )
             .validate_launch(LaunchConfig::new()),
-            Err(hook_policy_model::PolicyError::MissingPlatformHook)
+            Err(PolicyError::MissingPlatformHook)
         );
 
-        let mut launch =
-            LaunchLabLifecycle::create(key(1), optional_platform(), LaunchConfig::new()).unwrap();
+        let mint = Pubkey::new_unique();
+        let mut launch = LaunchPolicySimulator::create(
+            model_key(mint),
+            optional_platform([7; 32]),
+            LaunchConfig::new(),
+        )
+        .unwrap();
         assert_eq!(launch.phase(), LaunchPhase::MintCreated);
         launch.begin_trading().unwrap();
+        launch.check_trade_mint(model_key(mint)).unwrap();
 
-        let mut source = MemorySource::default();
-        source.add_mint(key(1), None, Vec::new());
-        source.mints.get_mut(&key(1)).unwrap().owner = TOKEN_PROGRAM;
-        let resolved = launch
-            .resolve_trade(
-                &TransferHookResolver::new(TOKEN_PROGRAM, TOKEN_2022),
-                &mut source,
-                transfer(4, 1, 5, 20),
-            )
-            .unwrap();
-        assert!(resolved.accounts.is_empty());
-        assert_eq!(source.fetch_list_count, 0);
-        let graduation = launch.graduate(key(1)).unwrap();
+        // A classic mint with no hook resolves unhooked under the launch's options.
+        let mut chain = MemoryChain::new();
+        chain.add_classic_mint(mint);
+        let accounts = cpmm_accounts();
+        let (mut input, output) = cpmm_swap_legs(&accounts, 20, 19);
+        input.mint = mint;
+        chain.add_classic_mint(accounts.output_token_mint);
+        let plan = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &launch.resolve_options(),
+            &ResolveOptions::default(),
+            chain.fetcher(),
+        ))
+        .unwrap();
+        assert_eq!(plan.hook_account_count(), 0);
+        let graduation = launch.graduate(model_key(mint)).unwrap();
         assert_eq!(graduation.hook_program, None);
         assert!(!graduation.validation_list_initialized);
     }
 
     #[test]
-    fn launchlab_initializes_hook_before_trading_and_preserves_it_on_graduation() {
-        let engine = hook_engine(1, 7, Vec::new());
-        let mut launch = LaunchLabLifecycle::create(
-            key(1),
-            optional_platform(),
+    fn launch_policy_pins_the_hook_program_the_sdk_will_accept() {
+        let accounts = cpmm_accounts();
+        let platform_hook = Pubkey::new_unique();
+        let engine = hook_engine(
+            model_key(accounts.input_token_mint),
+            model_key(platform_hook),
+            Vec::new(),
+        );
+        let mut launch = LaunchPolicySimulator::create(
+            model_key(accounts.input_token_mint),
+            optional_platform(model_key(platform_hook)),
             LaunchConfig::with_preset(HookPreset::FairLaunch),
         )
         .unwrap();
         assert_eq!(
             launch.initialize_hook(&engine, false),
-            Err(launchlab_hook_integration::LaunchLabError::MissingValidationList)
+            Err(LaunchSimError::MissingValidationList)
         );
         launch.initialize_hook(&engine, true).unwrap();
         launch.begin_trading().unwrap();
 
-        let mut source = MemorySource::default();
-        source.add_mint(
-            key(1),
-            Some(key(7)),
-            vec![AccountMeta::new(key(8), false, true)],
+        let (input, output) = cpmm_swap_legs(&accounts, 20, 19);
+        let mut chain = MemoryChain::new();
+        chain.add_hooked_mint(
+            accounts.input_token_mint,
+            platform_hook,
+            None,
+            &[extra(&Pubkey::new_unique(), false)],
         );
-        let plan = launch
-            .resolve_trade(
-                &TransferHookResolver::new(TOKEN_PROGRAM, TOKEN_2022),
-                &mut source,
-                transfer(4, 1, 5, 20),
-            )
+        chain.add_classic_mint(accounts.output_token_mint);
+        let plan = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &launch.resolve_options(),
+            &ResolveOptions::default(),
+            chain.fetcher(),
+        ))
+        .unwrap();
+        assert_eq!(plan.hook_account_count(), 3);
+        let graduation = launch
+            .graduate(model_key(accounts.input_token_mint))
             .unwrap();
-        assert_eq!(plan.accounts.len(), 3);
-
-        let graduation = launch.graduate(key(1)).unwrap();
-        assert_eq!(graduation.hook_program, Some(key(7)));
+        assert_eq!(graduation.hook_program, Some(model_key(platform_hook)));
         assert!(graduation.validation_list_initialized);
+
+        // The same launch rejects a mint hooked to some other program.
+        let rogue_hook = Pubkey::new_unique();
+        chain.add_hooked_mint(accounts.input_token_mint, rogue_hook, None, &[]);
+        let (input, output) = cpmm_swap_legs(&accounts, 20, 19);
+        let error = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &launch.resolve_options(),
+            &ResolveOptions::default(),
+            chain.fetcher(),
+        ))
+        .unwrap_err();
+        assert_eq!(error.leg, LegRole::Input);
+        assert_eq!(
+            error.source,
+            SplResolveError::UnexpectedHookProgram {
+                expected: platform_hook,
+                found: rogue_hook
+            }
+        );
     }
 
     #[test]
-    fn mandatory_hook_uses_platform_engine_even_without_a_launch_preset() {
-        let platform = PlatformConfig::new(
-            Some(key(7)),
-            HookPolicy::Mandatory,
-            HookAuthorityPolicy::GovernedTimelock,
-        );
-        let mut launch = LaunchLabLifecycle::create(key(1), platform, LaunchConfig::new()).unwrap();
-        let engine = hook_engine(1, 7, Vec::new());
-        launch.initialize_hook(&engine, true).unwrap();
-        launch.begin_trading().unwrap();
-
-        let mut source = MemorySource::default();
-        source.add_mint(
-            key(1),
-            Some(key(7)),
-            vec![AccountMeta::new(key(8), false, true)],
-        );
-        let resolved = launch
-            .resolve_trade(
-                &TransferHookResolver::new(TOKEN_PROGRAM, TOKEN_2022),
-                &mut source,
-                transfer(4, 1, 5, 1),
-            )
-            .unwrap();
-        assert_eq!(resolved.transfers[0].hook_program, Some(key(7)));
+    fn a_mandatory_launch_rejects_an_unhooked_mint() {
+        let accounts = cpmm_accounts();
+        let launch = LaunchPolicySimulator::create(
+            model_key(accounts.input_token_mint),
+            PlatformConfig::with_program(
+                [7; 32],
+                HookPolicy::Mandatory,
+                HookAuthorityPolicy::GovernedTimelock,
+            ),
+            LaunchConfig::new(),
+        )
+        .unwrap();
+        let mut chain = MemoryChain::new();
+        chain.add_unhooked_token_2022_mint(accounts.input_token_mint);
+        chain.add_classic_mint(accounts.output_token_mint);
+        let (input, output) = cpmm_swap_legs(&accounts, 20, 19);
+        let error = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &launch.resolve_options(),
+            &ResolveOptions::default(),
+            chain.fetcher(),
+        ))
+        .unwrap_err();
+        assert_eq!(error.source, SplResolveError::HookRequired);
     }
 
     #[test]
-    fn cpmm_swap_deposit_and_withdraw_keep_transfer_specific_slices() {
-        let resolver = TransferHookResolver::new(TOKEN_PROGRAM, TOKEN_2022);
-        let mut source = MemorySource::default();
-        source.add_mint(
-            key(10),
-            Some(key(20)),
-            vec![AccountMeta::new(key(30), false, true)],
+    fn cpmm_swap_with_one_hooked_leg_keeps_transfer_specific_slices() {
+        let accounts = cpmm_accounts();
+        let mut chain = MemoryChain::new();
+        chain.add_hooked_mint(
+            accounts.input_token_mint,
+            Pubkey::new_unique(),
+            None,
+            &[extra(&Pubkey::new_unique(), false)],
         );
-        source.add_mint(key(11), None, Vec::new());
+        chain.add_classic_mint(accounts.output_token_mint);
+        let (input, output) = cpmm_swap_legs(&accounts, 15, 12);
+        let plan = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &ResolveOptions::default(),
+            &ResolveOptions::default(),
+            chain.fetcher(),
+        ))
+        .unwrap();
+        let mut instruction = build_cpmm_swap_base_input_v1(Pubkey::new_unique(), &accounts, 15, 1);
+        let framed = plan.frame(&mut instruction).unwrap().unwrap();
+        assert_eq!(instruction.data[..8], CPMM_SWAP_BASE_INPUT_V2_DISCRIMINATOR);
+        assert_eq!(
+            (framed.input_hook_accounts, framed.output_hook_accounts),
+            (3, 0)
+        );
+        assert_eq!(instruction.accounts.len(), 13 + 3);
+    }
 
-        let swap = resolve_swap_base_input(
-            &resolver,
-            &mut source,
-            transfer(1, 10, 2, 15),
-            transfer(3, 11, 4, 12),
-        )
+    #[test]
+    fn cpmm_swap_with_no_hooks_is_a_byte_identical_v1_swap() {
+        let accounts = cpmm_accounts();
+        let mut chain = MemoryChain::new();
+        chain.add_classic_mint(accounts.input_token_mint);
+        chain.add_classic_mint(accounts.output_token_mint);
+        let (input, output) = cpmm_swap_legs(&accounts, 15, 12);
+        let plan = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &ResolveOptions::default(),
+            &ResolveOptions::default(),
+            chain.fetcher(),
+        ))
         .unwrap();
-        assert_eq!(swap.transfers.transfers[0].accounts, 0..3);
-        assert_eq!(swap.transfers.transfers[1].accounts, 3..3);
-        assert_eq!(swap.transfers.accounts.len(), 3);
-
-        let deposit = resolve_deposit(
-            &resolver,
-            &mut source,
-            transfer(1, 10, 7, 5),
-            transfer(1, 11, 8, 5),
-        )
-        .unwrap();
-        assert_eq!(deposit.transfers.transfers.len(), 2);
-        let withdraw = resolve_withdraw(
-            &resolver,
-            &mut source,
-            transfer(9, 10, 1, 5),
-            transfer(9, 11, 1, 5),
-        )
-        .unwrap();
-        assert_eq!(withdraw.transfers.transfers.len(), 2);
-        assert_eq!(source.resolved_contexts[1].source, key(1));
-        assert_eq!(source.resolved_contexts[1].destination, key(7));
+        let mut instruction = build_cpmm_swap_base_input_v1(Pubkey::new_unique(), &accounts, 15, 1);
+        let before = instruction.clone();
+        assert_eq!(plan.frame(&mut instruction), Ok(None));
+        assert_eq!(instruction, before);
+        assert_eq!(instruction.data[..8], CPMM_SWAP_BASE_INPUT_V1_DISCRIMINATOR);
     }
 
     #[test]
     fn cpmm_swap_with_both_mints_hooked_retains_duplicate_accounts_per_leg() {
-        let resolver = TransferHookResolver::new(TOKEN_PROGRAM, TOKEN_2022);
-        let mut source = MemorySource::default();
-        source.add_mint(
-            key(10),
-            Some(key(20)),
-            vec![AccountMeta::new(key(30), false, true)],
+        let accounts = cpmm_accounts();
+        let shared = Pubkey::new_unique();
+        let mut chain = MemoryChain::new();
+        // The same writable extra on the input leg, readonly on the output leg:
+        // the resolver would accept each, but the framer must refuse the escalation.
+        chain.add_hooked_mint(
+            accounts.input_token_mint,
+            Pubkey::new_unique(),
+            None,
+            &[extra(&shared, true)],
         );
-        source.add_mint(
-            key(11),
-            Some(key(21)),
-            vec![AccountMeta::new(key(30), false, false)],
+        chain.add_hooked_mint(
+            accounts.output_token_mint,
+            Pubkey::new_unique(),
+            None,
+            &[extra(&shared, false)],
         );
-
-        let swap = resolve_swap_base_input(
-            &resolver,
-            &mut source,
-            transfer(1, 10, 2, 15),
-            transfer(3, 11, 4, 12),
-        )
+        let options = ResolveOptions::default().with_privilege_policy(
+            transfer_hook_sdk::PrivilegePolicy::allowing_writable([shared]),
+        );
+        let (input, output) = cpmm_swap_legs(&accounts, 15, 12);
+        let plan = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &options,
+            &options,
+            chain.fetcher(),
+        ))
         .unwrap();
-        assert_eq!(swap.transfers.transfers[0].accounts, 0..3);
-        assert_eq!(swap.transfers.transfers[1].accounts, 3..6);
-        assert_eq!(swap.transfers.accounts.len(), 6);
-        assert_eq!(
-            swap.transfers.accounts[0].key,
-            swap.transfers.accounts[3].key
+        let mut instruction = build_cpmm_swap_base_input_v1(Pubkey::new_unique(), &accounts, 15, 1);
+        let snapshot = instruction.clone();
+        assert!(matches!(
+            plan.frame(&mut instruction),
+            Err(FrameError::CrossSlicePrivilegeConflict { address, .. }) if address == shared
+        ));
+        assert_eq!(instruction, snapshot);
+
+        // With equal flags both copies are kept, one per leg, in leg order.
+        chain.add_hooked_mint(
+            accounts.output_token_mint,
+            Pubkey::new_unique(),
+            None,
+            &[extra(&shared, true)],
         );
-        assert!(swap.transfers.accounts[0].is_writable);
-        assert!(!swap.transfers.accounts[3].is_writable);
+        let (input, output) = cpmm_swap_legs(&accounts, 15, 12);
+        let plan = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &options,
+            &options,
+            chain.fetcher(),
+        ))
+        .unwrap();
+        plan.frame(&mut instruction).unwrap().unwrap();
+        assert_eq!(instruction.accounts[13].pubkey, shared);
+        assert_eq!(instruction.accounts[16].pubkey, shared);
+        assert_eq!(instruction.accounts.len(), 13 + 6);
     }
 
     #[test]
-    fn clmm_tick_and_bitmap_accounts_are_kept_outside_the_hook_tail() {
-        let resolver = TransferHookResolver::new(TOKEN_PROGRAM, TOKEN_2022);
-        let mut source = MemorySource::default();
-        source.add_mint(
-            key(10),
-            Some(key(20)),
-            vec![AccountMeta::new(key(30), false, true)],
+    fn clmm_tick_and_bitmap_accounts_stay_outside_the_hook_tail() {
+        let accounts = clmm_accounts();
+        let mut chain = MemoryChain::new();
+        chain.add_hooked_mint(
+            accounts.input_vault_mint,
+            Pubkey::new_unique(),
+            None,
+            &[extra(&Pubkey::new_unique(), false)],
         );
-        source.add_mint(
-            key(11),
-            Some(key(21)),
-            vec![AccountMeta::new(key(31), false, true)],
+        chain.add_hooked_mint(
+            accounts.output_vault_mint,
+            Pubkey::new_unique(),
+            None,
+            &[extra(&Pubkey::new_unique(), false)],
         );
-        let tick_accounts = vec![
-            AccountMeta::new(key(40), false, true),
-            AccountMeta::new(key(41), false, true),
-        ];
-
-        let plan = resolve_swap_v2_remaining_accounts(
-            &resolver,
-            &mut source,
-            tick_accounts,
-            transfer(1, 10, 2, 10),
-            transfer(3, 11, 4, 9),
-        )
+        let ticks = [Pubkey::new_unique(), Pubkey::new_unique()];
+        let bitmap = Pubkey::new_unique();
+        let mut instruction = build_clmm_swap_v2(
+            Pubkey::new_unique(),
+            &accounts,
+            &ticks,
+            Some(bitmap),
+            ClmmSwapArgs {
+                amount: 10,
+                other_amount_threshold: 9,
+                sqrt_price_limit_x64: 0,
+                is_base_input: true,
+            },
+        );
+        assert_eq!(instruction.data[..8], CLMM_SWAP_V2_DISCRIMINATOR);
+        let (input, output) = clmm_swap_legs(&accounts, 10, 9);
+        let plan = block_on(plan_clmm_swap_v3(
+            2,
+            1,
+            input,
+            output,
+            &ResolveOptions::default(),
+            &ResolveOptions::default(),
+            chain.fetcher(),
+        ))
         .unwrap();
-        assert_eq!(plan.hook_account_range(), 2..8);
-        assert_eq!(plan.transfer_account_range(0), Some(2..5));
-        assert_eq!(plan.transfer_account_range(1), Some(5..8));
-        assert_eq!(plan.ordered_accounts().len(), 8);
-        assert_eq!(plan.ordered_accounts()[0].key, key(40));
-        assert_eq!(plan.ordered_accounts()[1].key, key(41));
+        let framed = plan.frame(&mut instruction).unwrap().unwrap();
+        assert_eq!(instruction.data[..8], CLMM_SWAP_V3_DISCRIMINATOR);
+        assert_eq!(instruction.accounts[13].pubkey, ticks[0]);
+        assert_eq!(instruction.accounts[14].pubkey, ticks[1]);
+        assert_eq!(instruction.accounts[15].pubkey, bitmap);
+        assert_eq!(framed.input_range, 16..19);
+        assert_eq!(framed.output_range, 19..22);
     }
 
     #[test]
-    fn stale_validation_list_is_refetched_and_rejected() {
-        let resolver = TransferHookResolver::new(TOKEN_PROGRAM, TOKEN_2022);
-        let mut source = MemorySource::default();
-        source.add_mint(
-            key(10),
-            Some(key(20)),
-            vec![AccountMeta::new(key(30), false, true)],
+    fn stale_validation_list_is_detected_before_signing() {
+        let accounts = cpmm_accounts();
+        let hook = Pubkey::new_unique();
+        let mut chain = MemoryChain::new();
+        chain.add_hooked_mint(
+            accounts.input_token_mint,
+            hook,
+            None,
+            &[extra(&Pubkey::new_unique(), false)],
         );
-        let context = transfer(1, 10, 2, 10);
-        resolver
-            .resolve_transfer_accounts(&mut source, context)
-            .unwrap();
-        let address = validation_address(key(20), key(10));
-        source.lists.get_mut(&address).unwrap().owner = key(99);
+        chain.add_classic_mint(accounts.output_token_mint);
+        let (input, output) = cpmm_swap_legs(&accounts, 15, 12);
+        let plan = block_on(plan_cpmm_swap_base_input(
+            input,
+            output,
+            &ResolveOptions::default(),
+            &ResolveOptions::default(),
+            chain.fetcher(),
+        ))
+        .unwrap();
+        block_on(plan.verify_unchanged(chain.fetcher())).unwrap();
 
-        assert_eq!(
-            resolver.resolve_transfer_accounts(&mut source, context),
-            Err(transfer_hook_sdk::ResolveError::ValidationListOwnerMismatch)
+        chain.add_hooked_mint(
+            accounts.input_token_mint,
+            hook,
+            None,
+            &[extra(&Pubkey::new_unique(), false)],
         );
-        assert_eq!(source.fetch_mint_count, 2);
-        assert_eq!(source.fetch_list_count, 2);
+        let error = block_on(plan.verify_unchanged(chain.fetcher())).unwrap_err();
+        assert_eq!(error.leg, LegRole::Input);
+        assert!(matches!(
+            error.source,
+            SplResolveError::ValidationListChanged { .. }
+        ));
     }
 
     #[test]
     fn hook_rejection_does_not_commit_earlier_transfer_effects() {
-        let allowed_engine = hook_engine(10, 20, Vec::new());
-        let rejecting_engine = hook_engine(11, 21, vec![key(6)]);
+        let allowed_engine = hook_engine([10; 32], [20; 32], Vec::new());
+        let rejecting_engine = hook_engine([11; 32], [21; 32], vec![[6; 32]]);
         let first = transfer(4, 10, 5, 10);
         let second = transfer(5, 11, 6, 10);
-        let mut balances = HashMap::from([(key(4), 20), (key(5), 20), (key(6), 0)]);
+        let mut balances = HashMap::from([([4; 32], 20), ([5; 32], 20), ([6; 32], 0)]);
         let initial = balances.clone();
 
         let result = apply_transfers_atomically(
@@ -409,8 +471,18 @@ mod tests {
         assert_eq!(balances, initial);
     }
 
+    fn transfer(source: u8, mint: u8, destination: u8, amount: u64) -> TransferContext {
+        TransferContext {
+            source: [source; 32],
+            mint: [mint; 32],
+            destination: [destination; 32],
+            authority: [6; 32],
+            amount,
+        }
+    }
+
     fn apply_transfers_atomically(
-        balances: &mut HashMap<Pubkey, u64>,
+        balances: &mut HashMap<ModelKey, u64>,
         transfers: &[(TransferContext, Option<&HookEngine>)],
     ) -> Result<(), AtomicError> {
         let mut staged = balances.clone();

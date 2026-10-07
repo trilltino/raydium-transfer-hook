@@ -1,5 +1,8 @@
-# CPMM flow model
+# CPMM planning model (MODEL ONLY)
 
-`src/lib.rs` plans the two concrete transfer legs for base-input swaps, deposits, and withdrawals, preserving a distinct resolved account range for each leg.
+`src/lib.rs` resolves the two transfer legs of a `swap_base_input` with the SDK (`plan_cpmm_swap_base_input`) and frames them with `frame_cpmm_or_passthrough`. It is not a Raydium CPI and executes nothing.
 
-Upstream source review found that the current CPMM helper invokes `TransferChecked` with only fixed transfer accounts and does not forward handler remaining accounts. This crate does not patch or execute that upstream program. Keep live V1 layouts unchanged; a future program fork must explicitly wire each per-transfer slice before enabling hooked traffic.
+- Live hooked entrypoint: `swap_base_input_v2`. A swap with no hooked leg stays the byte-identical V1 `swap_base_input`.
+- Deposits and withdrawals are rejected by the program for hooked mints, so there is no plan for them.
+- Each leg keeps its own `extras.., hook_program, validation_list` slice. Slices are never merged or deduplicated.
+- Runtime evidence is `programs/reference-hook-onchain/tests/cpmm_swap_base_input_v2_runtime.rs`; see `docs/source-lock.md` for its recorded status.

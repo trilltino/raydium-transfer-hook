@@ -1,5 +1,7 @@
-# CLMM flow model
+# CLMM planning model (MODEL ONLY)
 
-`src/lib.rs` plans a separate tick/bitmap prefix and hook-transfer tail for two swap legs.
+`src/lib.rs` resolves the two transfer legs of a swap (`plan_clmm_swap_v3`) and frames them with `frame_clmm_or_passthrough` into `swap_v3`. It is not a Raydium CPI and executes nothing.
 
-The reviewed upstream `SwapV2` parser scans remaining accounts as tick arrays/bitmap extension by data length and stops at the first other account. Its transfer helper does not forward hook accounts. The modeled partition is not a live SwapV2 extension; a real hooked entrypoint needs an explicit boundary/new discriminator and program tests.
+- Live hooked entrypoint: `swap_v3`. An unhooked swap stays the byte-identical `swap_v2`.
+- Tick arrays and the bitmap extension form a prefix that is only counted (`ticks`, `bitmaps`); the per-leg hook slices follow it.
+- No CLMM hooked swap has been executed on a runtime. This crate's tests only check account framing.

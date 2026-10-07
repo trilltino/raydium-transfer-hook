@@ -6,6 +6,10 @@ license.workspace = true
 rust-version.workspace = true
 publish = false
 
+[features]
+# The LaunchLab policy simulator. Model only; off by default.
+model = []
+
 [dependencies]
 hook-policy-model = { path = "../../crates/hook-policy-model" }
 reference-hook-program = { path = "../../programs/reference-hook" }

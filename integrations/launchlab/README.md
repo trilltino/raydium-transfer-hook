@@ -1,5 +1,5 @@
-# LaunchLab lifecycle model
+# LaunchLab policy simulator (MODEL ONLY, `model` feature)
 
-`src/lib.rs` models policy-selected hook setup before trading and records the hook/list state when graduating the same mint.
+`LaunchPolicySimulator` applies the platform policy model to a launch lifecycle (hook setup before trading, hook state recorded at graduation) and can produce the SDK `ResolveOptions` a trade would have to satisfy. It is behind the `model` feature and is not an API.
 
-The reviewed public LaunchLab SDK exposes instruction layouts and discriminators, but the on-chain handler is closed source (confirmed by the owner). The SDK's Token-2022 mint builder does not expose Transfer Hook extension initialization or validation-list setup. Buy/sell CPI count, authority seeds, and graduation transfer behavior remain unknown. This module is a local state model, not a patch to LaunchLab; do not treat it as a live integration.
+The reviewed public LaunchLab SDK exposes instruction layouts and discriminators, but the on-chain handler is closed source (confirmed by the owner). Buy/sell CPI count, authority seeds, and graduation transfer behavior remain unknown, so there is no LaunchLab framing and no live integration.

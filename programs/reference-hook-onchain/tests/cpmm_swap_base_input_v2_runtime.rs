@@ -1,7 +1,7 @@
 use {
     reference_hook_onchain::{
-        config_address, initialize_config_instruction, initialize_validation_list_instruction,
-        process_instruction,
+        config_address, initialize_hook_instruction, process_instruction, AuthorityMode, HookError,
+        InitializeHookArgs,
     },
     solana_program::{
         hash::hash,
@@ -27,7 +27,8 @@ use {
     },
     std::collections::HashMap,
     transfer_hook_sdk::{
-        frame_cpmm_swap_base_input_v2, resolve_spl_transfer_hook_accounts, SplAccount,
+        frame_cpmm_swap_base_input_v2, resolve_leg, FetchError, LegHook, LegRole, ResolveOptions,
+        SplAccount, SplTransferLeg,
     },
 };
 
@@ -305,49 +306,48 @@ async fn fetch_resolver_accounts(
 }
 
 async fn resolve_hook_slice(
+    role: LegRole,
     source: Pubkey,
     mint: Pubkey,
     destination: Pubkey,
     authority: Pubkey,
     amount: u64,
     fetched: &HashMap<Pubkey, SplAccount>,
-) -> Vec<AccountMeta> {
-    let mut resolver_instruction = Instruction {
-        program_id: CPMM_PROGRAM_ID,
-        accounts: vec![
-            AccountMeta::new(source, false),
-            AccountMeta::new_readonly(mint, false),
-            AccountMeta::new(destination, false),
-            AccountMeta::new_readonly(authority, false),
-        ],
-        data: Vec::new(),
-    };
-    let result = resolve_spl_transfer_hook_accounts(
-        &mut resolver_instruction,
-        source,
-        mint,
-        destination,
-        authority,
-        amount,
+) -> LegHook {
+    // Pin the hook program: the mint must use exactly the reference hook.
+    let options = ResolveOptions::default().with_expected_hook_program(HOOK_PROGRAM_ID);
+    let leg = resolve_leg(
+        role,
+        SplTransferLeg {
+            source,
+            mint,
+            destination,
+            authority,
+            amount,
+        },
+        &options,
         |key| {
             let account = fetched.get(&key).cloned();
-            async move { Ok::<_, Box<dyn std::error::Error + Send + Sync>>(account) }
+            async move { Ok::<_, FetchError>(account) }
         },
     )
     .await
-    .expect("resolve SPL Transfer Hook accounts")
-    .expect("Token-2022 swap leg must have a Transfer Hook");
-    assert_eq!(result.appended_accounts.len(), 3);
+    .expect("resolve SPL Transfer Hook accounts");
+    let slice = leg
+        .slice()
+        .expect("Token-2022 swap leg must have a Transfer Hook");
+    let appended = slice.metas();
+    assert_eq!(appended.len(), 3);
     assert_eq!(
-        result.appended_accounts[0].pubkey,
+        appended[0].pubkey,
         config_address(&mint, &HOOK_PROGRAM_ID).0
     );
-    assert_eq!(result.appended_accounts[1].pubkey, HOOK_PROGRAM_ID);
+    assert_eq!(appended[1].pubkey, HOOK_PROGRAM_ID);
     assert_eq!(
-        result.appended_accounts[2].pubkey,
+        appended[2].pubkey,
         spl_transfer_hook_interface::get_extra_account_metas_address(&mint, &HOOK_PROGRAM_ID)
     );
-    result.appended_accounts
+    leg
 }
 
 async fn framed_swap(
@@ -358,7 +358,8 @@ async fn framed_swap(
     expected_amount_out: u64,
 ) -> Instruction {
     let fetched = fetch_resolver_accounts(context, fixture).await;
-    let input_accounts = resolve_hook_slice(
+    let input_leg = resolve_hook_slice(
+        LegRole::Input,
         fixture.trader_input.pubkey(),
         fixture.input_mint.pubkey(),
         fixture.input_vault,
@@ -367,7 +368,8 @@ async fn framed_swap(
         &fetched,
     )
     .await;
-    let output_accounts = resolve_hook_slice(
+    let output_leg = resolve_hook_slice(
+        LegRole::Output,
         fixture.output_vault,
         fixture.output_mint.pubkey(),
         fixture.trader_output.pubkey(),
@@ -376,9 +378,9 @@ async fn framed_swap(
         &fetched,
     )
     .await;
-    assert_ne!(input_accounts, output_accounts);
+    assert_ne!(input_leg.slice(), output_leg.slice());
     let mut instruction = swap_instruction(fixture, payer, amount_in, 1);
-    frame_cpmm_swap_base_input_v2(&mut instruction, &input_accounts, &output_accounts)
+    frame_cpmm_swap_base_input_v2(&mut instruction, &input_leg, &output_leg)
         .expect("frame the two independent hook slices");
     instruction
 }
@@ -609,25 +611,16 @@ async fn cpmm_sbf_v2_executes_both_token_2022_hook_legs_and_rolls_back_output_re
             )
             .unwrap(),
         );
-        enable_hook_instructions.push(initialize_config_instruction(
+        enable_hook_instructions.push(initialize_hook_instruction(
             HOOK_PROGRAM_ID,
-            config_address(&mint.pubkey(), &HOOK_PROGRAM_ID).0,
             mint.pubkey(),
             context.payer.pubkey(),
             context.payer.pubkey(),
-            limit,
-        ));
-    }
-    for mint in [&fixture.input_mint, &fixture.output_mint] {
-        enable_hook_instructions.push(initialize_validation_list_instruction(
-            HOOK_PROGRAM_ID,
-            spl_transfer_hook_interface::get_extra_account_metas_address(
-                &mint.pubkey(),
-                &HOOK_PROGRAM_ID,
+            &InitializeHookArgs::max_transfer(
+                AuthorityMode::ExtensionAuthority,
+                limit,
+                Pubkey::default(),
             ),
-            mint.pubkey(),
-            context.payer.pubkey(),
-            context.payer.pubkey(),
         ));
     }
     let enable_hook_tx = Transaction::new_signed_with_payer(
@@ -824,7 +817,10 @@ async fn trace_hook(
         .expect("simulation request");
     let details = outcome.simulation_details.expect("simulation details");
     let invoke = format!("Program {HOOK_PROGRAM_ID} invoke");
-    let failed = format!("Program {HOOK_PROGRAM_ID} failed: custom program error: 0x1");
+    let failed = format!(
+        "Program {HOOK_PROGRAM_ID} failed: custom program error: {:#x}",
+        HookError::TransferExceedsLimit.code()
+    );
     HookTrace {
         succeeded: outcome.result.expect("simulation result").is_ok(),
         hook_invocations: details

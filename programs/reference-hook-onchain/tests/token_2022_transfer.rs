@@ -1,15 +1,15 @@
 use {
     reference_hook_onchain::{
-        config_address, initialize_config_instruction, initialize_validation_list_instruction,
-        process_instruction,
+        config_address, initialize_hook_instruction, process_instruction, AuthorityMode, HookError,
+        InitializeHookArgs,
     },
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
-        instruction::AccountMeta,
+        instruction::{AccountMeta, InstructionError},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,
-        transaction::Transaction,
+        transaction::{Transaction, TransactionError},
     },
     spl_token_2022::{
         extension::{
@@ -37,6 +37,18 @@ fn create_program_test() -> (ProgramTest, Keypair, Pubkey, Pubkey) {
         processor!(process_instruction),
     );
     (test, mint, config, validation_list)
+}
+
+fn assert_custom_error(
+    result: Result<(), solana_program_test::BanksClientError>,
+    expected: HookError,
+) {
+    match result {
+        Err(solana_program_test::BanksClientError::TransactionError(
+            TransactionError::InstructionError(_, InstructionError::Custom(code)),
+        )) => assert_eq!(code, expected.code(), "expected {expected}"),
+        other => panic!("expected {expected}, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -106,20 +118,12 @@ async fn token_2022_transfer_executes_hook_and_rejection_rolls_back_balances() {
         )
         .unwrap(),
     ];
-    setup_instructions.push(initialize_config_instruction(
+    setup_instructions.push(initialize_hook_instruction(
         HOOK_PROGRAM_ID,
-        config,
         mint.pubkey(),
         context.payer.pubkey(),
         context.payer.pubkey(),
-        50,
-    ));
-    setup_instructions.push(initialize_validation_list_instruction(
-        HOOK_PROGRAM_ID,
-        validation_list,
-        mint.pubkey(),
-        context.payer.pubkey(),
-        context.payer.pubkey(),
+        &InitializeHookArgs::max_transfer(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
     ));
     setup_instructions.push(
         token_instruction::mint_to(
@@ -173,11 +177,13 @@ async fn token_2022_transfer_executes_hook_and_rejection_rolls_back_balances() {
         &[&context.payer],
         blockhash,
     );
-    assert!(context
-        .banks_client
-        .process_transaction(direct_call_tx)
-        .await
-        .is_err());
+    assert_custom_error(
+        context
+            .banks_client
+            .process_transaction(direct_call_tx)
+            .await,
+        HookError::NotDirectInvocation,
+    );
 
     let transfer = |amount| {
         let mut instruction = token_instruction::transfer_checked(
@@ -219,11 +225,13 @@ async fn token_2022_transfer_executes_hook_and_rejection_rolls_back_balances() {
         &[&context.payer],
         blockhash,
     );
-    assert!(context
-        .banks_client
-        .process_transaction(rejected_transfer)
-        .await
-        .is_err());
+    assert_custom_error(
+        context
+            .banks_client
+            .process_transaction(rejected_transfer)
+            .await,
+        HookError::TransferExceedsLimit,
+    );
 
     let source_after = context
         .banks_client
