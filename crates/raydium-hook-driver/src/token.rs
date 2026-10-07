@@ -1,4 +1,5 @@
-//! Token-2022 helpers: mints with an optional TransferHook extension, and token accounts.
+//! Token-2022 helpers: mints with optional TransferHook and TransferFee extensions, and token
+//! accounts.
 
 use solana_program::program_pack::Pack;
 use solana_sdk::{
@@ -9,27 +10,63 @@ use solana_sdk::{
     system_instruction,
 };
 use spl_token_2022::{
-    extension::{transfer_hook::instruction as transfer_hook_instruction, ExtensionType},
+    extension::{
+        transfer_fee::instruction as transfer_fee_instruction,
+        transfer_hook::instruction as transfer_hook_instruction, ExtensionType,
+    },
     instruction as token_instruction,
     state::{Account as TokenAccount, Mint},
 };
 
-/// Instructions that create a Token-2022 mint with `decimals`. When `with_hook_extension` is set
-/// the TransferHook extension is initialised with `authority` as its authority and **no hook
-/// program yet**; the hook is switched on later (see [`crate::hooks::HookSetup`]).
+/// The Token-2022 extensions a flow puts on a mint (and so, as account extensions, on its token
+/// accounts).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct MintFeatures {
+    /// A TransferHook extension, with **no hook program yet**: the hook is switched on later (see
+    /// [`crate::hooks::HookSetup`]).
+    pub hook: bool,
+    /// A TransferFee extension charging this many basis points (0 for none).
+    pub transfer_fee_bps: u16,
+}
+
+impl MintFeatures {
+    pub fn plain() -> Self {
+        Self::default()
+    }
+
+    fn mint_extensions(self) -> Vec<ExtensionType> {
+        let mut list = Vec::new();
+        if self.hook {
+            list.push(ExtensionType::TransferHook);
+        }
+        if self.transfer_fee_bps > 0 {
+            list.push(ExtensionType::TransferFeeConfig);
+        }
+        list
+    }
+
+    fn account_extensions(self) -> Vec<ExtensionType> {
+        let mut list = Vec::new();
+        if self.hook {
+            list.push(ExtensionType::TransferHookAccount);
+        }
+        if self.transfer_fee_bps > 0 {
+            list.push(ExtensionType::TransferFeeAmount);
+        }
+        list
+    }
+}
+
+/// Instructions that create a Token-2022 mint with `decimals` and the extensions in `features`.
+/// `authority` is the mint authority and the authority of each extension.
 pub fn create_mint_instructions(
     payer: &Pubkey,
     mint: &Keypair,
     authority: &Pubkey,
     decimals: u8,
-    with_hook_extension: bool,
+    features: MintFeatures,
 ) -> Vec<Instruction> {
-    let extensions: &[ExtensionType] = if with_hook_extension {
-        &[ExtensionType::TransferHook]
-    } else {
-        &[]
-    };
-    let len = ExtensionType::try_calculate_account_len::<Mint>(extensions)
+    let len = ExtensionType::try_calculate_account_len::<Mint>(&features.mint_extensions())
         .expect("Token-2022 mint length");
     let mut instructions = vec![system_instruction::create_account(
         payer,
@@ -38,7 +75,7 @@ pub fn create_mint_instructions(
         len as u64,
         &spl_token_2022::id(),
     )];
-    if with_hook_extension {
+    if features.hook {
         instructions.push(
             transfer_hook_instruction::initialize(
                 &spl_token_2022::id(),
@@ -47,6 +84,19 @@ pub fn create_mint_instructions(
                 None,
             )
             .expect("TransferHook initialize"),
+        );
+    }
+    if features.transfer_fee_bps > 0 {
+        instructions.push(
+            transfer_fee_instruction::initialize_transfer_fee_config(
+                &spl_token_2022::id(),
+                &mint.pubkey(),
+                Some(authority),
+                Some(authority),
+                features.transfer_fee_bps,
+                u64::MAX,
+            )
+            .expect("TransferFeeConfig initialize"),
         );
     }
     instructions.push(
@@ -62,22 +112,18 @@ pub fn create_mint_instructions(
     instructions
 }
 
-/// Instructions that create a Token-2022 token account. `hooked` accounts carry the
-/// TransferHookAccount extension (required for any mint with a TransferHook extension).
+/// Instructions that create a Token-2022 token account for a mint with `features` (the account
+/// extensions the mint's extensions require).
 pub fn create_token_account_instructions(
     payer: &Pubkey,
     account: &Keypair,
     mint: &Pubkey,
     owner: &Pubkey,
-    hooked: bool,
+    features: MintFeatures,
 ) -> Vec<Instruction> {
-    let extensions: &[ExtensionType] = if hooked {
-        &[ExtensionType::TransferHookAccount]
-    } else {
-        &[]
-    };
-    let len = ExtensionType::try_calculate_account_len::<TokenAccount>(extensions)
-        .expect("Token-2022 account length");
+    let len =
+        ExtensionType::try_calculate_account_len::<TokenAccount>(&features.account_extensions())
+            .expect("Token-2022 account length");
     vec![
         system_instruction::create_account(
             payer,

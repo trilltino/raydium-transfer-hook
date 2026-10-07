@@ -8,15 +8,13 @@ use crate::{
     chain::{Chain, DriverError, Result},
     cpmm::{Cpmm, CpmmPool},
     env::Evidence,
-    hooks::{HookContext, HookSetup},
     token,
 };
 
 const CPMM_SEED_AMOUNT: u64 = 1_000_000;
 
 pub(super) struct CpmmSwaps<'a> {
-    pub(super) hook: &'a dyn HookSetup,
-    pub(super) ctx: HookContext,
+    pub(super) kit: &'a SwapKit<'a>,
     pub(super) cpmm: Cpmm,
     pub(super) pool: CpmmPool,
     pub(super) world: &'a World,
@@ -26,24 +24,22 @@ impl SwapBuilder for CpmmSwaps<'_> {
     async fn build<C: Chain>(
         &self,
         chain: &C,
-        hooked_in: bool,
+        mint0_in: bool,
         amount_in: u64,
         expected_out: u64,
     ) -> Result<Instruction> {
         let payer = chain.payer().pubkey();
-        let (in_account, out_account) = if hooked_in {
+        let (in_account, out_account) = if mint0_in {
             (self.world.trader[0].pubkey(), self.world.trader[1].pubkey())
         } else {
             (self.world.trader[1].pubkey(), self.world.trader[0].pubkey())
         };
         let accounts =
             self.cpmm
-                .swap_accounts(payer, &self.pool, hooked_in, in_account, out_account);
+                .swap_accounts(payer, &self.pool, mint0_in, in_account, out_account);
         let (input_leg, output_leg) = legs(
             chain,
-            self.hook,
-            &self.ctx,
-            hooked_in,
+            self.kit,
             &accounts.input_token_mint,
             &accounts.output_token_mint,
             in_account,
@@ -112,19 +108,25 @@ pub async fn run_cpmm<C: Chain>(chain: &mut C, inputs: &FlowInputs<'_>) -> Resul
     }
 
     // 2. Mints and accounts, then the support-mint record for the hooked mint.
-    let world = create_world(chain, &mut rec).await?;
+    let world = create_world(chain, &mut rec, inputs.world_options()).await?;
     require(
         payer == admin,
         "support mints can only be created by the admin",
     )?;
-    send_step(
-        chain,
-        &mut rec,
-        "register the hooked mint with CPMM (admin instruction)",
-        vec![cpmm.create_support_mint_instruction(&admin, &world.hooked.pubkey())],
-        &[],
-    )
-    .await?;
+    let mut hooked_mints = vec![world.hooked.pubkey()];
+    if inputs.second_hook.is_some() {
+        hooked_mints.push(world.quote.pubkey());
+    }
+    for mint in &hooked_mints {
+        send_step(
+            chain,
+            &mut rec,
+            "register a hooked mint with CPMM (admin instruction)",
+            vec![cpmm.create_support_mint_instruction(&admin, mint)],
+            &[],
+        )
+        .await?;
+    }
 
     // 3. Pool.
     let pool = cpmm.pool(amm_config, world.hooked.pubkey(), world.quote.pubkey());
@@ -140,37 +142,53 @@ pub async fn run_cpmm<C: Chain>(chain: &mut C, inputs: &FlowInputs<'_>) -> Resul
             CPMM_SEED_AMOUNT,
             CPMM_SEED_AMOUNT,
             0,
-            &[cpmm.support_mint(&world.hooked.pubkey())],
+            &hooked_mints
+                .iter()
+                .map(|mint| cpmm.support_mint(mint))
+                .collect::<Vec<_>>(),
         )]),
         &[],
     )
     .await?;
+    // A transfer fee is withheld from the deposit, so the vaults then hold slightly less.
+    let seeded = (
+        amount_of(chain, &pool.vault_0).await?,
+        amount_of(chain, &pool.vault_1).await?,
+    );
+    let exact = inputs.transfer_fee_bps == 0;
     require(
-        amount_of(chain, &pool.vault_0).await? == CPMM_SEED_AMOUNT
-            && amount_of(chain, &pool.vault_1).await? == CPMM_SEED_AMOUNT,
-        "the pool vaults must hold the seeded liquidity",
+        seeded.0 > 0
+            && seeded.1 > 0
+            && seeded.0 <= CPMM_SEED_AMOUNT
+            && seeded.1 <= CPMM_SEED_AMOUNT
+            && (!exact || (seeded.0 == CPMM_SEED_AMOUNT && seeded.1 == CPMM_SEED_AMOUNT)),
+        format!("the pool vaults must hold the seeded liquidity, found {seeded:?}"),
     )?;
     // CPMM opens a new pool one second after creation.
     chain.advance_time(5).await?;
 
     // 4. Hook on, 5-6. Swap checks.
-    let ctx = HookContext {
-        payer,
-        hooked_mint: world.hooked.pubkey(),
-        quote_mint: world.quote.pubkey(),
-        trader_accounts: [world.trader[0].pubkey(), world.trader[1].pubkey()],
-        pool_authority: pool.authority,
-        vaults: [pool.vault_0, pool.vault_1],
-        now: chain_time(chain).await?,
-    };
-    enable_hook(chain, &mut rec, inputs.hook, &ctx).await?;
+    let now = chain_time(chain).await?;
     let kit = SwapKit {
-        hook: inputs.hook,
-        ctx: ctx.clone(),
+        hooks: hook_entries(
+            inputs,
+            &world,
+            payer,
+            pool.authority,
+            [pool.vault_0, pool.vault_1],
+            now,
+        ),
     };
+    for (index, entry) in kit.hooks.iter().enumerate() {
+        let role = if index == 0 {
+            "hooked mint"
+        } else {
+            "second hooked mint"
+        };
+        enable_hook(chain, &mut rec, entry.hook, &entry.ctx, role).await?;
+    }
     let builder = CpmmSwaps {
-        hook: inputs.hook,
-        ctx,
+        kit: &kit,
         cpmm,
         pool,
         world: &world,

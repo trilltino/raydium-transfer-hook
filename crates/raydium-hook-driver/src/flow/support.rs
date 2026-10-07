@@ -134,18 +134,21 @@ pub(super) async fn resolve<C: Chain>(
     .map_err(|e| DriverError::new(format!("hook resolution failed: {e:?}")))
 }
 
+/// Enable `hook` on the mint described by `ctx`. `role` names which mint it is (recorded in the
+/// evidence): `"hooked mint"` for `mint_0`, `"second hooked mint"` for the other.
 pub(super) async fn enable_hook<C: Chain>(
     chain: &mut C,
     rec: &mut Recorder,
     hook: &dyn HookSetup,
     ctx: &HookContext,
+    role: &str,
 ) -> Result<()> {
     let sent = chain
         .send(&hook.enable_instructions(ctx), &[])
         .await
         .map_err(|e| DriverError::new(format!("enabling the hook failed: {e}")))?;
     rec.push(
-        &format!("enable {} on the hooked mint", hook.name()),
+        &format!("enable {} on the {role}", hook.name()),
         Some(sent.signature),
         format!("hook program {}", hook.program_id()),
     );

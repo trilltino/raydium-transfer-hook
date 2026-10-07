@@ -93,11 +93,7 @@ pub(crate) async fn e2e(flags: &Flags) -> Res<()> {
         for hook in &hooks {
             let label = format!("{amm} + {}", hook.name());
             println!("== {label}");
-            let inputs = FlowInputs {
-                env: &env,
-                hook: *hook,
-                fee_receiver_keypair: fee_receiver.as_ref(),
-            };
+            let inputs = FlowInputs::new(&env, *hook, fee_receiver.as_ref());
             let result = match *amm {
                 "cpmm" => run_cpmm(&mut chain, &inputs).await,
                 _ => run_clmm(&mut chain, &inputs).await,

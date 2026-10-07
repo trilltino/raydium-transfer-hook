@@ -32,8 +32,49 @@ pub const SWAP_AMOUNT: u64 = 10;
 
 pub struct FlowInputs<'a> {
     pub env: &'a Environment,
+    /// The hook on the first mint (`mint_0`, the smaller pubkey).
     pub hook: &'a dyn HookSetup,
     /// The keypair at the CPMM fee-receiver address, needed only if that token account does not
     /// exist yet.
     pub fee_receiver_keypair: Option<&'a Keypair>,
+    /// A hook on the other mint too, so both legs of every swap are hooked. Its hook sees the
+    /// other mint as "its" mint (its context has the trader accounts and vaults swapped). Only
+    /// hooks without follow-up steps are supported here.
+    pub second_hook: Option<&'a dyn HookSetup>,
+    /// Put a TransferFee extension of this many basis points on both mints (0 for none).
+    pub transfer_fee_bps: u16,
+}
+
+impl<'a> FlowInputs<'a> {
+    /// One hook on `mint_0`, plain mints otherwise.
+    pub fn new(
+        env: &'a Environment,
+        hook: &'a dyn HookSetup,
+        fee_receiver_keypair: Option<&'a Keypair>,
+    ) -> Self {
+        Self {
+            env,
+            hook,
+            fee_receiver_keypair,
+            second_hook: None,
+            transfer_fee_bps: 0,
+        }
+    }
+
+    pub fn with_second_hook(mut self, hook: &'a dyn HookSetup) -> Self {
+        self.second_hook = Some(hook);
+        self
+    }
+
+    pub fn with_transfer_fee(mut self, basis_points: u16) -> Self {
+        self.transfer_fee_bps = basis_points;
+        self
+    }
+
+    fn world_options(&self) -> world::WorldOptions {
+        world::WorldOptions {
+            quote_hooked: self.second_hook.is_some(),
+            transfer_fee_bps: self.transfer_fee_bps,
+        }
+    }
 }

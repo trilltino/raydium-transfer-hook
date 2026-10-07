@@ -147,14 +147,37 @@ async fn context(setup: &Setup) -> ProgramTestContext {
 }
 
 async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
+    run_with(amm, hook, None, 0, setup).await
+}
+
+/// `second` is a hook on the other mint too (both legs hooked); `transfer_fee_bps` puts a transfer
+/// fee on both mints.
+async fn run_with(
+    amm: &str,
+    hook: &dyn HookSetup,
+    second: Option<&dyn HookSetup>,
+    transfer_fee_bps: u16,
+    setup: &Setup,
+) {
     let mut context = context(setup).await;
     let mut chain = LocalChain::with_payer(&mut context, clone(&setup.deployer));
-    let inputs = FlowInputs {
-        env: &setup.env,
-        hook,
-        fee_receiver_keypair: Some(&setup.fee_receiver),
-    };
-    println!("== {amm} through {}", hook.name());
+    let mut inputs = FlowInputs::new(&setup.env, hook, Some(&setup.fee_receiver))
+        .with_transfer_fee(transfer_fee_bps);
+    if let Some(second) = second {
+        inputs = inputs.with_second_hook(second);
+    }
+    println!(
+        "== {amm} through {}{}{}",
+        hook.name(),
+        second
+            .map(|s| format!(" + {}", s.name()))
+            .unwrap_or_default(),
+        if transfer_fee_bps > 0 {
+            format!(" (transfer fee {transfer_fee_bps} bps)")
+        } else {
+            String::new()
+        }
+    );
     let evidence = match amm {
         "cpmm" => run_cpmm(&mut chain, &inputs).await,
         "clmm" => run_clmm(&mut chain, &inputs).await,
@@ -183,8 +206,8 @@ async fn run(amm: &str, hook: &dyn HookSetup, setup: &Setup) {
             .iter()
             .filter(|e| e.step.starts_with("hook refused swap"))
             .count()
-            == hook.refusals().len(),
-        "the flow must record every refusal the hook declares"
+            == expected_refusals(hook, second),
+        "the flow must record every refusal the hooks declare"
     );
 }
 
@@ -248,4 +271,74 @@ flows! {
     clmm_with_the_parent_spin_off_template: "clmm", |_s| {
         ParentSpinOffHook::new(template_id("parent_spin_off"), 100)
     };
+}
+
+/// How many refusals a flow records. With a single hook, all it declares. With two hooked legs
+/// only the refusals where the refusing hook's own mint is the swap's input are run (that transfer
+/// comes first, so the failure can only come from that hook).
+fn expected_refusals(hook: &dyn HookSetup, second: Option<&dyn HookSetup>) -> usize {
+    use raydium_hook_driver::Direction;
+    match second {
+        None => hook.refusals().len(),
+        Some(second) => [hook, second]
+            .iter()
+            .flat_map(|h| h.refusals())
+            .filter(|r| r.direction == Direction::HookedIn)
+            .count(),
+    }
+}
+
+fn reference(setup: &Setup) -> ReferenceHook {
+    ReferenceHook {
+        program_id: setup.env.reference_hook_program().unwrap(),
+        max_transfer: 500,
+    }
+}
+
+fn arbitrary(setup: &Setup) -> ArbitraryHook {
+    ArbitraryHook {
+        program_id: setup.env.arbitrary_hook_program().unwrap(),
+        max_per_slot: 2,
+    }
+}
+
+/// Both mints hooked, each leg of every swap running its own hook.
+macro_rules! combos {
+    ($($name:ident: $amm:literal, |$s:ident| ($first:expr, $second:expr, $fee:expr);)+) => {$(
+        #[tokio::test]
+        #[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+        async fn $name() {
+            let $s = setup();
+            let (first, second) = ($first, $second);
+            run_with($amm, &first, Some(&second), $fee, &$s).await;
+        }
+    )+};
+}
+
+combos! {
+    cpmm_with_different_hooks_on_each_leg: "cpmm", |s| (reference(&s), arbitrary(&s), 0);
+    clmm_with_different_hooks_on_each_leg: "clmm", |s| (reference(&s), arbitrary(&s), 0);
+    cpmm_with_the_arbitrary_hook_on_mint_0_and_the_reference_on_mint_1: "cpmm", |s| (arbitrary(&s), reference(&s), 0);
+    clmm_with_the_arbitrary_hook_on_mint_0_and_the_reference_on_mint_1: "clmm", |s| (arbitrary(&s), reference(&s), 0);
+    cpmm_with_the_same_hook_program_on_both_legs: "cpmm", |s| (reference(&s), reference(&s), 0);
+    clmm_with_the_same_hook_program_on_both_legs: "clmm", |s| (reference(&s), reference(&s), 0);
+    cpmm_with_different_hooks_and_a_transfer_fee: "cpmm", |s| (reference(&s), arbitrary(&s), 500);
+    clmm_with_different_hooks_and_a_transfer_fee: "clmm", |s| (reference(&s), arbitrary(&s), 500);
+}
+
+/// One hook on mint_0, with the Token-2022 TransferFee extension on both mints.
+macro_rules! fee_flows {
+    ($($name:ident: $amm:literal;)+) => {$(
+        #[tokio::test]
+        #[ignore = "needs target/integration-sbf artifacts and .keys (see docs/forking.md)"]
+        async fn $name() {
+            let s = setup();
+            run_with($amm, &reference(&s), None, 500, &s).await;
+        }
+    )+};
+}
+
+fee_flows! {
+    cpmm_with_a_transfer_fee_mint: "cpmm";
+    clmm_with_a_transfer_fee_mint: "clmm";
 }

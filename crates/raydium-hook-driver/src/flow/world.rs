@@ -5,12 +5,38 @@ use solana_sdk::signature::{Keypair, Signer};
 use super::{recorder::Recorder, support::*};
 use crate::{
     chain::{Chain, Result},
-    token,
+    token::{self, MintFeatures},
 };
 
 const DECIMALS: u8 = 6;
 pub(super) const PROVIDER_FUNDS: u64 = 2_000_000_000;
 pub(super) const TRADER_FUNDS: u64 = 10_000;
+
+/// What the two mints carry. The first mint (`mint_0`, the smaller pubkey) always has a
+/// TransferHook extension.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct WorldOptions {
+    /// Also give the second mint (the quote) a TransferHook extension.
+    pub(super) quote_hooked: bool,
+    /// A TransferFee extension, in basis points, on both mints (0 for none).
+    pub(super) transfer_fee_bps: u16,
+}
+
+impl WorldOptions {
+    pub(super) fn hooked_features(self) -> MintFeatures {
+        MintFeatures {
+            hook: true,
+            transfer_fee_bps: self.transfer_fee_bps,
+        }
+    }
+
+    pub(super) fn quote_features(self) -> MintFeatures {
+        MintFeatures {
+            hook: self.quote_hooked,
+            transfer_fee_bps: self.transfer_fee_bps,
+        }
+    }
+}
 
 /// The two mints (the hooked one is the smaller pubkey, hence `mint_0`) and the funded accounts.
 pub(super) struct World {
@@ -20,7 +46,11 @@ pub(super) struct World {
     pub(super) trader: [Keypair; 2],
 }
 
-pub(super) async fn create_world<C: Chain>(chain: &mut C, rec: &mut Recorder) -> Result<World> {
+pub(super) async fn create_world<C: Chain>(
+    chain: &mut C,
+    rec: &mut Recorder,
+    options: WorldOptions,
+) -> Result<World> {
     let payer = chain.payer().pubkey();
     let (a, b) = (Keypair::new(), Keypair::new());
     let (hooked, quote) = if a.pubkey() < b.pubkey() {
@@ -30,20 +60,21 @@ pub(super) async fn create_world<C: Chain>(chain: &mut C, rec: &mut Recorder) ->
     };
     let provider = [Keypair::new(), Keypair::new()];
     let trader = [Keypair::new(), Keypair::new()];
+    let (hooked_features, quote_features) = (options.hooked_features(), options.quote_features());
 
     send_step(
         chain,
         rec,
-        "create hooked Token-2022 mint (TransferHook extension, hook not yet enabled)",
-        token::create_mint_instructions(&payer, &hooked, &payer, DECIMALS, true),
+        &describe_mint("hooked", hooked_features),
+        token::create_mint_instructions(&payer, &hooked, &payer, DECIMALS, hooked_features),
         &[&hooked],
     )
     .await?;
     send_step(
         chain,
         rec,
-        "create plain Token-2022 quote mint",
-        token::create_mint_instructions(&payer, &quote, &payer, DECIMALS, false),
+        &describe_mint("quote", quote_features),
+        token::create_mint_instructions(&payer, &quote, &payer, DECIMALS, quote_features),
         &[&quote],
     )
     .await?;
@@ -53,14 +84,14 @@ pub(super) async fn create_world<C: Chain>(chain: &mut C, rec: &mut Recorder) ->
         &provider[0],
         &hooked.pubkey(),
         &payer,
-        true,
+        hooked_features,
     ));
     accounts.extend(token::create_token_account_instructions(
         &payer,
         &provider[1],
         &quote.pubkey(),
         &payer,
-        false,
+        quote_features,
     ));
     send_step(
         chain,
@@ -76,14 +107,14 @@ pub(super) async fn create_world<C: Chain>(chain: &mut C, rec: &mut Recorder) ->
         &trader[0],
         &hooked.pubkey(),
         &payer,
-        true,
+        hooked_features,
     ));
     accounts.extend(token::create_token_account_instructions(
         &payer,
         &trader[1],
         &quote.pubkey(),
         &payer,
-        false,
+        quote_features,
     ));
     send_step(
         chain,
@@ -122,4 +153,27 @@ pub(super) async fn create_world<C: Chain>(chain: &mut C, rec: &mut Recorder) ->
         provider,
         trader,
     })
+}
+
+/// The evidence label of a mint-creation step.
+fn describe_mint(role: &str, features: MintFeatures) -> String {
+    let mut extensions = Vec::new();
+    if features.hook {
+        extensions.push("TransferHook".to_string());
+    }
+    if features.transfer_fee_bps > 0 {
+        extensions.push(format!("TransferFee {} bps", features.transfer_fee_bps));
+    }
+    if extensions.is_empty() {
+        return format!("create plain Token-2022 {role} mint");
+    }
+    let suffix = if features.hook {
+        ", hook not yet enabled"
+    } else {
+        ""
+    };
+    format!(
+        "create {role} Token-2022 mint ({} extension{suffix})",
+        extensions.join(" + ")
+    )
 }
