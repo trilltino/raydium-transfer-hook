@@ -70,7 +70,7 @@ own program ids ([devnet.md](devnet.md)). No row is "official Raydium deployed".
 Token-2022 mint only if its extensions are on a short list (`TransferHook` is not) or the pool admin
 (or a delegated owner) has created a `SupportMintAssociated` record for it. This is Raydium's existing
 mint admission, unchanged by the forks, and it is per mint, not per hook program; see
-[permissionless-hooks.md](permissionless-hooks.md).
+[Raydium's mint admission](#raydiums-mint-admission-a-real-gate-and-what-it-is).
 
 Every transfer helper that has no hook framing passes an empty slice and rejects a hook-enabled
 mint, so an unsupported path fails with a clear error instead of an opaque Token-2022 one. That is
@@ -95,3 +95,26 @@ remaining-account parsing and migration behavior are therefore **unknown**, not 
 instruction names, and a production integration is blocked. The SDK repository is GPL-3.0 and is
 never copied into this Apache-2.0 project. Do not change or claim a LaunchLab layout without an
 authorized, executable integration surface.
+
+## Raydium's mint admission (a real gate, and what it is)
+
+Raydium's CPMM and CLMM already restrict which Token-2022 mints can start a pool. In the pinned
+upstream CPMM (`utils/token.rs`, `is_supported_mint`) a Token-2022 mint is admitted only if every
+extension it carries is on a short list (transfer fee, metadata pointer, token metadata,
+interest-bearing, scaled UI amount), **or** a `SupportMintAssociated` record exists for it.
+`TransferHook` is not on the list. The record can only be created by the pool admin or a delegated
+"create support mint" owner. So:
+
+* **Creating a pool with a hooked mint needs a human approval from whoever runs that Raydium
+  deployment**, per mint. This is upstream behaviour that predates this work; the forks only add
+  `swap_base_input_v2` and `swap_v3`.
+* **The gate is about the mint, not the hook program.** The same record admits a mint pointing at
+  any hook (or none yet: the flows approve the mint while its hook is unset and attach the hook
+  after the pool has liquidity). Nothing names or ranks a hook program.
+* **Once a pool exists,** swaps through it do not consult the record again.
+
+What this means for the claim: *hook programs* are permissionless; *getting a hooked mint into a
+Raydium pool* is not, and depends on the operator. On our integration builds the operator is the
+deployer key, so every flow here runs `create_support_mint` as admin first. A launchpad that wants
+hooked launches without per-mint approval would need that delegated-owner role, or Raydium to
+change the rule.

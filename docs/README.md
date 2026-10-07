@@ -12,7 +12,6 @@ what you are doing.
 | **integrate hooked swaps** into an app, wallet or aggregator | [architecture.md](architecture.md), then [transfer-surface-matrix.md](transfer-surface-matrix.md) |
 | **judge how heavy a hook can be** (accounts, compute, transaction size) | [hook-thickness.md](hook-thickness.md) |
 | **assess the risk** of a hook or of this stack | [security.md](security.md) |
-| **check what "permissionless" means** and what proves it | [permissionless-hooks.md](permissionless-hooks.md) |
 | **see what is proven**, with transactions | [devnet.md](devnet.md) |
 | **know exactly which Raydium code this is tested against** | [source-lock.md](source-lock.md) |
 
@@ -23,12 +22,11 @@ what you are doing.
 | [forking.md](forking.md) | What a fork can reuse as-is, what it must change, and the steps to get your own deployment and evidence page |
 | [authoring-hooks.md](authoring-hooks.md) | The standard every hook follows: the rule is one file, what must be right, how to test it |
 | [architecture.md](architecture.md) | The architecture and how each transfer leg's accounts are resolved and framed |
-| [transfer-surface-matrix.md](transfer-surface-matrix.md) | The two instructions added to Raydium, their byte layouts, and which surfaces are supported |
+| [transfer-surface-matrix.md](transfer-surface-matrix.md) | The instructions added to Raydium, their byte layouts, which surfaces are supported, and Raydium's per-mint admission |
 | [hook-thickness.md](hook-thickness.md) | What bounds a hook, with measured numbers |
-| [security.md](security.md) | The threat model, what the SDK checks and cannot, malicious-hook tests, and what the policy models mean |
-| [permissionless-hooks.md](permissionless-hooks.md) | Each requirement of "permissionless" with its evidence, including the one gate Raydium upstream already has (per-mint admission) |
-| [source-lock.md](source-lock.md) | The pinned Raydium and SPL revisions, toolchains and dependency line |
-| [devnet.md](devnet.md) | Generated evidence page: what is deployed on devnet and what ran. Regenerate with `cargo xtask devnet-doc` |
+| [security.md](security.md) | The threat model, what the SDK checks and cannot, malicious-hook tests, and what is not shown |
+| [source-lock.md](source-lock.md) | How the Raydium forks are pinned, the dependency line, toolchains, and what is verified |
+| [devnet.md](devnet.md) | Evidence, not a guide: what is deployed on devnet under our ids and what ran. A fork does not need it |
 
 ## How to read the claims
 

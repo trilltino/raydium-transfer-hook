@@ -21,16 +21,10 @@ a path-name heuristic plus a remote-existence check, not a content scan.
 
 ## Source-review locks
 
-| Source | Revision | Role |
-|---|---|---|
-| [`raydium-io/raydium-cp-swap`](https://github.com/raydium-io/raydium-cp-swap) | `b3187ae53a1b95a201f855a59024a12ca8f5b51a` | CPMM base |
-| [`raydium-io/raydium-clmm`](https://github.com/raydium-io/raydium-clmm) | `ed1eb41519d5355755f7df52b43fa9610938b60b` | CLMM base |
-| [`raydium-io/raydium-sdk-V2`](https://github.com/raydium-io/raydium-sdk-V2) | `cc33ec28a8921a35609e83293e9e07ad830b0779` | GPL-3.0 reference only; never copied (a local, git-ignored copy may exist under `reference/`) |
-| [`raydium-io/raydium-cpi`](https://github.com/raydium-io/raydium-cpi) | `115df2779d53bacc7db9d0be2773a4b48a6d372b` | Public CPI interface reference |
-| [`solana-program/transfer-hook`](https://github.com/solana-program/transfer-hook) | `ec7063291e968f4b0064e4df0324ff49dcf320df` | Execute ABI, validation PDA, TLV resolver |
-| [`solana-program/token-2022`](https://github.com/solana-program/token-2022) | `b5b7511e5d4f19a6a118b858d83a7fe3b0017b1e` | Transfer-hook extension and CPI behavior |
-
-These are source-review locks. They are **not** the Rust crate versions this workspace builds against.
+The base commits of the official Raydium repositories, the reference repositories and the SPL
+programs this was reviewed against are in [`upstream.lock.toml`](../upstream.lock.toml), which
+`cargo xtask upstream verify` checks. They are source-review locks, **not** the Rust crate versions
+this workspace builds against (see the dependency line below).
 
 ## Hook-support revisions (external)
 
@@ -41,10 +35,6 @@ No upstream pull request to `raydium-io` has been opened.
 |---|---|---|---|
 | CPMM | [`trilltino/raydium-cp-swap`](https://github.com/trilltino/raydium-cp-swap) `transfer-hook-support` | `842724dd9396508f8a653f14628dd78f597eff85` | `swap_base_input_v2`, `swap_base_output_v2`, and `_v2` variants of `initialize`, `initialize_with_permission`, `deposit`, `withdraw` and the four fee collections; the `integration` build feature |
 | CLMM | [`trilltino/raydium-clmm`](https://github.com/trilltino/raydium-clmm) `transfer-hook-support` | `40291d53d84c6a28991ed966aa2efd261843f662` | `swap_v3`; the `integration` build feature |
-
-Host unit tests (`cargo test --lib --locked`, upstream lockfile): CPMM 30 pass by default (re-run after adding the `_v2`
-instructions; the `--features integration` count was not re-run, it was 27 before those changes);
-CLMM 204 pass by default and 205 with `--features integration`.
 
 The `integration` feature selects a program id, admin and fee-receiver/owner keys, so the hook-aware
 builds can be deployed under ids you control. Default, `devnet` and `localnet` behavior is unchanged,

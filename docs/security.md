@@ -87,39 +87,21 @@ not work on v1 transactions at all.
 
 ## Platform policy models (not on-chain)
 
-`hook-policy-model` describes how a platform could select a hook. It is a design label, not a
-deployed access control.
+`hook-policy-model` describes how a platform could select a hook (a policy of disabled, optional or
+mandatory; an authority policy of platform-retained, immutable-at-launch or governed-by-timelock) and
+a 180-byte layout for those settings. It is a **model**: a design label, not a deployed access
+control. The timelock token proves no real delay, nothing has been checked against LaunchLab's
+deployed program (whose handler is not public), and no on-chain account is read or written. The only
+thing the SDK takes from it is a decision turned into resolution options. A production hook must
+enforce its authority and timelock rules on-chain.
 
-A platform selects at most one hook program. A launch can choose a supported preset or parameters
-within that engine; it cannot replace the platform-selected program.
+## What is not shown
 
-| Policy | Meaning |
-|---|---|
-| **Disabled** | no launch can request a hook preset |
-| **Optional** | the platform may configure an engine; a launch may use it or launch without one |
-| **Mandatory** | an engine must be configured and is selected for every launch |
-
-| Authority policy | Meaning in the model |
-|---|---|
-| **PlatformRetained** | the configured platform authority can update rules; changing the mint, hook program or authority policy is rejected |
-| **ImmutableAtLaunch** | engine reconfiguration is rejected after initialisation |
-| **GovernedTimelock** | the model accepts an authority token standing for timelock approval. It does not verify signatures, delay, governance execution or on-chain account constraints |
-
-Only the first two authority rules are simple state checks; the timelock token proves no real delay.
-A production hook must enforce authority and timelock proofs on-chain.
-
-### The settings as bytes, and the identity lock
-
-`PlatformHookOverlay` in `hook-policy-model` is a 180-byte layout for these settings (hook program,
-policy, authority policy, version, flags, 144 reserved bytes) that an all-zero region decodes as "no
-hook", so an existing platform account whose padding was never written keeps its meaning. After the
-first hooked mint is created the **hook program identity locks**: the same program is still
-accepted, a different one or clearing it is refused. A platform wanting a different hook engine
-creates another platform account.
-
-This is a **model**. The layout assumes a 180-byte padding region that can be overlaid without
-resizing the account (the reviewed public CPI state of LaunchLab's `PlatformConfig` exposes 180
-bytes of padding); nothing has been checked against LaunchLab's deployed program, whose handler is
-not public, and no on-chain account is read or written. Before storing this anywhere, inspect the
-exact serialization, padding, IDL and upgrade compatibility, and do not assume unused bytes can be
-repurposed safely.
+* **Official Raydium.** Raydium's own programs do not contain the hook-aware instructions, so no
+  hook of any kind runs through them. "Permissionless" is demonstrated on forks under our own ids,
+  and even there a hooked mint needs Raydium's per-mint admission before it can start a pool
+  ([transfer-surface-matrix.md](transfer-surface-matrix.md#raydiums-mint-admission-a-real-gate-and-what-it-is)).
+* **Hostile hooks on a cluster.** The malicious-hook scenarios above are tested in-process and in
+  the SDK, not on devnet.
+* **That a permissionless hook is a good hook.** Anyone can write one that refuses every transfer.
+  The stack checks transport correctness, not trustworthiness.

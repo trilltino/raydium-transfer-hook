@@ -19,7 +19,7 @@ fit) is **recorded as a failure with its reason**, not dropped: finding the edge
 
 The bench hook does nothing but the shared checks and, where stated, one write. So the numbers are
 the cost of a hook's *thickness*, not of a clever rule. A real rule adds its own compute on top, and
-the example templates' figures are in [`../docs/hook-limits.md`](../docs/hook-limits.md).
+the example templates' figures are in [`../docs/hook-thickness.md`](../docs/hook-limits.md).
 
 ## What it does not measure
 
