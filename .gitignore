@@ -7,10 +7,6 @@ Thumbs.db
 /templates/*/target/
 /my-hook/
 
-# Quarantined legacy code: regenerated lockfiles and dependencies
-/legacy/Cargo.lock
-/legacy/target/
-/legacy/transfer-hook-client/package-lock.json
 node_modules/
 
 # Private keys and credentials: never commit them

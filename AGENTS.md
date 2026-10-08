@@ -8,8 +8,8 @@ it fully before generating code. `CLAUDE.md` only points here.
 
 A starter kit for **Token-2022 Transfer Hooks**: you design a rule, test it, deploy it to Solana and
 optionally contribute it as a template. It is not a Raydium integration and contains no Raydium
-program code. `legacy/` is quarantined prototype code waiting on Raydium's official interface; never
-build on it and never copy from it.
+program code. The prototype that had some is in git history (tag `pre-community-hook-kit`); do not
+resurrect it.
 
 | Path | What | Edit it? |
 |---|---|---|
@@ -17,7 +17,6 @@ build on it and never copy from it.
 | `templates/<name>/` | Curated hooks: `README.md`, `src/rule.rs`, `tests/`. | Only when contributing or fixing that template. |
 | `hook-kit/` | Shared plumbing used by the templates. | Rarely. A bug here affects every template; add a test with the fix. |
 | `scripts/` | `build.sh`, `test.sh`, `deploy.sh`. | Only to fix them. |
-| `legacy/` | Archived. | **No.** |
 
 ## Where business logic belongs
 

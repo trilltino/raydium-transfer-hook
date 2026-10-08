@@ -5,8 +5,8 @@ members = [
     "templates/fair-launch",
     "templates/holder-rewards",
 ]
-# The starter is standalone on purpose (you copy it out). `legacy/` is its own workspace.
-exclude = ["starter", "legacy"]
+# The starter is standalone on purpose (you copy it out).
+exclude = ["starter"]
 resolver = "2"
 
 [workspace.package]

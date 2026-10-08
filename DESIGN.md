@@ -130,6 +130,6 @@ Every template README must say who holds each, and what a holder can do with it.
 They were measured in a prototype that ran arbitrary hooks through modified Raydium CPMM and CLMM
 programs, with `solana-program-test` against SBF binaries (the real runtime, in-process; not a
 validator, not a cluster under load) and a single local validator for contention. The prototype is
-in git history (tag `pre-community-hook-kit`); its Raydium-specific parts are quarantined in
-[`legacy/`](legacy). Nothing in this kit depends on it. Not measured: contention on a real
+in git history (tag `pre-community-hook-kit`), including its Raydium-specific adapters. Nothing in this
+kit depends on it. Not measured: contention on a real
 cluster, v1 transactions, literal-address extras, hostile hooks on a cluster.

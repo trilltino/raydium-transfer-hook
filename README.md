@@ -158,4 +158,4 @@ integration, and check them for the current state of Transfer Hook support befor
 
 History: this repository began as a prototype that ran arbitrary hooks through modified Raydium CPMM
 and CLMM programs, to show the architecture works. That prototype is preserved in git (tag
-`pre-community-hook-kit`) and, in part, in [`legacy/`](legacy). It is not part of this kit.
+`pre-community-hook-kit`), including the Raydium-specific adapters, SDK and TypeScript client. It is not part of this kit.
