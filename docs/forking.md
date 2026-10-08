@@ -30,7 +30,7 @@ and check exact error codes and rollback. Nothing else in this repository is nee
 [authoring-hooks.md](authoring-hooks.md).
 
 To use the shared plumbing and the in-process test world (`hook-kit`), put your hook under
-`templates/` as a workspace member, as the five examples are.
+`templates/` as a workspace member, as the three examples are.
 
 ## B and C. Run it through Raydium
 
@@ -69,7 +69,7 @@ are git-ignored and never published. So a fork deploying to a public cluster nee
    | `cpmm-program.json`, `clmm-program.json` | the two Raydium program ids |
    | `cpmm-fee-receiver.json` | the CPMM pool-creation fee receiver (a wrapped-SOL token account) |
    | `hook-program.json`, `arbitrary-hook-program.json` | the reference and arbitrary hooks |
-   | `creator-commitment-program.json`, `fair-launch-program.json`, `anti-bundle-program.json`, `loyalty-rewards-program.json`, `parent-spin-off-program.json` | the five examples |
+   | `creator-commitment-program.json`, `fair-launch-program.json`, `holder-rewards-program.json` | the three examples |
 
 3. **Point an environment at your ids.** Copy `environments/devnet.json` to, say,
    `environments/mine.json`; replace `programs`, `admin` and `cpmm_fee_receiver`, and empty
@@ -96,6 +96,62 @@ are git-ignored and never published. So a fork deploying to a public cluster nee
 5. **Run the in-process flows against these exact binaries** (optional):
    `RTH_PROFILE=integration cargo test -p program-test-flows -- --ignored`.
 
+## Approving a hooked mint
+
+Raydium's CPMM and CLMM admit a Token-2022 mint with a TransferHook extension to a new pool only if
+the program's admin has approved that mint (`create_support_mint_associated`). This is Raydium's
+existing rule, not something this repository added, and it is per mint, not per hook program (see
+[Raydium's mint admission](transfer-surface-matrix.md#raydiums-mint-admission-a-real-gate-and-what-it-is)).
+The program accepts exactly two signers for the approval: its compile-time `admin`, or one fixed
+owner key. So **whoever deploys the forks with their own keys approves the mints**; nobody else can.
+
+On a local validator you do not need to do anything: the end-to-end flows approve their mints with
+the throwaway admin in `tests/fixtures/localnet`. On a cluster where you hold the admin key:
+
+```sh
+# is it approved? (read-only, no key)
+raydium-hook mint approval --env environments/mine.json --mint MINT
+
+# approve one mint, several, or a file with one address per line (# comments allowed)
+raydium-hook mint approve --env environments/mine.json --keypair .keys/deployer.json --mint MINT
+raydium-hook mint approve --env environments/mine.json --keypair .keys/deployer.json --mints-file mints.txt
+
+# see what it would do without sending anything
+raydium-hook mint approve ... --dry-run
+```
+
+Prefer a script? [`scripts/approve-hooked-mints.ts`](../scripts/README.md) does the same job in TypeScript
+(Node 22, `@solana/web3.js` only, no Raydium SDK): `npm run approve -- --env ... --keypair ... --mint MINT`.
+
+`mint approve` refuses a key that is not the admin the environment records, tells you which key the
+program expects, checks each mint first (a Token-2022 mint with a TransferHook extension, and if a
+hook program is set, that it exists and is executable), skips mints already approved, simulates every
+transaction before sending, and packs many approvals into as few transactions as fit. A mint it
+cannot approve is reported and does not stop the others; the command exits with an error if any
+failed. `--amm cpmm|clmm|all` (default `all`) chooses the programs.
+
+The usual order is: create the mint with the extension (`mint create --hookable`), approve it,
+create the pool, then attach the hook with `hook setup`. A mint whose hook is not set yet is
+approvable for that reason.
+
+### Running a shared cluster for a hackathon
+
+Teams can always run everything locally (the steps above, no keys, no shared cluster). If you want
+them to try hooks on a public cluster instead:
+
+1. Deploy the forks under your own keys (steps 1 to 4 above). Both programs together need about
+   9 SOL of rent on devnet: the CPMM program account held 3.03 SOL at 597 KB, and CLMM is about
+   twice the size.
+2. Each team creates its mint (`mint create --hookable`) and sends you the address.
+3. You approve the batch: put the addresses in a file and run `mint approve --mints-file`. Check
+   one with `mint approval`.
+4. Teams check their own mint with `mint approval` (no key), create the pool, and attach their hook.
+
+Only you can do step 3, because only the admin key can sign it. That is the property to keep: a
+program that let anyone approve a mint would not have a gate. If you would rather not gate at all,
+that is a change to the forks (admit `TransferHook` in `is_supported_mint`), which is yours to make
+and which Raydium upstream would be unlikely to accept.
+
 ## Adding your hook to the flows
 
 Nothing has to change for a hook to run: `raydium-hook e2e --hook-dir DIR` builds, deploys and
@@ -109,7 +165,7 @@ cannot express, like advancing time or claiming), add a provider:
 1. `crates/raydium-hook-driver/src/hooks/<yours>.rs`: implement `HookSetup` (how to point a mint at
    your hook and initialise your state, which swaps it must refuse and with which error code, which
    writable extras the integrator accepts, and any follow-up steps). Export it from
-   `hooks/mod.rs` and `lib.rs`. The five examples are good models.
+   `hooks/mod.rs` and `lib.rs`. The three examples are good models.
 2. Add your program id under `programs.templates` in your environment manifests
    (`environments/localnet.json` too, with a throwaway keypair in `tests/fixtures/localnet`).
 3. Add it to `ARTIFACTS` in `crates/raydium-hook-cli/src/commands/deploy.rs`, to `program_for` and

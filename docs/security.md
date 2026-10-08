@@ -61,7 +61,7 @@ and that every balance is unchanged after a refusal.
 | Scenario | Covered by |
 |---|---|
 | A hook that always rejects | Flows: every refusal rolls back the whole swap, with the hook's own code, in each direction. The generic provider's refusals in `tests/third-party-hook`. |
-| A hook that rejects only the output transfer | Flows: the hooked-token-out refusals of `reference-hook`, `fair-launch`, `anti-bundle`. |
+| A hook that rejects only the output transfer | Flows: the hooked-token-out refusals of `reference-hook`, `fair-launch` (also in its per-slot-only setting). |
 | A hook requiring many accounts | SDK: `a_hook_with_a_large_account_list_resolves_every_extra_in_order` (48 extras), `two_large_slices_in_one_swap_stay_separate_and_are_framed_by_their_full_lengths`, `cpmm_rejects_slices_longer_than_the_u16_framing_limit`. |
 | A malformed validation list | SDK: `error_validation_list_malformed_variants`, `error_missing_validation_list`. |
 | A validation list with the wrong owner | SDK: `error_invalid_validation_list_owner`. |

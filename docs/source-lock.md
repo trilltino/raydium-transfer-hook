@@ -66,7 +66,7 @@ workspace.
 |---|---|---|
 | CPMM (`raydium-cp-swap`) | `raydium-cp-swap`, lib `raydium_cp_swap` | `cargo build-sbf` (solana-cargo-build-sbf 4.0.0, platform-tools v1.53); host tests on cargo 1.96.1 |
 | CLMM (`raydium-clmm`) | `raydium-clmm`, lib `raydium_clmm` | same |
-| Hooks (this repo) | `reference-hook-onchain`, `arbitrary-test-hook`, the templates | same |
+| Hooks (this repo) | `arbitrary-test-hook`, the starter and the templates | same |
 
 Deployed artifacts are recorded with their SHA-256, size and source revision in
 `environments/devnet.json`; rebuilding gives the same hash only if the toolchain matches.

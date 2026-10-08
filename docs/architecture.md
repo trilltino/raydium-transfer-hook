@@ -28,8 +28,8 @@ any Transfer Hook program                   one of the examples, or yours
 | `crates/raydium-hook-driver` | Instruction builders for the Raydium admin, pool and position setup, and the checked end-to-end flows (`flow/`), over a `Chain` that is a real RPC endpoint or in-process ProgramTest (`chain/`). Hook setup providers live in `hooks/`. |
 | `crates/raydium-hook-cli` | `raydium-hook deploy \| e2e \| inspect`: a thin shell over the driver. |
 | `crates/hook-kit` | What every hook needs: the `Execute` prelude, mint and token reads, PDA creation, an in-process test world. |
-| `templates/` | The five example hooks and the starter. The rule of each is `src/rule.rs`. |
-| `programs/` | The reference hook and the arbitrary test hook. |
+| `templates/` | The starter and the three example hooks. The rule of each is `src/rule.rs`. |
+| `programs/` | The arbitrary test hook (shares nothing with the starter) and the benchmark hook. |
 | `crates/hook-policy-model` | A pure-Rust model of platform policy. Not on-chain. |
 | `environments/` | Cluster manifests: program ids, deployments, recorded evidence. |
 | `xtask` | `cargo xtask upstream {list,verify,fetch}` and `cargo xtask devnet-doc`. |

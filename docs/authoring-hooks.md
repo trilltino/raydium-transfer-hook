@@ -47,12 +47,12 @@ numbers the rule needs out of accounts, call the rule, write back any state.
 |---|---|
 | [`creator-commitment`](../templates/creator-commitment) | A creator's allocation vests: the dedicated account's balance may not fall below what a cliff-and-linear schedule still locks |
 | [`fair-launch`](../templates/fair-launch) | In a launch window, buys are limited: size, per-account balance, buys per slot, declared priority fee |
-| [`loyalty-rewards`](../templates/loyalty-rewards) | Holders earn a quote-token stream in proportion to balance x time held |
+| [`holder-rewards`](../templates/holder-rewards) | Holders earn a quote-token stream in proportion to balance x time held; in one-time mode the allocation is funded once (a spin-off) |
 | [`transfer-hook-starter`](../templates/transfer-hook-starter) | The reference hook (a per-transfer maximum with several authority modes) as a standalone copy-me crate: `src/rule.rs` is the rule, and it builds from a copy outside the repo |
 
-[`programs/reference-hook-onchain`](../programs/reference-hook-onchain) (max transfer, with several
-authority modes) and [`programs/arbitrary-test-hook`](../programs/arbitrary-test-hook) (a per-slot
-counter) exist to show the stack handles hooks written independently of each other.
+[`programs/arbitrary-test-hook`](../programs/arbitrary-test-hook) (a per-slot counter) shares no code
+with the starter, to show the stack handles hooks written independently of each other. (The repository's
+"reference hook", the per-transfer maximum with several authority modes, is the starter itself.)
 
 ## What `hook-kit` does for you
 
@@ -66,6 +66,30 @@ counter) exist to show the stack handles hooks written independently of each oth
 * `create_pda`, which survives a pre-funded address, and `create_validation_list`.
 * `testing::World`: a hooked Token-2022 mint and funded accounts in-process, and transfers whose
   accounts are resolved through the SDK exactly as an integrator would.
+
+## Building blocks that already exist
+
+The starter is the plumbing and a default rule. The pieces below are not in the starter, but each is
+written, tested against the real Token-2022 program, and used by an example. Copy the one you need.
+
+| You need | Where it is proven | Notes |
+|---|---|---|
+| a **per-slot counter** that resets when the slot changes | `templates/fair-launch`: `src/rule.rs` (`buys_in_slot_after`), `src/config.rs` (`Counter`), `src/processor/execute.rs` | one writable PDA per mint; name it as an allowed writable extra on the client side |
+| to know whether a transfer is a **buy** (leaves one of your pool vaults) | `templates/fair-launch`: `rule::is_buy`, up to four venues in `Config` | a venue must be a token account of the hooked mint |
+| to read the **priority fee** a transaction declares | `templates/fair-launch`: `declared_priority_price` in `src/processor/execute.rs` | reads `SetComputeUnitPrice` through the instructions sysvar; best effort, and **not on v1 transactions** (SIMD-0385) |
+| a **per-holder record**, created on first use and settled on every transfer | `templates/holder-rewards`: `src/state.rs` (`Record`), `src/rule.rs` (`Holder`), `Register` | records are created by an explicit `Register`, not inside the swap |
+| a **vesting floor** on one account | `templates/creator-commitment`: `src/rule.rs` | pure; the floor belongs to the account |
+| to **refuse a second funding** / a single-use setting | `templates/holder-rewards`: `rule::check_funding` and the one-time mode | |
+| an **optional extra account** (only declared when a feature is on) | `templates/fair-launch`: the sysvar is in the validation list only when the fee check is on, and `Execute` reads the extras count from the account list | the prelude checks the list and the accounts agree |
+| a **writable extra** the client must opt in to | any of the above; the client side is `HookSetup::allowed_writable` in `crates/raydium-hook-driver/src/hooks/` | the SDK refuses writable extras the integrator did not name |
+
+### How thick can my hook be?
+
+Every extra account is added to every hooked transfer, and a Raydium swap has two. Measured with a hook
+that does nothing but declare N extras ([`benches/`](../benches/README.md)): about **10 PDA-derived extras**
+work today; the hook program's heap runs out at 12 to 14, and Token-2022's at 16 and above, before the
+transaction size or compute become the limit. `hook_kit::PRACTICAL_EXTRA_ACCOUNTS` records that figure.
+The examples declare two or three. See [commercial-and-limits.md](commercial-and-limits.md).
 
 ## Two facts every rule relies on
 
@@ -89,12 +113,12 @@ Both were verified against the Token-2022 source and are covered by tests.
    a different hook program.
 5. **Return typed errors**, so an integrator can see that your hook, and which rule, refused a
    transfer. One code range per program: `hook-kit` `0x8001..`, creator-commitment `0xA001..`,
-   fair-launch `0xB001..`, loyalty-rewards `0xC001..`, reference hook `0x7001..`, arbitrary hook
+   fair-launch `0xB001..`, holder-rewards `0xC001..`, reference hook `0x7001..`, arbitrary hook
    `0x9001..`.
 6. **Keep it bounded.** No loops over holders. Every extra account is added to every hooked
    transfer, and a Raydium swap has two transfers. See [hook-thickness.md](hook-thickness.md).
 7. **Do not try to move the transferred tokens.** Token-2022 gives a hook no authority over them.
-   (A hook can move *other* tokens that a PDA of its own controls, as loyalty-rewards does when a
+   (A hook can move *other* tokens that a PDA of its own controls, as holder-rewards does when a
    holder claims, but never inside the transfer it is checking.)
 
 ## State your hook writes

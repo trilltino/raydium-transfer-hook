@@ -6,11 +6,12 @@ what you are doing.
 
 | I want to... | Read |
 |---|---|
-| **write a hook** (a rule that allows or refuses transfers) | [authoring-hooks.md](authoring-hooks.md), the [starter](../templates/transfer-hook-starter), then the five examples: [creator-commitment](../templates/creator-commitment), [fair-launch](../templates/fair-launch), [anti-bundle](../templates/anti-bundle), [loyalty-rewards](../templates/loyalty-rewards), [parent-spin-off](../templates/parent-spin-off) |
+| **write a hook** (a rule that allows or refuses transfers) | [authoring-hooks.md](authoring-hooks.md), the [starter](../templates/transfer-hook-starter), then the three examples: [creator-commitment](../templates/creator-commitment), [fair-launch](../templates/fair-launch), [holder-rewards](../templates/holder-rewards) |
 | **run hooks through Raydium locally** with no keys | the README's [Build your own hook](../README.md#build-your-own-hook); `cargo xtask localnet e2e` |
 | **fork this repo** and run it on my own program ids, or with my own hook | [forking.md](forking.md) |
 | **integrate hooked swaps** into an app, wallet or aggregator | [architecture.md](architecture.md), then [transfer-surface-matrix.md](transfer-surface-matrix.md) |
 | **judge how heavy a hook can be** (accounts, compute, transaction size) | [hook-thickness.md](hook-thickness.md) |
+| **decide whether it is worth it**: who pays, what it costs, where the limits are | [commercial-and-limits.md](commercial-and-limits.md) |
 | **assess the risk** of a hook or of this stack | [security.md](security.md) |
 | **see what is proven**, with transactions | [devnet.md](devnet.md) |
 | **know exactly which Raydium code this is tested against** | [source-lock.md](source-lock.md) |
@@ -24,6 +25,7 @@ what you are doing.
 | [architecture.md](architecture.md) | The architecture and how each transfer leg's accounts are resolved and framed |
 | [transfer-surface-matrix.md](transfer-surface-matrix.md) | The instructions added to Raydium, their byte layouts, which surfaces are supported, and Raydium's per-mint admission |
 | [hook-thickness.md](hook-thickness.md) | What bounds a hook, with measured numbers |
+| [commercial-and-limits.md](commercial-and-limits.md) | What each example is for, who pays what, the limits found by the benchmarks, and what a hook can never do |
 | [security.md](security.md) | The threat model, what the SDK checks and cannot, malicious-hook tests, and what is not shown |
 | [source-lock.md](source-lock.md) | How the Raydium forks are pinned, the dependency line, toolchains, and what is verified |
 | [devnet.md](devnet.md) | Evidence, not a guide: what is deployed on devnet under our ids and what ran. A fork does not need it |

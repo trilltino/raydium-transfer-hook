@@ -15,7 +15,7 @@ Needs Rust and the [Solana CLI](https://docs.anza.xyz/cli/install) (Agave 4.0, f
 and `solana-test-validator`). No keys, no network beyond fetching the pinned forks.
 
 ```sh
-# 1. Copy the starter (or one of the five examples below)
+# 1. Copy the starter (or one of the three examples below)
 cp -r templates/transfer-hook-starter my-hook        # PowerShell: Copy-Item -Recurse templates\transfer-hook-starter my-hook
 
 # 2. Implement your rule: my-hook/src/rule.rs (and my-hook/setup.json if you change its parameters)
@@ -53,14 +53,14 @@ in [`crates/hook-kit`](crates/hook-kit)).
 
 | Folder | The rule |
 |---|---|
-| [`templates/transfer-hook-starter`](templates/transfer-hook-starter) | The copy-me starter: a maximum transfer size, with per-mint config, authority modes and versioning already done |
+| [`templates/transfer-hook-starter`](templates/transfer-hook-starter) | The copy-me starter, and the repository's reference hook: a maximum transfer size, with per-mint config, authority modes and versioning already done |
 | [`templates/creator-commitment`](templates/creator-commitment) | A creator's allocation **vests**: the dedicated account may not fall below what a cliff-and-linear schedule still locks |
-| [`templates/fair-launch`](templates/fair-launch) | During a launch window, **buys** are limited: per-buy size, per-account balance, buys per slot, declared priority fee |
-| [`templates/anti-bundle`](templates/anti-bundle) | A per-slot budget on **buys from recognised venues**, so a bundle packed into one block is refused |
-| [`templates/loyalty-rewards`](templates/loyalty-rewards) | Holders earn a **quote-token reward stream** in proportion to balance x time held; the pool never earns |
-| [`templates/parent-spin-off`](templates/parent-spin-off) | Parent holders accrue a **child token** allocation by balance x time; the allocation can be funded exactly once |
+| [`templates/fair-launch`](templates/fair-launch) | During a launch window, **buys** from up to four pool vaults are limited: per-buy size, per-account balance, buys per slot, declared priority fee. Each limit can be switched off, so with only the per-slot budget it is an **anti-bundle** guard |
+| [`templates/holder-rewards`](templates/holder-rewards) | Holders earn a **quote-token reward stream** in proportion to balance x time held; the pool never earns. In **one-time** mode the allocation can be funded exactly once, which is a **parent/child spin-off** |
 
-Each has its own README with the rule, the accounts, every error code and the honest limits.
+Three examples and the starter: each example is its rule (`src/rule.rs`) plus its tests, on the shared
+plumbing in `hook-kit`. Each has its own README with the rule, the accounts, every error code and the
+honest limits. The CLI runs the two named settings as `fair-launch-per-slot` and `holder-rewards-one-time`.
 
 ## Status
 
@@ -80,7 +80,7 @@ of the forks, under our program ids) < `official Raydium` (Raydium's own deploym
 | Official Raydium (including its devnet) | **Not supported** | Their programs do not contain `swap_base_input_v2` / `swap_v3`; no upstream PR has been opened. `raydium-hook env probe` checks a deployment |
 | CPMM exact-output swap, pool creation with a live hook, deposit, withdraw, protocol and fund fee collection | **Devnet verified** (`_v2` instructions in the CPMM fork) | Each takes the hook slices of both token transfers, framed like the swaps. [`docs/transfer-surface-matrix.md`](docs/transfer-surface-matrix.md) says exactly what ran where; the original instructions still reject hooked mints |
 | CLMM liquidity, positions and fees; CPMM creator-fee collection | **Not supported** (CLMM) / **unit-tested only** (CPMM creator fees) | CLMM rejects hooked mints on those paths with a clear error. CPMM creator-fee collection has a fork instruction and a tested framer, but no runtime test: [`docs/transfer-surface-matrix.md`](docs/transfer-surface-matrix.md) |
-| Creating a pool with a hooked mint | **Needs the pool admin's per-mint record** | Upstream's mint admission requires a `SupportMintAssociated` record for any mint with a TransferHook. Per mint, not per hook program: [`docs/transfer-surface-matrix.md`](docs/transfer-surface-matrix.md#raydiums-mint-admission-a-real-gate-and-what-it-is) |
+| Creating a pool with a hooked mint | **Needs the pool admin's per-mint record** (`raydium-hook mint approve`, run by whoever holds the admin key) | Upstream's mint admission requires a `SupportMintAssociated` record for any mint with a TransferHook. Per mint, not per hook program: [`docs/transfer-surface-matrix.md`](docs/transfer-surface-matrix.md#raydiums-mint-admission-a-real-gate-and-what-it-is) |
 | LaunchLab | **Blocked** | Its on-chain handler is not public, so there is nothing to patch or test |
 | Hook-thickness benchmarks (accounts, compute, v0/v1, contention) | **Partial** | Measured compute and sizes in [`docs/hook-thickness.md`](docs/hook-thickness.md); no benchmark suite yet ([`benches/`](benches)) |
 
@@ -93,6 +93,7 @@ of the forks, under our program ids) < `official Raydium` (Raydium's own deploym
 |---|---|
 | `hook build DIR`, `hook deploy`, `hook setup`, `hook inspect MINT` | The author's loop for one hook |
 | `mint create [--hook PROGRAM]` | A Token-2022 mint with the TransferHook extension |
+| `mint approve`, `mint approval` | Approve hooked mints for pool creation (admin only; many at once; `--dry-run`), and check whether a mint is approved: [`docs/forking.md`](docs/forking.md#approving-a-hooked-mint) |
 | `e2e` | The checked end-to-end flows and the results table (`--hook NAME|all`, `--hook-dir DIR`, `--setup FILE`, `--second-hook`, `--transfer-fee-bps`, `--keep-state`, `--record`) |
 | `cpmm swap`, `clmm swap` | Swap on a pool `e2e --keep-state` left: resolve each leg, simulate, explain a refusal, send |
 | `inspect MINT`, `env probe` | Transport readiness of a mint; whether a cluster's Raydium programs have the hook-aware instructions |
@@ -123,11 +124,12 @@ third-party-hook-acceptance -- --ignored` after `cargo xtask localnet build`
 | `crates/raydium-hook-cli` | `raydium-hook` |
 | `crates/hook-kit` | Shared hook plumbing and an in-process test world |
 | `crates/hook-policy-model` | Platform policy model (types the SDK turns into resolution options) |
-| `programs/` | The reference hook, the unrelated arbitrary hook, and the benchmark hook |
-| `templates/` | The starter and the five example hooks |
+| `programs/` | The unrelated arbitrary hook and the benchmark hook |
+| `templates/` | The starter and the three example hooks |
 | `environments/` | Cluster manifests: `localnet.json` (keyless), `devnet.json` (integration), `raydium-devnet.json` (official) |
 | `tests/` | In-process flows, third-party acceptance tests, the localnet fixtures |
 | `xtask` | Upstream locks, localnet, devnet deployment, evidence page |
+| `scripts/` | `approve-hooked-mints.ts`: approve hooked mints for pool creation, or check them (TypeScript, no Raydium SDK) |
 | `docs/` | Start at [docs/README.md](docs/README.md) |
 
 ## Trust model

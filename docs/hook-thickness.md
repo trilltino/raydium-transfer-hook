@@ -20,8 +20,8 @@ Observed:
 | reference hook | 1 | 3 |
 | creator-commitment | 1 (config) | 3 |
 | arbitrary test hook | 2 (policy, stats) | 4 |
-| fair-launch | 3 (config, slot counter, instructions sysvar) | 5 |
-| loyalty-rewards | 3 (global, source record, destination record) | 5 |
+| fair-launch | 2 (config, slot counter), or 3 with the priority-fee check on (instructions sysvar) | 4 or 5 |
+| holder-rewards | 3 (global, source record, destination record) | 5 |
 
 ## Transaction size
 
@@ -46,10 +46,10 @@ the runs made while writing this. One hooked leg unless stated:
 | reference hook, TransferFee on both mints | 84,000 | 107,000 to 110,000 |
 | creator-commitment | 81,000 to 92,000 | 101,000 to 110,000 |
 | arbitrary test hook (writes a counter) | 83,000 to 101,000 | 112,000 to 130,000 |
-| anti-bundle (writes a counter) | 95,000 to 99,000 | 110,000 to 111,000 |
+| anti-bundle, now `fair-launch` with only the per-slot budget (writes a counter; measured before the merge) | 95,000 to 99,000 | 110,000 to 111,000 |
 | fair-launch (reads the instructions sysvar, writes a counter) | 94,000 to 127,000 | 115,000 to 132,000 |
-| loyalty-rewards (settles two records and the global) | 93,000 to 116,000 | 127,000 to 153,000 |
-| parent-spin-off (the same accounting) | 129,000 to 130,000 | 125,000 to 128,000 |
+| holder-rewards, measured as loyalty-rewards before the rename (settles two records and the global) | 93,000 to 116,000 | 127,000 to 153,000 |
+| holder-rewards in one-time mode, measured as parent-spin-off before the merge (the same accounting) | 129,000 to 130,000 | 125,000 to 128,000 |
 | **two hooks, one per leg** (reference + arbitrary) | 113,000 to 137,000 | 147,000 to 157,000 |
 | two hooks, the same program on both legs | 112,000 | 136,000 to 139,000 |
 | two hooks plus a TransferFee on both mints | 121,000 | 162,000 to 164,000 |
@@ -74,7 +74,7 @@ reading instructions. See `templates/fair-launch`.
 
 ## Contention
 
-`fair-launch` and `loyalty-rewards` write one account on every transfer (a slot counter; the global
+`fair-launch` and `holder-rewards` write one account on every transfer (a slot counter; the global
 reward account), so transfers of those mints in the same block serialise on it. That is the real
 cost of those two rules, and it has not been measured under load. `creator-commitment` only reads.
 
@@ -82,7 +82,7 @@ cost of those two rules, and it has not been measured under load. `creator-commi
 
 A program's rent is a refundable deposit of about 5.1 SOL per MB. The hooks here are 126 to 169 KB,
 so about 0.7 to 0.9 SOL each; most of that weight is the `spl-token-2022` dependency, not the rule.
-Per-mint accounts are small (the largest, loyalty-rewards' global, is 185 bytes; each holder record
+Per-mint accounts are small (the largest, holder-rewards' global, is 186 bytes; each holder record
 is 73).
 
 ## Not measured
