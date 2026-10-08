@@ -626,6 +626,12 @@ pub(super) fn hook_entries<'a>(
 ) -> Vec<HookEntry<'a>> {
     use solana_sdk::signature::Signer;
     let traders = [world.trader[0].pubkey(), world.trader[1].pubkey()];
+    let wallet_accounts = inputs.ui_fixture.map(|fixture| {
+        [
+            crate::cpmm::Cpmm::associated_token_2022(&fixture.wallet, &world.hooked.pubkey()),
+            crate::cpmm::Cpmm::associated_token_2022(&fixture.wallet, &world.quote.pubkey()),
+        ]
+    });
     let mut entries = vec![HookEntry {
         hook: inputs.hook,
         ctx: HookContext {
@@ -636,6 +642,7 @@ pub(super) fn hook_entries<'a>(
             pool_authority,
             vaults,
             now,
+            wallet_accounts,
         },
     }];
     if let Some(second) = inputs.second_hook {
@@ -649,6 +656,7 @@ pub(super) fn hook_entries<'a>(
                 pool_authority,
                 vaults: [vaults[1], vaults[0]],
                 now,
+                wallet_accounts: wallet_accounts.map(|[hooked, quote]| [quote, hooked]),
             },
         });
     }

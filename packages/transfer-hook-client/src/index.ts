@@ -12,5 +12,7 @@ export * from './fair-launch/addresses.ts';
 export * from './fair-launch/decode.ts';
 export * from './fair-launch/errors.ts';
 export * from './fair-launch/policy.ts';
+export * from './creator-commitment/index.ts';
+export * from './holder-rewards/index.ts';
 export * from './transaction/simulate.ts';
 export * from './transaction/send.ts';

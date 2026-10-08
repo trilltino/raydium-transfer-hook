@@ -20,6 +20,10 @@ function pick(file) {
     cpmmProgramId: need(raw.programs?.cpmm, 'programs.cpmm'),
     clmmProgramId: need(raw.programs?.clmm, 'programs.clmm'),
     fairLaunchProgramId: need(raw.programs?.templates?.fair_launch, 'programs.templates.fair_launch'),
+    ...(raw.programs?.templates?.creator_commitment
+      ? { creatorCommitmentProgramId: raw.programs.templates.creator_commitment }
+      : {}),
+    ...(raw.programs?.templates?.holder_rewards ? { holderRewardsProgramId: raw.programs.templates.holder_rewards } : {}),
   };
 }
 

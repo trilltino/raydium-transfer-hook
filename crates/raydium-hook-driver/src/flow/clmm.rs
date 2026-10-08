@@ -199,6 +199,15 @@ pub async fn run_clmm_session<C: Chain>(
         format!("vault_0 {} vault_1 {}", seeded.0, seeded.1),
     );
 
+    // A UI fixture's wallet is funded before the hook goes on: some hooks (holder-rewards) give up the
+    // mint authority when they are enabled, and minting is not a transfer, so the hook is not involved.
+    let wallet_accounts = match inputs.ui_fixture {
+        Some(fixture) => {
+            Some(super::cpmm::fund_ui_wallet(chain, &mut rec, &fixture, &world).await?)
+        }
+        None => None,
+    };
+
     let now = chain_time(chain).await?;
     let kit = SwapKit {
         hooks: hook_entries(
@@ -219,9 +228,11 @@ pub async fn run_clmm_session<C: Chain>(
         };
         enable_hook(chain, &mut rec, entry.hook, &entry.ctx, role).await?;
     }
-    if let Some(fixture) = inputs.ui_fixture {
-        let wallet_accounts =
-            super::cpmm::fund_ui_wallet(chain, &mut rec, &fixture, &world).await?;
+    if inputs.ui_fixture.is_some() {
+        let wallet_accounts = wallet_accounts.expect("a UI fixture funds its wallet");
+        for (label, instructions) in kit.primary().hook.fixture_steps(&kit.primary().ctx) {
+            send_step(chain, &mut rec, &label, with_budget(instructions), &[]).await?;
+        }
         let mut session = build_session("clmm", &world, &kit);
         session.pool = Some(pool.pool_state.to_string());
         // For a UI fixture the accounts are the wallet's, not the payer's.
@@ -235,6 +246,18 @@ pub async fn run_clmm_session<C: Chain>(
         world: &world,
     };
     swap_checks(chain, &mut rec, &builder, &kit).await?;
+    if inputs.liquidity {
+        super::clmm_liquidity::clmm_liquidity_checks(
+            chain,
+            &mut rec,
+            &clmm,
+            &world,
+            inputs,
+            &hooked_mints,
+            admin,
+        )
+        .await?;
+    }
     rec.push(
         "summary",
         None,

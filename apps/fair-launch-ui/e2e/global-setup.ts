@@ -33,14 +33,21 @@ export default async function globalSetup(): Promise<void> {
   }
 
   // E2E_REUSE=1 keeps the pools and wallet of the previous run (they live as long as the validator does).
-  if (process.env.E2E_REUSE === '1' && existsSync(join(outDir, 'fixture-clmm.json'))) return;
+  if (process.env.E2E_REUSE === '1' && existsSync(join(outDir, 'fixture-holder-rewards-cpmm.json'))) return;
 
   const wallet = newWallet();
   writeFileSync(join(outDir, 'wallet.json'), JSON.stringify(wallet.secret));
-  for (const amm of ['cpmm', 'clmm']) {
+  // Which pools the browser tests use: Fair Launch on both AMMs, the other two example hooks on CPMM.
+  const pools = [
+    ['fair-launch', 'cpmm'],
+    ['fair-launch', 'clmm'],
+    ['creator-commitment', 'cpmm'],
+    ['holder-rewards', 'cpmm'],
+  ];
+  for (const [hook, amm] of pools) {
     execFileSync(
       'cargo',
-      ['xtask', 'localnet', 'ui-fixture', '--wallet', wallet.address, '--amm', amm, '--out', join(outDir, `fixture-${amm}.json`)],
+      ['xtask', 'localnet', 'ui-fixture', '--wallet', wallet.address, '--amm', amm, '--hook', hook, '--out', join(outDir, `fixture-${hook}-${amm}.json`)],
       { cwd: repo, stdio: 'inherit', shell: true }
     );
   }
@@ -65,7 +72,7 @@ function setUpDevnet(): void {
         '--keypair', '.keys/deployer.json',
         '--fee-receiver-keypair', '.keys/cpmm-fee-receiver.json',
         '--wallet', wallet.address, '--amm', amm,
-        '--out', join(outDir, `fixture-${amm}.json`),
+        '--out', join(outDir, `fixture-fair-launch-${amm}.json`),
         '--window-seconds', '3600', '--max-buy', '100000000', '--max-wallet', '300000000',
         '--max-buys-per-slot', '3', '--max-priority', '1000',
         '--seed-amount', '2000000000', '--wallet-hooked-amount', '100000000',

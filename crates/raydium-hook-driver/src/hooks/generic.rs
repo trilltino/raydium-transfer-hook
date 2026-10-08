@@ -300,6 +300,7 @@ impl GenericExternalHook {
             pool_authority: Pubkey::new_unique(),
             vaults: [Pubkey::new_unique(), Pubkey::new_unique()],
             now: 0,
+            wallet_accounts: None,
         };
         let vars = Vars::from_context(self.program, &dummy);
         for instruction in &self.spec.setup {
@@ -431,6 +432,7 @@ mod tests {
             pool_authority: Pubkey::new_unique(),
             vaults: [Pubkey::new_unique(); 2],
             now: 0,
+            wallet_accounts: None,
         };
         let instructions = hook.enable_instructions(&ctx);
         assert_eq!(

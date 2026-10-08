@@ -15,6 +15,7 @@
 //! The hooked mint is always `mint_0`, so the first swap is `zero_for_one` on CLMM.
 
 mod clmm;
+mod clmm_liquidity;
 mod cpmm;
 mod liquidity;
 mod recorder;

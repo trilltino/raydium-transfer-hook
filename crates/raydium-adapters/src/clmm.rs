@@ -48,6 +48,16 @@ pub struct ClmmPool {
     pub tick_arrays: [Pubkey; 2],
 }
 
+/// A liquidity position opened by [`Clmm::open_position_instruction`]: the Token-2022 NFT that
+/// owns it and the accounts the later instructions need.
+#[derive(Clone, Copy, Debug)]
+pub struct ClmmPosition {
+    pub owner: Pubkey,
+    pub nft_mint: Pubkey,
+    pub nft_account: Pubkey,
+    pub personal_position: Pubkey,
+}
+
 impl Clmm {
     fn pda(&self, seeds: &[&[u8]]) -> Pubkey {
         Pubkey::find_program_address(seeds, &self.program_id).0
@@ -232,6 +242,149 @@ impl Clmm {
                 AccountMeta::new_readonly(spl_token_2022::id(), false),
                 AccountMeta::new_readonly(pool.mint_0, false),
                 AccountMeta::new_readonly(pool.mint_1, false),
+            ],
+            data,
+        }
+    }
+
+    /// The accounts of the position whose NFT mint is `nft_mint`, owned by `owner`.
+    pub fn position(&self, owner: &Pubkey, nft_mint: &Pubkey) -> ClmmPosition {
+        ClmmPosition {
+            owner: *owner,
+            nft_mint: *nft_mint,
+            nft_account: Pubkey::find_program_address(
+                &[
+                    owner.as_ref(),
+                    spl_token_2022::id().as_ref(),
+                    nft_mint.as_ref(),
+                ],
+                &ASSOCIATED_TOKEN_PROGRAM_ID,
+            )
+            .0,
+            personal_position: self.pda(&[POSITION_SEED, nft_mint.as_ref()]),
+        }
+    }
+
+    /// `increase_liquidity_v2` over the position's range, paid from `token_account_0` / `_1`
+    /// (owned by the position's owner, who signs). Unframed: a pool with a hooked mint needs
+    /// `increase_liquidity_v3` instead (see `transfer-hook-sdk`'s `ClmmLiquidityOp`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn increase_liquidity_instruction(
+        &self,
+        pool: &ClmmPool,
+        position: &ClmmPosition,
+        token_account_0: &Pubkey,
+        token_account_1: &Pubkey,
+        liquidity: u128,
+        amount_0_max: u64,
+        amount_1_max: u64,
+    ) -> Instruction {
+        let mut data = anchor_discriminator("increase_liquidity_v2").to_vec();
+        data.extend_from_slice(&liquidity.to_le_bytes());
+        data.extend_from_slice(&amount_0_max.to_le_bytes());
+        data.extend_from_slice(&amount_1_max.to_le_bytes());
+        data.push(0); // base_flag = None
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(position.owner, true),
+                AccountMeta::new_readonly(position.nft_account, false),
+                AccountMeta::new(pool.pool_state, false),
+                // Deprecated `protocol_position`: an unconstrained account the program ignores.
+                AccountMeta::new_readonly(system_program::id(), false),
+                AccountMeta::new(position.personal_position, false),
+                AccountMeta::new(self.tick_array(&pool.pool_state, LOWER_ARRAY_START), false),
+                AccountMeta::new(self.tick_array(&pool.pool_state, UPPER_ARRAY_START), false),
+                AccountMeta::new(*token_account_0, false),
+                AccountMeta::new(*token_account_1, false),
+                AccountMeta::new(pool.vault_0, false),
+                AccountMeta::new(pool.vault_1, false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(spl_token_2022::id(), false),
+                AccountMeta::new_readonly(pool.mint_0, false),
+                AccountMeta::new_readonly(pool.mint_1, false),
+            ],
+            data,
+        }
+    }
+
+    /// `decrease_liquidity_v2`: takes `liquidity` out of the position and pays it, with the position's
+    /// owed fees, to `recipient_0` / `_1`. With `liquidity == 0` it only collects the fees. Unframed:
+    /// a pool with a hooked mint needs `decrease_liquidity_v3`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn decrease_liquidity_instruction(
+        &self,
+        pool: &ClmmPool,
+        position: &ClmmPosition,
+        recipient_0: &Pubkey,
+        recipient_1: &Pubkey,
+        liquidity: u128,
+        amount_0_min: u64,
+        amount_1_min: u64,
+    ) -> Instruction {
+        let mut data = anchor_discriminator("decrease_liquidity_v2").to_vec();
+        data.extend_from_slice(&liquidity.to_le_bytes());
+        data.extend_from_slice(&amount_0_min.to_le_bytes());
+        data.extend_from_slice(&amount_1_min.to_le_bytes());
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(position.owner, true),
+                AccountMeta::new_readonly(position.nft_account, false),
+                AccountMeta::new(position.personal_position, false),
+                AccountMeta::new(pool.pool_state, false),
+                AccountMeta::new_readonly(system_program::id(), false),
+                AccountMeta::new(pool.vault_0, false),
+                AccountMeta::new(pool.vault_1, false),
+                AccountMeta::new(self.tick_array(&pool.pool_state, LOWER_ARRAY_START), false),
+                AccountMeta::new(self.tick_array(&pool.pool_state, UPPER_ARRAY_START), false),
+                AccountMeta::new(*recipient_0, false),
+                AccountMeta::new(*recipient_1, false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(spl_token_2022::id(), false),
+                AccountMeta::new_readonly(MEMO_PROGRAM_ID, false),
+                AccountMeta::new_readonly(pool.mint_0, false),
+                AccountMeta::new_readonly(pool.mint_1, false),
+            ],
+            data,
+        }
+    }
+
+    /// `collect_protocol_fee` (or `collect_fund_fee` when `fund`): the admin sends what has accrued, up
+    /// to the amounts requested, to `recipient_0` / `_1`. Unframed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn collect_fee_instruction(
+        &self,
+        fund: bool,
+        admin: &Pubkey,
+        pool: &ClmmPool,
+        recipient_0: &Pubkey,
+        recipient_1: &Pubkey,
+        amount_0_requested: u64,
+        amount_1_requested: u64,
+    ) -> Instruction {
+        let mut data = anchor_discriminator(if fund {
+            "collect_fund_fee"
+        } else {
+            "collect_protocol_fee"
+        })
+        .to_vec();
+        data.extend_from_slice(&amount_0_requested.to_le_bytes());
+        data.extend_from_slice(&amount_1_requested.to_le_bytes());
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(*admin, true),
+                AccountMeta::new(pool.pool_state, false),
+                AccountMeta::new_readonly(pool.amm_config, false),
+                AccountMeta::new(pool.vault_0, false),
+                AccountMeta::new(pool.vault_1, false),
+                AccountMeta::new_readonly(pool.mint_0, false),
+                AccountMeta::new_readonly(pool.mint_1, false),
+                AccountMeta::new(*recipient_0, false),
+                AccountMeta::new(*recipient_1, false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(spl_token_2022::id(), false),
             ],
             data,
         }

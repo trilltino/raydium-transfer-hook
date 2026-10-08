@@ -20,7 +20,14 @@ const REQUIRED_KEYS: &[&str] = &["deployer.json", "cpmm-fee-receiver.json"];
 pub fn run(args: &[&str]) -> Result<()> {
     match args {
         ["deploy-devnet", rest @ ..] => deploy_devnet(rest),
-        _ => Err("usage: cargo xtask env deploy-devnet [--env FILE] [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] [--no-record]".into()),
+        // Build only, for upgrading programs that are already deployed (`solana program deploy
+        // --program-id ...`): the integration builds bake in the environment's ids and admin.
+        ["build-integration", ..] => build_programs(
+            &root().join("target").join("integration-sbf"),
+            "integration",
+            None,
+        ),
+        _ => Err("usage: cargo xtask env build-integration | deploy-devnet [--env FILE] [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] [--no-record]".into()),
     }
 }
 

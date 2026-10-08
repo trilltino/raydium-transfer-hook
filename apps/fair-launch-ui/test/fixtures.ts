@@ -1,4 +1,4 @@
-import type { FairLaunchConfig, FairLaunchCounter } from '@raydium-transfer-hook/client';
+import type { CreatorCommitmentConfig, FairLaunchConfig, FairLaunchCounter, HolderRewardsGlobal } from '@raydium-transfer-hook/client';
 import { PublicKey } from '@solana/web3.js';
 import { cpmmAdapter } from '../src/adapters/index.ts';
 import type { PoolContext } from '../src/lib/chain.ts';
@@ -54,19 +54,30 @@ export interface ContextOptions {
   config?: Partial<FairLaunchConfig> | null;
   counter?: FairLaunchCounter | null;
   slot?: bigint;
+  /** Make the pool's hooked token a creator-commitment token instead of a fair-launch one. */
+  commitment?: CreatorCommitmentConfig;
+  /** Make the pool's hooked token a holder-rewards token instead of a fair-launch one. */
+  rewards?: HolderRewardsGlobal;
 }
 
-/** A pool with the launch token on the A side, vault `key(0x31)` a launch venue. */
-export function poolContext({ config = {}, counter = null, slot = 100n }: ContextOptions = {}): PoolContext {
+export const CREATOR_PROGRAM = key(0xf2);
+export const REWARDS_PROGRAM = key(0xf3);
+
+/** A pool with the hooked token on the A side, vault `key(0x31)` a launch venue (when it is a launch). */
+export function poolContext({ config = {}, counter = null, slot = 100n, commitment, rewards }: ContextOptions = {}): PoolContext {
   const pool = poolView();
-  const hooked = { mint: pool.tokenA.mint, tokenProgram: pool.tokenA.tokenProgram, hookProgramId: FAIR_LAUNCH_PROGRAM, hookAuthority: null, decimals: 6 };
+  const hookProgram = commitment ? CREATOR_PROGRAM : rewards ? REWARDS_PROGRAM : FAIR_LAUNCH_PROGRAM;
+  const hooked = { mint: pool.tokenA.mint, tokenProgram: pool.tokenA.tokenProgram, hookProgramId: hookProgram, hookAuthority: null, decimals: 6 };
   const plain = { mint: pool.tokenB.mint, tokenProgram: pool.tokenB.tokenProgram, hookProgramId: null, hookAuthority: null, decimals: 6 };
+  const other = Boolean(commitment || rewards);
   return {
     adapter: cpmmAdapter,
     pool,
     hookA: hooked,
     hookB: plain,
-    launch: config === null ? null : { config: launchConfig(config), counter, hookedSide: 'A' },
+    launch: other || config === null ? null : { config: launchConfig(config), counter, hookedSide: 'A' },
+    commitment: commitment ? { config: commitment, hookedSide: 'A' } : null,
+    rewards: rewards ? { global: rewards, hookedSide: 'A', rewardMint: { mint: key(0x41), tokenProgram: key(0x22), decimals: 6 } } : null,
     slot,
   };
 }

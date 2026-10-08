@@ -8,11 +8,15 @@
 use std::ops::Range;
 
 mod clmm;
+mod clmm_liquidity;
 mod cpmm;
 mod cpmm_pair;
 mod layout;
 
 pub use clmm::{frame_clmm_or_passthrough, frame_clmm_swap_v3};
+pub use clmm_liquidity::{
+    frame_clmm_liquidity_or_passthrough, frame_clmm_liquidity_v3, ClmmLiquidityOp,
+};
 pub use cpmm::{
     frame_cpmm_or_passthrough, frame_cpmm_output_or_passthrough, frame_cpmm_swap_base_input_v2,
     frame_cpmm_swap_base_output_v2,
@@ -27,6 +31,8 @@ pub enum FramedAbi {
     /// A two-token CPMM operation other than a swap: liquidity, fee collection, pool creation.
     CpmmPair(CpmmPairOp),
     ClmmSwapV3,
+    /// A two-token CLMM operation other than a swap: positions, liquidity, fee collection.
+    ClmmLiquidity(ClmmLiquidityOp),
 }
 
 /// What `frame_*` did to the instruction, with the account ranges of each slice.

@@ -138,23 +138,27 @@ exact_output_flows! {
     cpmm_exact_output_with_a_transfer_fee: |s| (reference(&s), None, 500);
 }
 
-/// CPMM pool creation, deposit, withdraw and fee collection with the hook live (the `_v2`
-/// instructions). Hooks that cap swaps per slot are left out, as for the exact-output flows.
+/// Pool and position creation, deposit, withdraw and fee collection with the hook live: CPMM's `_v2`
+/// instructions and CLMM's `*_v3` / `collect_*_v2`. Hooks that cap swaps per slot are left out, as for
+/// the exact-output flows.
 macro_rules! liquidity_flows {
-    ($($name:ident: |$s:ident| ($first:expr, $second:expr, $fee:expr);)+) => {$(
+    ($($name:ident: $amm:literal, |$s:ident| ($first:expr, $second:expr, $fee:expr);)+) => {$(
         #[tokio::test]
         #[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
         async fn $name() {
             let $s = setup();
             let first = $first;
             let second: Option<Box<dyn HookSetup>> = $second;
-            run_full("cpmm", &first, second.as_deref(), $fee, false, true, &$s).await;
+            run_full($amm, &first, second.as_deref(), $fee, false, true, &$s).await;
         }
     )+};
 }
 
 liquidity_flows! {
-    cpmm_liquidity_with_the_reference_hook: |s| (reference(&s), None, 0);
-    cpmm_liquidity_with_the_same_hook_program_on_both_legs: |s| (reference(&s), Some(Box::new(reference(&s))), 0);
-    cpmm_liquidity_with_a_transfer_fee: |s| (reference(&s), None, 500);
+    cpmm_liquidity_with_the_reference_hook: "cpmm", |s| (reference(&s), None, 0);
+    cpmm_liquidity_with_the_same_hook_program_on_both_legs: "cpmm", |s| (reference(&s), Some(Box::new(reference(&s))), 0);
+    cpmm_liquidity_with_a_transfer_fee: "cpmm", |s| (reference(&s), None, 500);
+    clmm_liquidity_with_the_reference_hook: "clmm", |s| (reference(&s), None, 0);
+    clmm_liquidity_with_the_same_hook_program_on_both_legs: "clmm", |s| (reference(&s), Some(Box::new(reference(&s))), 0);
+    clmm_liquidity_with_a_transfer_fee: "clmm", |s| (reference(&s), None, 500);
 }

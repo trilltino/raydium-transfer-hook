@@ -1,14 +1,19 @@
-import type { HookEnvironment } from '@raydium-transfer-hook/client';
+import { type HookEnvironment, previewCreatorTransfer } from '@raydium-transfer-hook/client';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { useWallet } from '@solana/wallet-adapter-react';
 import type { Connection, PublicKey } from '@solana/web3.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFairLaunch } from '../hooks/useFairLaunch.ts';
 import { useHookAwareSwap } from '../hooks/useHookAwareSwap.ts';
+import { useNow } from '../hooks/useNow.ts';
 import { useSwapQuote } from '../hooks/useSwapQuote.ts';
 import type { Balances } from '../hooks/useWalletBalances.ts';
 import { formatAmount, parseAmount, shortKey, toInputText } from '../lib/amounts.ts';
 import type { PoolContext } from '../lib/chain.ts';
+import { type KnownHook, hookSummary, hookedToken } from '../lib/hooks.ts';
+import { CreatorCommitmentPolicy, type FloorCheck } from './CreatorCommitmentPolicy.tsx';
 import { DeveloperDetails } from './DeveloperDetails.tsx';
+import { HolderRewardsPanel } from './HolderRewardsPanel.tsx';
 import { FairLaunchPolicy, protectionCount } from './FairLaunchPolicy.tsx';
 import { SwapSummary } from './SwapSummary.tsx';
 import { TokenAmountInput } from './TokenAmountInput.tsx';
@@ -39,6 +44,13 @@ export function swapButtonState(input: {
   return { label: 'Swap', disabled: false };
 }
 
+function hookNameOf(program: string | undefined, environment: HookEnvironment): string {
+  if (program === environment.fairLaunchProgramId) return 'Fair Launch';
+  if (program && program === environment.creatorCommitmentProgramId) return 'Creator Commitment';
+  if (program && program === environment.holderRewardsProgramId) return 'Holder Rewards';
+  return 'Unrecognised hook';
+}
+
 export interface SwapCardProps {
   environment: HookEnvironment;
   connection: Connection;
@@ -51,7 +63,8 @@ export interface SwapCardProps {
 }
 
 export function SwapCard({ environment, connection, context, balances, reload, onSwapped, loadedAt }: SwapCardProps) {
-  const { connected } = useWallet();
+  const { connected, publicKey } = useWallet();
+  const now = useNow();
   const pool = context.pool;
   const [inputIsA, setInputIsA] = useState(true);
   const [text, setText] = useState('');
@@ -60,18 +73,21 @@ export function SwapCard({ environment, connection, context, balances, reload, o
 
   const tokenIn = inputIsA ? pool.tokenA : pool.tokenB;
   const tokenOut = inputIsA ? pool.tokenB : pool.tokenA;
-  const launchMint = context.launch ? (context.launch.hookedSide === 'A' ? pool.tokenA.mint : pool.tokenB.mint) : null;
+  const hooked = hookedToken(context);
+  const hookedMint = hooked?.mint ?? null;
+  const prefix: Record<KnownHook, string> = { 'fair-launch': 'LAUNCH', 'creator-commitment': 'VESTING', 'holder-rewards': 'REWARDS' };
   const labelOf = useCallback(
     (mint: PublicKey) =>
-      launchMint?.equals(mint) ? `LAUNCH ${shortKey(mint.toBase58())}` : shortKey(mint.toBase58()),
-    [launchMint]
+      hooked && hooked.mint.equals(mint) ? `${prefix[hooked.kind]} ${shortKey(mint.toBase58())}` : shortKey(mint.toBase58()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hookedMint, hooked?.kind]
   );
 
   const amountIn = useMemo(() => parseAmount(text, tokenIn.decimals), [text, tokenIn.decimals]);
   const quote = useSwapQuote(context.adapter, pool, inputIsA, amountIn, slippageBps);
   const balanceIn = balances ? (inputIsA ? balances.a : balances.b) : null;
   const balanceOut = balances ? (inputIsA ? balances.b : balances.a) : null;
-  const hookedBalance = context.launch && balances ? (context.launch.hookedSide === 'A' ? balances.a : balances.b) : 0n;
+  const hookedBalance = hooked && balances ? (hooked.side === 'A' ? balances.a : balances.b) : 0n;
   const view = useFairLaunch(context, inputIsA, quote, hookedBalance);
 
   const swap = useHookAwareSwap(connection, environment, reload, onSwapped);
@@ -92,13 +108,38 @@ export function SwapCard({ environment, connection, context, balances, reload, o
 
   const button = swapButtonState({ connected, amount: amountIn, balance: balanceIn, hasQuote: quote !== null, gated, busy });
   const outputText = quote ? toInputText(quote.amountOut, tokenOut.decimals) : '';
-  const hookLabel = context.launch
-    ? `Fair Launch · ${view?.phase === 'ended' ? 'Ended' : view?.phase === 'not-started' ? 'Not started' : 'Active'}`
-    : context.hookA.hookProgramId || context.hookB.hookProgramId
-      ? 'Unrecognised hook'
-      : 'None';
+  const hasAnyHook = Boolean(context.hookA.hookProgramId || context.hookB.hookProgramId);
+  const launchDetail = view?.phase === 'ended' ? 'Ended' : view?.phase === 'not-started' ? 'Not started' : 'Active';
+  const hookLabel = hookSummary(hooked?.kind ?? null, hasAnyHook, hooked?.kind === 'fair-launch' ? launchDetail : '');
+  const policyLabel =
+    hooked?.kind === 'fair-launch' && context.launch
+      ? `${protectionCount(context.launch.config)} protections`
+      : hooked?.kind === 'creator-commitment'
+        ? 'Vesting floor on the creator account'
+        : hooked?.kind === 'holder-rewards'
+          ? 'Pays registered holders'
+          : null;
   const outcome = swap.state.phase === 'done' ? swap.state.outcome : null;
-  const hookProgram = context.launch ? environment.fairLaunchProgramId : (context.hookA.hookProgramId ?? context.hookB.hookProgramId)?.toBase58() ?? '';
+  const hookProgram =
+    hooked?.kind === 'fair-launch'
+      ? environment.fairLaunchProgramId
+      : hooked?.kind === 'creator-commitment'
+        ? (environment.creatorCommitmentProgramId ?? '')
+        : hooked?.kind === 'holder-rewards'
+          ? (environment.holderRewardsProgramId ?? '')
+          : (context.hookA.hookProgramId ?? context.hookB.hookProgramId)?.toBase58() ?? '';
+
+  // A sale out of the creator account is checked against the vesting floor before signing.
+  const hookedDecimals = hooked ? (hooked.side === 'A' ? pool.tokenA : pool.tokenB).decimals : 0;
+  const hookedProgram = hooked ? (hooked.side === 'A' ? pool.tokenA : pool.tokenB).tokenProgram : null;
+  const walletHookedAccount = publicKey && hooked && hookedProgram ? getAssociatedTokenAddressSync(hooked.mint, publicKey, false, hookedProgram) : null;
+  const sellingHooked = hooked ? (inputIsA ? hooked.side === 'A' : hooked.side === 'B') : false;
+  const preview =
+    context.commitment && walletHookedAccount && sellingHooked && amountIn !== null && amountIn > 0n
+      ? previewCreatorTransfer(context.commitment.config, walletHookedAccount, hookedBalance, amountIn, now)
+      : null;
+  const floorCheck: FloorCheck | null = preview;
+  const walletIsCreator = Boolean(context.commitment && walletHookedAccount?.equals(context.commitment.config.creatorAccount));
 
   return (
     <div className="trade-grid">
@@ -107,7 +148,7 @@ export function SwapCard({ environment, connection, context, balances, reload, o
           <UnknownTokenGate
             key={mint.toBase58()}
             mint={mint.toBase58()}
-            hookName={info.hookProgramId?.toBase58() === environment.fairLaunchProgramId ? 'Fair Launch' : 'Unrecognised hook'}
+            hookName={hookNameOf(info.hookProgramId?.toBase58(), environment)}
             hookProgram={info.hookProgramId?.toBase58() ?? ''}
             onConfirm={() => {
               rememberConfirmed(mint.toBase58());
@@ -156,7 +197,7 @@ export function SwapCard({ environment, connection, context, balances, reload, o
               outLabel={labelOf(tokenOut.mint)}
               slippageBps={slippageBps}
               hookLabel={hookLabel}
-              policyLabel={context.launch ? `${protectionCount(context.launch.config)} protections` : null}
+              policyLabel={policyLabel}
               updatedAt={loadedAt}
             />
           )}
@@ -177,6 +218,11 @@ export function SwapCard({ environment, connection, context, balances, reload, o
             <p className="warn-box" role="status" data-testid="preflight-warning">
               This buy breaks the Fair Launch rule{view.violated.length > 1 ? 's' : ''}: {view.violated.map((row) => row.label).join(', ')}.
               The on-chain hook will reject it.
+            </p>
+          )}
+          {floorCheck && floorCheck.violated && (
+            <p className="warn-box" role="status" data-testid="preflight-warning">
+              This sale would leave the creator account below its vesting floor. The on-chain hook will reject it.
             </p>
           )}
           <button
@@ -203,7 +249,28 @@ export function SwapCard({ environment, connection, context, balances, reload, o
             view={view}
             decimals={(context.launch.hookedSide === 'A' ? pool.tokenA : pool.tokenB).decimals}
             hookProgramId={hookProgram}
-            tokenLabel={launchMint ? shortKey(launchMint.toBase58()) : ''}
+            tokenLabel={hookedMint ? shortKey(hookedMint.toBase58()) : ''}
+          />
+        )}
+        {context.commitment && (
+          <CreatorCommitmentPolicy
+            config={context.commitment.config}
+            now={now}
+            decimals={hookedDecimals}
+            hookProgramId={hookProgram}
+            tokenLabel={hookedMint ? shortKey(hookedMint.toBase58()) : ''}
+            floorCheck={floorCheck}
+            walletIsCreator={walletIsCreator}
+          />
+        )}
+        {context.rewards && (
+          <HolderRewardsPanel
+            environment={environment}
+            connection={connection}
+            context={context}
+            rewards={context.rewards}
+            tokenLabel={hookedMint ? shortKey(hookedMint.toBase58()) : ''}
+            onChanged={onSwapped}
           />
         )}
         <DeveloperDetails environment={environment} context={context} outcome={outcome} />

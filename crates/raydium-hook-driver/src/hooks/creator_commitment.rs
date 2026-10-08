@@ -61,7 +61,8 @@ impl HookSetup for CreatorCommitmentHook {
                 &ctx.payer,
                 &ctx.payer,
                 &ctx.hooked_mint,
-                &ctx.trader_accounts[0],
+                // In a UI fixture the creator is the browser wallet's account.
+                &ctx.wallet_accounts.unwrap_or(ctx.trader_accounts)[0],
                 schedule,
             ),
         ]

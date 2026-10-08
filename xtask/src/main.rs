@@ -28,6 +28,7 @@ commands:
   localnet ui-fixture --wallet PUBKEY --out FILE [--amm cpmm|clmm] [--hook NAME]
                                      on a running validator: set up a Fair Launch CPMM pool and fund
                                      PUBKEY with SOL and both tokens (for the browser UI and its test)
+  env build-integration              build the forks (`integration`) and every hook into target/integration-sbf, nothing else
   env deploy-devnet [--skip-build] [--amm A] [--hook H] [--no-record]
                                      verify locks, build the integration forks and hooks, deploy what
                                      is missing to devnet (existing program ids are never replaced),

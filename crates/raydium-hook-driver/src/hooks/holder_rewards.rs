@@ -112,6 +112,35 @@ impl HookSetup for HolderRewardsHook {
         ]
     }
 
+    /// A UI fixture leaves the stream funded, so a holder who registers has something to claim.
+    fn fixture_steps(&self, ctx: &HookContext) -> Vec<(String, Vec<Instruction>)> {
+        let [_, quote_account] = ctx.trader_accounts;
+        vec![
+            (
+                "mint the reward tokens".to_string(),
+                vec![crate::token::mint_to_instruction(
+                    &ctx.quote_mint,
+                    &quote_account,
+                    &ctx.payer,
+                    self.reward_amount,
+                )],
+            ),
+            (
+                "fund the reward stream with quote tokens".to_string(),
+                vec![fund(
+                    &self.program_id,
+                    &ctx.payer,
+                    &quote_account,
+                    &ctx.hooked_mint,
+                    &ctx.quote_mint,
+                    &spl_token_2022::id(),
+                    self.reward_amount,
+                    self.duration_seconds,
+                )],
+            ),
+        ]
+    }
+
     fn follow_up(&self, ctx: &HookContext) -> Vec<FollowUp> {
         let [hooked_account, quote_account] = ctx.trader_accounts;
         let mut steps = vec![

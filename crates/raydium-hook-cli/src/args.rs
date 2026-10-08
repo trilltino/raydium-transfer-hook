@@ -58,7 +58,7 @@ run it through Raydium
                CPMM pool with the hook live and deposits, withdraws and collects fees (`*_v2`).
                --record writes evidence (and a --hook-dir deployment) to the env file.
   ui-fixture   --env FILE --keypair FILE --wallet PUBKEY --out FILE [--amm cpmm|clmm] [--hook NAME] [--fee-receiver-keypair FILE]
-               [--window-seconds N] [--max-buy N] [--max-wallet N] [--max-buys-per-slot N] [--max-priority N]
+               [--window-seconds N] [--vest-seconds N] [--locked-total N] [--reward-seconds N] [--reward-amount N] [--max-buy N] [--max-wallet N] [--max-buys-per-slot N] [--max-priority N]
                [--seed-amount N] [--wallet-hooked-amount N] [--wallet-quote-amount N] [--wallet-lamports N]
                Set up a Fair Launch CPMM pool and give WALLET SOL and funded token accounts, then stop:
                what the browser UI and its end-to-end test need. Only the wallet's public key is used.

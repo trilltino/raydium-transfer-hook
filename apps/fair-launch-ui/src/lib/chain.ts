@@ -1,12 +1,16 @@
 import { Raydium } from '@raydium-io/raydium-sdk-v2';
 import {
+  type CreatorCommitmentConfig,
   type FairLaunchConfig,
   type FairLaunchCounter,
+  type HolderRewardsGlobal,
   type HookEnvironment,
   type TransferHookInfo,
   programKeys,
+  readCreatorCommitmentConfig,
   readFairLaunchConfig,
   readFairLaunchCounter,
+  readRewardsGlobal,
   readTransferHook,
 } from '@raydium-transfer-hook/client';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
@@ -34,6 +38,19 @@ export async function loadRaydium(connection: Connection, environment: HookEnvir
   } as never);
 }
 
+/** A creator-commitment token of the pool: the schedule that locks the creator account. */
+export interface CommitmentState {
+  config: CreatorCommitmentConfig;
+  hookedSide: 'A' | 'B';
+}
+
+/** A holder-rewards token of the pool: the reward stream, and what it pays in. */
+export interface RewardsState {
+  global: HolderRewardsGlobal;
+  hookedSide: 'A' | 'B';
+  rewardMint: { mint: PublicKey; tokenProgram: PublicKey; decimals: number };
+}
+
 export interface LaunchState {
   config: FairLaunchConfig;
   counter: FairLaunchCounter | null;
@@ -49,6 +66,10 @@ export interface PoolContext {
   hookA: TransferHookInfo;
   hookB: TransferHookInfo;
   launch: LaunchState | null;
+  /** Set when the pool's hooked token is a creator-commitment token (one example hook per pool is shown). */
+  commitment: CommitmentState | null;
+  /** Set when the pool's hooked token is a holder-rewards token. */
+  rewards: RewardsState | null;
   slot: bigint;
 }
 
@@ -76,16 +97,42 @@ export async function loadPoolContext(
     connection.getSlot('confirmed'),
   ]);
   let launch: LaunchState | null = null;
+  let commitment: CommitmentState | null = null;
+  let rewards: RewardsState | null = null;
+  const known = {
+    creator: environment.creatorCommitmentProgramId ? new PublicKey(environment.creatorCommitmentProgramId) : null,
+    rewards: environment.holderRewardsProgramId ? new PublicKey(environment.holderRewardsProgramId) : null,
+  };
   for (const [side, hook] of [['A', hookA], ['B', hookB]] as const) {
-    if (!hook.hookProgramId?.equals(programs.fairLaunch)) continue;
+    const hookProgram = hook.hookProgramId;
+    if (!hookProgram) continue;
     const mint = side === 'A' ? pool.tokenA.mint : pool.tokenB.mint;
-    const config = await readFairLaunchConfig(connection, mint, programs.fairLaunch);
-    if (config) {
-      launch = { config, counter: await readFairLaunchCounter(connection, mint, programs.fairLaunch), hookedSide: side };
-      break;
+    if (hookProgram.equals(programs.fairLaunch)) {
+      const config = await readFairLaunchConfig(connection, mint, programs.fairLaunch);
+      if (config) {
+        launch = { config, counter: await readFairLaunchCounter(connection, mint, programs.fairLaunch), hookedSide: side };
+        break;
+      }
+    } else if (known.creator && hookProgram.equals(known.creator)) {
+      const config = await readCreatorCommitmentConfig(connection, mint, known.creator);
+      if (config) {
+        commitment = { config, hookedSide: side };
+        break;
+      }
+    } else if (known.rewards && hookProgram.equals(known.rewards)) {
+      const global = await readRewardsGlobal(connection, mint, known.rewards);
+      if (global) {
+        const rewardMintInfo = await readTransferHook(connection, global.rewardMint);
+        rewards = {
+          global,
+          hookedSide: side,
+          rewardMint: { mint: global.rewardMint, tokenProgram: rewardMintInfo.tokenProgram, decimals: rewardMintInfo.decimals },
+        };
+        break;
+      }
     }
   }
-  return { adapter, pool, hookA, hookB, launch, slot: BigInt(slot) };
+  return { adapter, pool, hookA, hookB, launch, commitment, rewards, slot: BigInt(slot) };
 }
 
 /** The wallet's balance of `mint` in its associated token account; 0 if the account does not exist. */

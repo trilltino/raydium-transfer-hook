@@ -236,6 +236,13 @@ pub async fn run_cpmm_session<C: Chain>(
     // CPMM opens a new pool one second after creation.
     chain.advance_time(5).await?;
 
+    // A UI fixture's wallet is funded before the hook goes on: some hooks (holder-rewards) give up the
+    // mint authority when they are enabled, and minting is not a transfer, so the hook is not involved.
+    let wallet_accounts = match inputs.ui_fixture {
+        Some(fixture) => Some(fund_ui_wallet(chain, &mut rec, &fixture, &world).await?),
+        None => None,
+    };
+
     // 4. Hook on, 5-6. Swap checks.
     let now = chain_time(chain).await?;
     let kit = SwapKit {
@@ -257,7 +264,10 @@ pub async fn run_cpmm_session<C: Chain>(
         enable_hook(chain, &mut rec, entry.hook, &entry.ctx, role).await?;
     }
     if let Some(fixture) = inputs.ui_fixture {
-        let wallet_accounts = fund_ui_wallet(chain, &mut rec, &fixture, &world).await?;
+        let wallet_accounts = wallet_accounts.expect("a UI fixture funds its wallet");
+        for (label, instructions) in kit.primary().hook.fixture_steps(&kit.primary().ctx) {
+            send_step(chain, &mut rec, &label, with_budget(instructions), &[]).await?;
+        }
         let mut session = build_session("cpmm", &world, &kit);
         session.pool = Some(pool.pool_state.to_string());
         // For a UI fixture the accounts are the wallet's, not the payer's.

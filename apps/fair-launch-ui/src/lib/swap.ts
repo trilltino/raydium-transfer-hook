@@ -10,6 +10,7 @@ import {
   getFairLaunchCounterAddress,
   programKeys,
   resolveTransferHookLeg,
+  rewardsWritableExtras,
 } from '@raydium-transfer-hook/client';
 import {
   TOKEN_2022_PROGRAM_ID,
@@ -18,6 +19,7 @@ import {
   getAssociatedTokenAddressSync,
 } from '@solana/spl-token';
 import { ComputeBudgetProgram, type Connection, PublicKey, type TransactionInstruction } from '@solana/web3.js';
+import { type HookedToken, hookProgramId } from './hooks.ts';
 import type { PoolView } from './pool.ts';
 import type { SwapQuote } from './quote.ts';
 
@@ -34,8 +36,8 @@ export interface PrepareSwapInput {
   inputIsA: boolean;
   amountIn: bigint;
   payer: PublicKey;
-  /** The mint of the fair-launch token in this pool, if any; its hook program must be this environment's. */
-  launchMint: PublicKey | null;
+  /** The pool token with one of the example hooks, if any: its hook program must be this environment's. */
+  hooked: HookedToken | null;
 }
 
 export type InstructionLabel = 'swap_base_input_v2' | 'swap_base_input' | 'swap_v3' | 'swap_v2';
@@ -63,34 +65,41 @@ export async function prepareSwap(input: PrepareSwapInput): Promise<PreparedSwap
   const userInputAccount = getAssociatedTokenAddressSync(tokenIn.mint, payer, false, tokenIn.tokenProgram);
   const userOutputAccount = getAssociatedTokenAddressSync(tokenOut.mint, payer, false, tokenOut.tokenProgram);
 
-  const options = (mint: PublicKey) => {
-    const isLaunch = input.launchMint?.equals(mint) ?? false;
-    return isLaunch
-      ? {
-          expectedHookProgram: programs.fairLaunch,
-          allowWritable: [getFairLaunchCounterAddress(mint, programs.fairLaunch)],
-        }
-      : {};
+  // What the integrator accepts of each leg's hook: the expected program, and exactly the writable
+  // accounts that hook's rule needs. Any other hooked token gets no writable extras at all.
+  const options = (leg: { mint: PublicKey; source: PublicKey; destination: PublicKey }) => {
+    const hooked = input.hooked;
+    if (!hooked || !hooked.mint.equals(leg.mint)) return {};
+    const program = hookProgramId(environment, hooked.kind);
+    switch (hooked.kind) {
+      case 'fair-launch':
+        return { expectedHookProgram: programs.fairLaunch, allowWritable: [getFairLaunchCounterAddress(leg.mint, programs.fairLaunch)] };
+      case 'creator-commitment':
+        return { expectedHookProgram: program, allowWritable: [] };
+      case 'holder-rewards':
+        return { expectedHookProgram: program, allowWritable: rewardsWritableExtras(leg.mint, leg.source, leg.destination, program) };
+    }
   };
 
+  const inputTransfer = {
+    role: 'input' as const,
+    mint: tokenIn.mint,
+    source: userInputAccount,
+    destination: tokenIn.vault,
+    authority: payer,
+    amount: input.amountIn,
+  };
+  const outputTransfer = {
+    role: 'output' as const,
+    mint: tokenOut.mint,
+    source: tokenOut.vault,
+    destination: userOutputAccount,
+    authority: pool.authority,
+    amount: quote.minimumOut,
+  };
   const [inputLeg, outputLeg] = await Promise.all([
-    resolveTransferHookLeg(
-      connection,
-      { role: 'input', mint: tokenIn.mint, source: userInputAccount, destination: tokenIn.vault, authority: payer, amount: input.amountIn },
-      options(tokenIn.mint)
-    ),
-    resolveTransferHookLeg(
-      connection,
-      {
-        role: 'output',
-        mint: tokenOut.mint,
-        source: tokenOut.vault,
-        destination: userOutputAccount,
-        authority: pool.authority,
-        amount: quote.minimumOut,
-      },
-      options(tokenOut.mint)
-    ),
+    resolveTransferHookLeg(connection, inputTransfer, options(inputTransfer)),
+    resolveTransferHookLeg(connection, outputTransfer, options(outputTransfer)),
   ]);
   const hooked = inputLeg.hookProgram !== null || outputLeg.hookProgram !== null;
 

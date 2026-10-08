@@ -1,7 +1,7 @@
 import type { HookEnvironment } from '@raydium-transfer-hook/client';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Connection } from '@solana/web3.js';
+import { type Connection, Keypair } from '@solana/web3.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { key, poolContext, FAIR_LAUNCH_PROGRAM } from './fixtures.ts';
 
@@ -29,9 +29,11 @@ const environment: HookEnvironment = {
 
 const MINT_A = key(0x11).toBase58();
 
+const WALLET_KEY = Keypair.fromSeed(Buffer.alloc(32, 7)).publicKey;
+
 function connect() {
   wallet.connected = true;
-  wallet.publicKey = key(0x77);
+  wallet.publicKey = WALLET_KEY;
   wallet.signTransaction = vi.fn();
 }
 

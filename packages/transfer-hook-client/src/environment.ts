@@ -11,6 +11,9 @@ export interface HookEnvironment {
   cpmmProgramId: string;
   clmmProgramId: string;
   fairLaunchProgramId: string;
+  /** The other two example hooks, if the environment has them deployed. */
+  creatorCommitmentProgramId?: string;
+  holderRewardsProgramId?: string;
 }
 
 /**
@@ -32,6 +35,8 @@ export function loadEnvironment(source: string | unknown): HookEnvironment {
       throw new HookClientError('environment', `the environment's ${what} is not a public key`);
     }
   };
+  const optional = (name: string, value: unknown, what: string): Record<string, string> =>
+    value === undefined || value === null ? {} : { [name]: key(value, what) };
   if (raw === null || typeof raw !== 'object') throw new HookClientError('environment', 'the environment is not an object');
   const cluster = need(raw.cluster, 'cluster');
   if (cluster !== 'localnet' && cluster !== 'devnet') {
@@ -44,6 +49,8 @@ export function loadEnvironment(source: string | unknown): HookEnvironment {
     cpmmProgramId: key(raw.programs?.cpmm ?? raw.cpmmProgramId, 'programs.cpmm'),
     clmmProgramId: key(raw.programs?.clmm ?? raw.clmmProgramId, 'programs.clmm'),
     fairLaunchProgramId: key(raw.programs?.templates?.fair_launch ?? raw.fairLaunchProgramId, 'programs.templates.fair_launch'),
+    ...optional('creatorCommitmentProgramId', raw.programs?.templates?.creator_commitment ?? raw.creatorCommitmentProgramId, 'programs.templates.creator_commitment'),
+    ...optional('holderRewardsProgramId', raw.programs?.templates?.holder_rewards ?? raw.holderRewardsProgramId, 'programs.templates.holder_rewards'),
   };
 }
 

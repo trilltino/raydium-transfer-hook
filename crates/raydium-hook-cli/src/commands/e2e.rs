@@ -138,7 +138,7 @@ pub(crate) async fn e2e(flags: &Flags) -> Res<()> {
             if flags.has("exact-output") && *amm == "cpmm" {
                 inputs = inputs.with_exact_output();
             }
-            if flags.has("liquidity") && *amm == "cpmm" {
+            if flags.has("liquidity") {
                 inputs = inputs.with_liquidity();
             }
             let run = match *amm {

@@ -130,7 +130,7 @@ describe('failure presentation', () => {
     const view = presentSimulationFailure(hookFailure(0xb003, 'Other11111111111111111111111111111111111111'), { fairLaunchProgramId: fairLaunch });
     expect(view.source).toBe('hook');
     expect(view.reason).toContain('0xB003');
-    expect(view.reason).toContain('No known Fair Launch mapping');
+    expect(view.reason).toContain('No known mapping');
   });
 
   it('keeps unknown codes from the fair-launch program honest too', () => {

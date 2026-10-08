@@ -83,6 +83,10 @@ pub struct HookContext {
     pub vaults: [Pubkey; 2],
     /// Chain unix time when setup ran.
     pub now: i64,
+    /// `[hooked, quote]` token accounts of the wallet a browser test will trade with, when a flow is
+    /// preparing one (a UI fixture). A hook about "the creator's account" uses it so that wallet is the
+    /// creator; the others ignore it.
+    pub wallet_accounts: Option<[Pubkey; 2]>,
 }
 
 /// A step a hook needs after the standard swap checks (fund a vault, claim, snapshot...).
@@ -154,6 +158,12 @@ pub trait HookSetup {
 
     /// Steps to run after the standard swap checks.
     fn follow_up(&self, _ctx: &HookContext) -> Vec<FollowUp> {
+        Vec::new()
+    }
+
+    /// Transactions a UI fixture sends after enabling the hook, to leave it in a state worth looking at
+    /// (for example a funded reward stream). Each is a label and its instructions, sent by the payer.
+    fn fixture_steps(&self, _ctx: &HookContext) -> Vec<(String, Vec<Instruction>)> {
         Vec::new()
     }
 }

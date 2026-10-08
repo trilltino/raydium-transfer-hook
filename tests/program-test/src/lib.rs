@@ -287,15 +287,29 @@ pub async fn run_full(
         );
     }
     if liquidity {
-        for step in [
-            "hooked pool creation (initialize_v2)",
-            "hooked deposit (deposit_v2)",
-            "hooked withdraw (withdraw_v2)",
-            "hooked protocol-fee collection (collect_protocol_fee_v2)",
-            "hooked fund-fee collection (collect_fund_fee_v2)",
-        ] {
+        let steps: &[&str] = match amm {
+            "cpmm" => &[
+                "hooked pool creation (initialize_v2)",
+                "hooked deposit (deposit_v2)",
+                "hooked withdraw (withdraw_v2)",
+                "hooked protocol-fee collection (collect_protocol_fee_v2)",
+                "hooked fund-fee collection (collect_fund_fee_v2)",
+                "hooked pool creation with a permission record (initialize_with_permission_v2)",
+                "hooked creator-fee collection (collect_creator_fee_v2)",
+                "hooked creator-fee collection by anyone (collect_creator_fee_permissionless_v2)",
+            ],
+            _ => &[
+                "hooked position opening (open_position_with_token22_nft_v3)",
+                "hooked liquidity increase (increase_liquidity_v3)",
+                "hooked position-fee collection (decrease_liquidity_v3 with zero liquidity)",
+                "hooked protocol-fee collection (collect_protocol_fee_v2)",
+                "hooked fund-fee collection (collect_fund_fee_v2)",
+                "hooked liquidity removal (decrease_liquidity_v3)",
+            ],
+        };
+        for step in steps {
             assert!(
-                evidence.iter().any(|e| e.step == step),
+                evidence.iter().any(|e| e.step == *step),
                 "the flow must record `{step}`"
             );
         }

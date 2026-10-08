@@ -197,10 +197,12 @@ pub(crate) fn provider(kind: &str, flags: &Flags, env: &Environment) -> Res<Box<
             program_id: program,
             max_per_slot: flags.number("max-per-slot", 2u32)?,
         }),
-        "creator-commitment" => Box::new(CreatorCommitmentHook::new(
-            program,
-            flags.number("vest-seconds", 120i64)?,
-        )),
+        "creator-commitment" => {
+            let mut hook =
+                CreatorCommitmentHook::new(program, flags.number("vest-seconds", 120i64)?);
+            hook.locked_total = flags.number("locked-total", hook.locked_total)?;
+            Box::new(hook)
+        }
         "fair-launch" => {
             let mut hook = FairLaunchHook::new(program, flags.number("window-seconds", 150i64)?);
             hook.max_buy = flags.number("max-buy", hook.max_buy)?;
@@ -211,14 +213,16 @@ pub(crate) fn provider(kind: &str, flags: &Flags, env: &Environment) -> Res<Box<
             Box::new(hook)
         }
         "fair-launch-per-slot" => Box::new(FairLaunchHook::per_slot_only(program)),
-        "holder-rewards" => Box::new(HolderRewardsHook::new(
-            program,
-            flags.number("reward-seconds", 100u32)?,
-        )),
-        "holder-rewards-one-time" => Box::new(HolderRewardsHook::one_time(
-            program,
-            flags.number("reward-seconds", 100u32)?,
-        )),
+        "holder-rewards" | "holder-rewards-one-time" => {
+            let seconds = flags.number("reward-seconds", 100u32)?;
+            let mut hook = if kind == "holder-rewards" {
+                HolderRewardsHook::new(program, seconds)
+            } else {
+                HolderRewardsHook::one_time(program, seconds)
+            };
+            hook.reward_amount = flags.number("reward-amount", hook.reward_amount)?;
+            Box::new(hook)
+        }
         other => return Err(format!("unknown --kind `{other}`")),
     })
 }
@@ -276,6 +280,7 @@ pub(crate) async fn setup(flags: &Flags) -> Res<()> {
         pool_authority: Pubkey::default(),
         vaults: [pool_vault.unwrap_or_default(), Pubkey::default()],
         now: cluster_time(&mut chain).await?,
+        wallet_accounts: None,
     };
     let sent = chain
         .send(&hook.enable_instructions(&ctx), &[])
