@@ -10,10 +10,10 @@ export interface HeaderProps {
 export function Header({ environment }: HeaderProps) {
   return (
     <header className="header">
-      <div className="brand">
+      <a className="brand" href="/" aria-label="Raydium Transfer Hooks, home">
         <RaydiumMark />
         <span className="brand-name">Raydium Transfer Hooks</span>
-      </div>
+      </a>
       <div className="nav" />
       <div className="header-actions">
         <EnvironmentBadge cluster={environment.cluster} />

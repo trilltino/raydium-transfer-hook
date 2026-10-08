@@ -37,6 +37,13 @@ describe('App', () => {
     expect(screen.queryByText(/Experimental Raydium Transfer Hook environment/)).toBeNull();
   });
 
+  it('has the logo and name as a link to the home page', () => {
+    open(`?pool=${key(1).toBase58()}`);
+    const home = screen.getByRole('link', { name: 'Raydium Transfer Hooks, home' });
+    expect(home.getAttribute('href')).toBe('/');
+    expect(home.querySelector('svg')).toBeTruthy();
+  });
+
   it('offers a pool picker when no pool is given', () => {
     open('');
     expect(screen.getByText('Open a pool')).toBeTruthy();

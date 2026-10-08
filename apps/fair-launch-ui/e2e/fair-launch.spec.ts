@@ -15,12 +15,12 @@ for (const [amm, instruction] of scenarios.filter(([name]) => !DEVNET || enabled
     test.describe.configure({ mode: 'serial' });
     const fixture = load('fair-launch', amm);
 
-    const open = (page: Parameters<typeof openAndConnect>[0]) => openAndConnect(page, fixture);
+    const open = (page: Parameters<typeof openAndConnect>[0]) => openAndConnect(page, fixture, 'policy-rules');
 
     test('loads the pool and its policy', async ({ page }) => {
       await open(page);
-      await expect(page.getByTestId('policy-phase')).toContainText('Active');
       await expect(page.getByText('Fair Launch policy')).toBeVisible();
+      await expect(page.getByTestId('policy-phase')).toHaveCount(0);
     });
 
     test(`a buy inside the limits succeeds through ${instruction.split('  ')[1]}`, async ({ page }) => {
@@ -70,7 +70,7 @@ for (const [amm, instruction] of scenarios.filter(([name]) => !DEVNET || enabled
       const empty = newWallet();
       await page.goto(`/?env=${ENV_NAME}&pool=${fixture.pool}&testWallet=${encodeURIComponent(JSON.stringify(empty.secret))}`);
       await connectTestWallet(page);
-      await expect(page.getByTestId('policy-phase')).toBeVisible();
+      await expect(page.getByTestId('policy-rules')).toBeVisible();
       const gate = page.getByRole('button', { name: 'I understand, continue' });
       while (await gate.first().isVisible().catch(() => false)) await gate.first().click();
       // Before anything is clicked, Developer details says what the zero balances mean and what to do.
@@ -134,7 +134,7 @@ for (const [amm, instruction] of scenarios.filter(([name]) => !DEVNET || enabled
       await open(page);
       const before = await balanceOf(fixture, fixture.quote_mint);
       await page.getByLabel('From').fill('5');
-      await expect(page.getByText('Fair Launch buy restrictions do not apply to this sell.')).toBeVisible();
+      await expect(page.getByText('BUY PROTECTIONS ACTIVE')).toHaveCount(0);
       await page.getByRole('button', { name: 'Swap', exact: true }).click();
       await expect(page.getByText('Swap confirmed')).toBeVisible();
       expect(await balanceOf(fixture, fixture.quote_mint)).toBeGreaterThan(before);
@@ -145,7 +145,7 @@ for (const [amm, instruction] of scenarios.filter(([name]) => !DEVNET || enabled
 test('the layout fits a phone without horizontal scrolling', async ({ page }) => {
   // A desktop picture first, for the docs: a typed buy shows the quote, the policy meters and the hook row.
   await page.setViewportSize({ width: 1280, height: 900 });
-  await openAndConnect(page, load('fair-launch', 'cpmm'));
+  await openAndConnect(page, load('fair-launch', 'cpmm'), 'policy-rules');
   await page.getByRole('button', { name: 'Switch direction' }).click();
   await page.getByLabel('From').fill('10');
   await expect(page.getByText('BUY PROTECTIONS ACTIVE')).toBeVisible();

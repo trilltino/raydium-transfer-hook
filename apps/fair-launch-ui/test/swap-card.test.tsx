@@ -113,18 +113,24 @@ describe('quote and summary', () => {
 });
 
 describe('Fair Launch policy panel', () => {
-  it('shows an active window and the protections that are on', () => {
+  it('shows the protections that are on for an active window, with no countdown line', () => {
     connect();
     renderCard();
-    expect(screen.getByTestId('policy-phase').textContent).toMatch(/^Active/);
-    expect(screen.getAllByTestId('policy-meter')).toHaveLength(4);
+    expect(screen.queryByTestId('policy-phase')).toBeNull();
+    expect(screen.queryByText(/remaining/)).toBeNull();
+    // the two size meters; the slot and fee rules are listed in words, not as empty meters
+    expect(screen.getAllByTestId('policy-meter')).toHaveLength(2);
+    expect(screen.queryByText('Buys this slot')).toBeNull();
+    expect(screen.queryByText(/Priority fee \(µ-lamports\)/)).toBeNull();
+    expect(screen.queryByText(/Last buy slot/)).toBeNull();
+    expect(screen.getByTestId('policy-rules').textContent).toContain('priority fee above');
   });
 
-  it('shows only the limits that are on, and says the fee rule is disabled', () => {
+  it('shows only the limits that are on', () => {
     connect();
     renderCard({ config: { maxBuy: 0n, maxWallet: 0n, maxPriorityMicroLamports: 0n } });
-    expect(screen.getAllByTestId('policy-meter')).toHaveLength(1);
-    expect(screen.getByText('Priority fee rule disabled')).toBeTruthy();
+    expect(screen.queryAllByTestId('policy-meter')).toHaveLength(0);
+    expect(screen.getByTestId('policy-rules').textContent).not.toContain('priority fee above');
   });
 
   it('shows the ended state with no restrictions', () => {
@@ -143,10 +149,10 @@ describe('Fair Launch policy panel', () => {
     expect(screen.getByTestId('policy-phase').textContent).toMatch(/^Not started/);
   });
 
-  it('says buy restrictions do not apply to a sell', () => {
+  it('shows no buy banner for a sell, and no sell notice either', () => {
     connect();
     renderCard();
-    expect(screen.getByText('Fair Launch buy restrictions do not apply to this sell.')).toBeTruthy();
+    expect(screen.queryByText('Fair Launch buy restrictions do not apply to this sell.')).toBeNull();
     expect(screen.queryByText('BUY PROTECTIONS ACTIVE')).toBeNull();
   });
 

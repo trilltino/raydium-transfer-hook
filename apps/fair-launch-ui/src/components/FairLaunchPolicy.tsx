@@ -64,28 +64,20 @@ export function FairLaunchPolicy({ environment, tokenMint, config, counter, view
   return (
     <section className="card policy" aria-labelledby="policy-title">
       <h2 id="policy-title">Fair Launch policy</h2>
-      <p className={`policy-phase phase-${phase}`} data-testid="policy-phase">
-        {phase === 'active' && `Active${view?.secondsLeft != null ? ` · ${duration(view.secondsLeft)} remaining` : ''}`}
-        {phase === 'not-started' && `Not started${view?.secondsLeft != null ? ` · starts in ${duration(view.secondsLeft)}` : ''}`}
-        {phase === 'ended' && 'Fair Launch window ended'}
-      </p>
+      {phase !== 'active' && (
+        <p className={`policy-phase phase-${phase}`} data-testid="policy-phase">
+          {phase === 'not-started' && `Not started${view?.secondsLeft != null ? ` · starts in ${duration(view.secondsLeft)}` : ''}`}
+          {phase === 'ended' && 'Fair Launch window ended'}
+        </p>
+      )}
       {phase === 'ended' ? (
         <p className="muted">Transfers are no longer restricted by this policy.</p>
       ) : (
         <>
           {view?.isBuy && <p className="buy-banner">BUY PROTECTIONS ACTIVE</p>}
-          {view && !view.isBuy && phase === 'active' && (
-            <p className="muted">Fair Launch buy restrictions do not apply to this sell.</p>
-          )}
           <div className="meters">
             {config.maxBuy > 0n && meter('max-buy', 'Buy amount', config.maxBuy, tokens)}
             {config.maxWallet > 0n && meter('max-wallet', 'Wallet after', config.maxWallet, tokens)}
-            {config.maxBuysPerSlot > 0 && meter('buys-per-slot', 'Buys this slot', BigInt(config.maxBuysPerSlot), plain)}
-            {config.maxPriorityMicroLamports > 0n ? (
-              meter('priority-fee', 'Priority fee (µ-lamports)', config.maxPriorityMicroLamports, plain)
-            ) : (
-              <p className="muted">Priority fee rule disabled</p>
-            )}
           </div>
           {rules.length > 0 && (
             <div className="policy-rules" data-testid="policy-rules">
@@ -108,11 +100,6 @@ export function FairLaunchPolicy({ environment, tokenMint, config, counter, view
                 </div>
               )}
             </div>
-          )}
-          {counter && (
-            <p className="muted small">
-              Last buy slot {counter.slot.toString()} · {counter.buys} buy{counter.buys === 1 ? '' : 's'}
-            </p>
           )}
         </>
       )}
