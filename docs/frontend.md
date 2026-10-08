@@ -110,6 +110,28 @@ Above the meters the panel says, in words, what the launch enforces: the per-buy
 never restricted. Two buttons, **A buy inside the limits** and **A buy over the limit**, fill the swap box so you can press Swap and
 see the hook allow or refuse it. Which rules show is read from the launch's own config account, so a limit set to 0 does not appear.
 
+## Making a pool: demo pools and your own token
+
+Under the search bar of the home page there are two buttons.
+
+* **Create a demo pool.** Choose a hook (Fair Launch, Creator Commitment or Holder Rewards) and an AMM (CPMM or CLMM). The dev server runs
+  this repository's own pool command (`raydium-hook ui-fixture`, or `cargo xtask localnet ui-fixture` for a local validator) and
+  makes a new hooked token and a real pool of our forked Raydium, gives the connected wallet test tokens, and the page opens the pool when
+  it is done (about 20 seconds on a local validator, a minute or two on devnet). One pool at a time and one a minute per cluster.
+  It needs the pool admin's key, so it appears only where the dev server has it: `FAUCET_KEYPAIR` in `apps/fair-launch-ui/.env.local` for
+  devnet (and `.keys/cpmm-fee-receiver.json`), the committed fixture admin and a running validator for local. A devnet pool spends devnet SOL
+  from that key. Elsewhere the panel says what it needs.
+* **Bring your own token.** Paste a mint and the page reads whether it is a token, whether it has a Transfer Hook, and whether the pool
+  admin has approved it on CPMM and on CLMM (the approval record the admin's `raydium-hook mint approve` leaves behind). It prints the
+  commands that come next with your environment filled in (`mint approve`, `mint approval`), and the command that builds a token and a pool
+  around a hook program of your own: `raydium-hook e2e --hook-dir ./your-hook --keep-state pool.json`. It sends nothing.
+
+Why this is a developer-side tool: our forked Raydium refuses to create a pool containing a hooked token until the pool admin has
+approved that token, and only the admin key can. A browser wallet cannot give that approval, so a pool for your own token needs the admin
+(on our devnet that is the deployer key) whatever the page does. The tools also make the token and the pool together; there is no
+command that creates a pool around a token you already hold, so "bring your own" is "bring your own hook", and the pasted-mint check is for
+reading where it stands.
+
 ## Connecting a wallet
 
 **Connect wallet** opens a dialog that lists the wallets with their own logos (the wallets' own icons): Phantom and Solflare by name,

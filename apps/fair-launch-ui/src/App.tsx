@@ -1,6 +1,10 @@
+import type { HookEnvironment } from '@raydium-transfer-hook/client';
+import type { Connection } from '@solana/web3.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { readSelection, withParams } from './config.ts';
+import { BringYourOwnToken } from './components/BringYourOwnToken.tsx';
+import { CreateDemoPool } from './components/CreateDemoPool.tsx';
 import { Header } from './components/Header.tsx';
 import { SwapCard } from './components/SwapCard.tsx';
 import { usePool } from './hooks/usePool.ts';
@@ -41,7 +45,14 @@ export function App() {
             {selection.pool.error}
           </p>
         )}
-        {state.status === 'none' && !(selection.pool && 'error' in selection.pool) && <PoolPicker onOpen={(pool) => navigate({ pool })} />}
+        {state.status === 'none' && !(selection.pool && 'error' in selection.pool) && (
+            <PoolPicker
+              environment={environment}
+              connection={connection}
+              wallet={publicKey?.toBase58() ?? null}
+              onOpen={(pool) => navigate({ pool })}
+            />
+          )}
         {raydiumError && (
           <p className="notice notice-error" role="alert">
             Could not initialise Raydium SDK: {raydiumError}
@@ -79,7 +90,17 @@ export function App() {
   );
 }
 
-function PoolPicker({ onOpen }: { onOpen: (pool: string) => void }) {
+function PoolPicker({
+  environment,
+  connection,
+  wallet,
+  onOpen,
+}: {
+  environment: HookEnvironment;
+  connection: Connection;
+  wallet: string | null;
+  onOpen: (pool: string) => void;
+}) {
   const [value, setValue] = useState('');
   return (
     <section className="card picker" aria-labelledby="picker-title">
@@ -101,6 +122,10 @@ function PoolPicker({ onOpen }: { onOpen: (pool: string) => void }) {
       <button type="button" className="btn btn-primary" disabled={value.trim() === ''} onClick={() => onOpen(value.trim())}>
         Open pool
       </button>
+      <div className="picker-actions">
+        <CreateDemoPool environment={environment} wallet={wallet} onOpen={onOpen} />
+        <BringYourOwnToken environment={environment} connection={connection} />
+      </div>
     </section>
   );
 }

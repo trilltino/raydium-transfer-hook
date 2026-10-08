@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 import { type Plugin, type ProxyOptions, defineConfig, loadEnv } from 'vite';
 import { PublicKey } from '@solana/web3.js';
 import { connectionFor, faucetFor, fundWallet, readKeypair } from './scripts/faucet-core.mjs';
+import { createJobs, poolsFor } from './scripts/pools-core.mjs';
 
 /**
  * `/faucet` for the dev and preview servers: mint a pool's test tokens into a wallet. The mint authority's
@@ -68,6 +69,50 @@ function faucet(env: Record<string, string>): Plugin {
   };
 }
 
+/**
+ * `/pools` for the dev and preview servers: create a demo pool (a new hooked token and a real pool of our forked Raydium)
+ * by running this repository's own command, and report how it is going. Loopback callers only; see `scripts/pools-core.mjs`.
+ */
+function pools(env: Record<string, string>): Plugin {
+  const jobs = createJobs();
+  const send = (res: ServerResponse, status: number, body: unknown) => {
+    res.statusCode = status;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify(body));
+  };
+  const handler = (req: IncomingMessage, res: ServerResponse) => {
+    const remote = req.socket.remoteAddress ?? '';
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remote)) return send(res, 403, { error: 'this answers this machine only' });
+    const path = (req.url ?? '/').split('?')[0];
+    if (req.method === 'GET' && (path === '/' || path === '')) return send(res, 200, { devnet: poolsFor('devnet', env) !== null, localnet: poolsFor('localnet', env) !== null });
+    if (req.method === 'GET') {
+      const job = jobs.view(path.replace(/^\//, ''));
+      return job ? send(res, 200, job) : send(res, 404, { error: 'no such pool run' });
+    }
+    if (req.method !== 'POST') return send(res, 405, { error: 'GET or POST only' });
+    let text = '';
+    req.on('data', (chunk) => {
+      text += chunk;
+    });
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(text) as { cluster?: string; hook?: string; amm?: string; wallet?: string };
+        if (!body.wallet) return send(res, 400, { error: 'send the wallet that should receive the tokens' });
+        new PublicKey(body.wallet);
+        const started = jobs.start({ cluster: body.cluster ?? '', hook: body.hook ?? '', amm: body.amm ?? '', wallet: body.wallet }, env);
+        return send(res, 'error' in started ? 429 : 202, started);
+      } catch (error) {
+        return send(res, 400, { error: error instanceof Error ? error.message : String(error) });
+      }
+    });
+  };
+  return {
+    name: 'pools',
+    configureServer: (server) => void server.middlewares.use('/pools', handler),
+    configurePreviewServer: (server) => void server.middlewares.use('/pools', handler),
+  };
+}
+
 export default defineConfig(({ mode }) => {
   // `TRITON_DEVNET_RPC_URL` (no `VITE_` prefix, so Vite never exposes it to the page) lives in the ignored
   // `.env.local`. The dev server forwards `/triton/devnet` to it, token and all, so the browser can read devnet
@@ -85,7 +130,7 @@ export default defineConfig(({ mode }) => {
       }
     : {};
   return {
-    plugins: [react(), faucet(env)],
+    plugins: [react(), faucet(env), pools(env)],
     define: { global: 'globalThis', __TRITON_DEVNET_PROXY__: JSON.stringify(triton !== null) },
     server: { host: '127.0.0.1', port: 5173, strictPort: true, proxy: tritonProxy },
     preview: { proxy: tritonProxy },

@@ -764,3 +764,44 @@ a.mono:hover {
 .rule-skipped .rule-mark {
   color: var(--dim);
 }
+
+.picker-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.picker-action {
+  display: grid;
+  gap: 10px;
+}
+.picker-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.picker-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.picker-fields .grow {
+  flex: 1 1 220px;
+}
+.picker-log pre,
+.command pre {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border-radius: 6px;
+  background: var(--field);
+}
+.token-check {
+  display: grid;
+  gap: 8px;
+}
