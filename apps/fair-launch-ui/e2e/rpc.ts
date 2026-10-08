@@ -82,6 +82,26 @@ export async function tokenBalance(account: string): Promise<bigint> {
   }
 }
 
+/** What `owner` holds of `mint` in all its token accounts (0 if it has none). */
+export async function ownedBalance(owner: string, mint: string): Promise<bigint> {
+  const result = await rpc<{ value: { account: { data: { parsed: { info: { tokenAmount: { amount: string } } } } } }[] }>(
+    'getTokenAccountsByOwner',
+    [owner, { mint }, { encoding: 'jsonParsed', commitment: 'confirmed' }]
+  );
+  return result.value.reduce((sum, entry) => sum + BigInt(entry.account.data.parsed.info.tokenAmount.amount), 0n);
+}
+
+/** Give an address SOL on the local validator (devnet has its own faucet) and wait until it shows. */
+export async function airdrop(address: string, lamports: number): Promise<void> {
+  await rpc<string>('requestAirdrop', [address, lamports]);
+  for (let i = 0; i < 60; i += 1) {
+    const { value } = await rpc<{ value: number }>('getBalance', [address, { commitment: 'confirmed' }]);
+    if (value >= lamports) return;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error('the airdrop did not arrive');
+}
+
 export async function signatureCount(address: string): Promise<number> {
   const result = await rpc<unknown[]>('getSignaturesForAddress', [address, { limit: 1000, commitment: 'confirmed' }]);
   return result.length;

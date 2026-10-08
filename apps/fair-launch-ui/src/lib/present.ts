@@ -85,6 +85,17 @@ export function presentSimulationFailure(failure: HookFailure, context: PresentC
       raw,
     };
   }
+  // The runtime says AccountNotFound when the fee payer has no account on the network at all: the wallet has no SOL here.
+  if (/AccountNotFound/.test(failure.message)) {
+    return {
+      source: 'network',
+      title: 'Your wallet has no SOL on this network',
+      reason:
+        'The network has no account for your wallet, so it cannot pay the transaction fee. Check that your wallet is set to the same network as this page (Devnet) and that it holds some SOL there.',
+      notSubmitted: true,
+      raw,
+    };
+  }
   return {
     source: 'network',
     title: subject === 'swap' ? 'The swap could not be simulated' : 'The transaction could not be simulated',

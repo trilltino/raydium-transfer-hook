@@ -13,6 +13,7 @@ import type { PoolContext } from '../lib/chain.ts';
 import { type KnownHook, hookSummary, hookedToken } from '../lib/hooks.ts';
 import { CreatorCommitmentPolicy, type FloorCheck } from './CreatorCommitmentPolicy.tsx';
 import { DeveloperDetails } from './DeveloperDetails.tsx';
+import { TestTokens } from './TestTokens.tsx';
 import { HolderRewardsPanel } from './HolderRewardsPanel.tsx';
 import { FairLaunchPolicy, protectionCount } from './FairLaunchPolicy.tsx';
 import { SwapSummary } from './SwapSummary.tsx';
@@ -60,9 +61,11 @@ export interface SwapCardProps {
   onSwapped: () => void;
   /** When the page was last loaded, for the price-freshness row. */
   loadedAt: number;
+  /** Read the balances again after the faucet minted tokens. */
+  onFunded?: () => void;
 }
 
-export function SwapCard({ environment, connection, context, balances, reload, onSwapped, loadedAt }: SwapCardProps) {
+export function SwapCard({ environment, connection, context, balances, reload, onSwapped, loadedAt, onFunded }: SwapCardProps) {
   const { connected, publicKey } = useWallet();
   const now = useNow();
   const pool = context.pool;
@@ -225,6 +228,15 @@ export function SwapCard({ environment, connection, context, balances, reload, o
               This sale would leave the creator account below its vesting floor. The on-chain hook will reject it.
             </p>
           )}
+          {connected && publicKey && (
+            <TestTokens
+              environment={environment}
+              connection={connection}
+              wallet={publicKey}
+              tokens={[pool.tokenA, pool.tokenB]}
+              onFunded={onFunded ?? onSwapped}
+            />
+          )}
           <button
             type="button"
             className="btn btn-primary btn-wide"
@@ -250,6 +262,15 @@ export function SwapCard({ environment, connection, context, balances, reload, o
             decimals={(context.launch.hookedSide === 'A' ? pool.tokenA : pool.tokenB).decimals}
             hookProgramId={hookProgram}
             tokenLabel={hookedMint ? shortKey(hookedMint.toBase58()) : ''}
+            onTry={(kind) => {
+              if (!hooked) return;
+              // A buy takes the hooked token out of the pool, so the other token goes in.
+              setInputIsA(hooked.side === 'B');
+              const limit = context.launch?.config.maxBuy ?? 0n;
+              const amount = kind === 'over-limit' ? (limit * 3n) / 2n : limit / 10n > 0n ? limit / 10n : 1n;
+              const decimals = hooked.side === 'A' ? pool.tokenB.decimals : pool.tokenA.decimals;
+              setText(toInputText(amount, decimals));
+            }}
           />
         )}
         {context.commitment && (
@@ -273,7 +294,14 @@ export function SwapCard({ environment, connection, context, balances, reload, o
             onChanged={onSwapped}
           />
         )}
-        <DeveloperDetails environment={environment} context={context} outcome={outcome} />
+        <DeveloperDetails
+          environment={environment}
+          context={context}
+          outcome={outcome}
+          wallet={publicKey?.toBase58() ?? null}
+          balances={balances}
+          labelOf={labelOf}
+        />
       </div>
     </div>
   );

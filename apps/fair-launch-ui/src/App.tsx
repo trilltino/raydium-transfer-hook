@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { ENVIRONMENT_LIST, readSelection, withParams } from './config.ts';
-import { ExperimentalBanner } from './components/EnvironmentBadge.tsx';
+import { readSelection, withParams } from './config.ts';
 import { Header } from './components/Header.tsx';
 import { SwapCard } from './components/SwapCard.tsx';
 import { usePool } from './hooks/usePool.ts';
@@ -35,12 +34,7 @@ export function App() {
 
   return (
     <>
-      <Header
-        environment={environment}
-        environments={ENVIRONMENT_LIST}
-        onEnvironmentChange={(name) => navigate({ env: name, pool: null })}
-      />
-      <ExperimentalBanner />
+      <Header environment={environment} />
       <main className="page">
         {selection.pool && 'error' in selection.pool && (
           <p className="notice notice-error" role="alert">

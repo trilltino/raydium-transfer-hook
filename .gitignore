@@ -22,3 +22,8 @@ apps/fair-launch-ui/dist/
 apps/fair-launch-ui/test-results/
 apps/fair-launch-ui/playwright-report/
 node_modules/
+
+# local secrets (the Triton endpoint for the UI trace lives in apps/fair-launch-ui/.env.local)
+.env
+.env.local
+.env.*.local

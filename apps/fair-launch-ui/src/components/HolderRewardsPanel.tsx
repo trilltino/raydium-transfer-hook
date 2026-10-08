@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useNow } from '../hooks/useNow.ts';
 import { useRewardsAccount } from '../hooks/useRewardsAccount.ts';
 import { explorerUrl } from '../config.ts';
+import { TransactionTrace } from './TransactionTrace.tsx';
 import { formatAmount } from '../lib/amounts.ts';
 import type { PoolContext, RewardsState } from '../lib/chain.ts';
 import { hookProgramId } from '../lib/hooks.ts';
@@ -183,12 +184,15 @@ export function HolderRewardsPanel({ environment, connection, context, rewards, 
 function ActionResult({ environment, outcome, action }: { environment: HookEnvironment; outcome: TransactionOutcome; action: Action }) {
   if (outcome.status === 'success') {
     return (
-      <div className="status status-ok" role="status" data-testid="action-status">
-        <strong>{action === 'register' ? 'Registered' : 'Rewards claimed'}</strong>
-        <a href={explorerUrl(environment, 'tx', outcome.signature)} target="_blank" rel="noreferrer" className="mono wrap">
-          {outcome.signature}
-        </a>
-      </div>
+      <>
+        <div className="status status-ok" role="status" data-testid="action-status">
+          <strong>{action === 'register' ? 'Registered' : 'Rewards claimed'}</strong>
+          <a href={explorerUrl(environment, 'tx', outcome.signature)} target="_blank" rel="noreferrer" className="mono wrap">
+            {outcome.signature}
+          </a>
+        </div>
+        <TransactionTrace environment={environment} signature={outcome.signature} />
+      </>
     );
   }
   return (

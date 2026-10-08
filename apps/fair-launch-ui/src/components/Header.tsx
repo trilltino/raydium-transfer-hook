@@ -2,9 +2,7 @@ import type { HookEnvironment } from '@raydium-transfer-hook/client';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { shortKey } from '../lib/amounts.ts';
 import { EnvironmentBadge } from './EnvironmentBadge.tsx';
-
-const DOCS_URL = 'https://github.com/trilltino/raydium-transfer-hook/blob/main/docs/frontend.md';
-const REPO_URL = 'https://github.com/trilltino/raydium-transfer-hook';
+import { RaydiumMark } from './RaydiumMark.tsx';
 
 export function WalletButton() {
   const { wallets, wallet, publicKey, connected, connecting, select, connect, disconnect } = useWallet();
@@ -37,45 +35,18 @@ export function WalletButton() {
 
 export interface HeaderProps {
   environment: HookEnvironment;
-  environments: readonly HookEnvironment[];
-  onEnvironmentChange: (name: string) => void;
 }
 
-export function Header({ environment, environments, onEnvironmentChange }: HeaderProps) {
+export function Header({ environment }: HeaderProps) {
   return (
     <header className="header">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true" />
+        <RaydiumMark />
         <span className="brand-name">Raydium Transfer Hooks</span>
       </div>
-      <nav className="nav" aria-label="Primary">
-        <a href="#swap" aria-current="page">
-          Swap
-        </a>
-        <a href={DOCS_URL} target="_blank" rel="noreferrer">
-          Docs
-        </a>
-        <a href={REPO_URL} target="_blank" rel="noreferrer">
-          GitHub
-        </a>
-      </nav>
+      <div className="nav" />
       <div className="header-actions">
-        <label className="visually-hidden" htmlFor="environment">
-          Environment
-        </label>
-        <select
-          id="environment"
-          className="select"
-          value={environment.name}
-          onChange={(event) => onEnvironmentChange(event.target.value)}
-        >
-          {environments.map((entry) => (
-            <option key={entry.name} value={entry.name}>
-              {entry.name}
-            </option>
-          ))}
-        </select>
-        <EnvironmentBadge name={environment.name} />
+        <EnvironmentBadge cluster={environment.cluster} />
         <WalletButton />
       </div>
     </header>

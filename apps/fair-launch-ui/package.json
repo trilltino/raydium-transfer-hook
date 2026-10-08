@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "pretest": "npm run generate",
-    "pretypecheck": "npm run generate"
+    "pretypecheck": "npm run generate",
+    "fund": "node scripts/fund-wallet.mjs"
   },
   "dependencies": {
     "@raydium-io/raydium-sdk-v2": "0.2.73-alpha",

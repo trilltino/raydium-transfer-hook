@@ -3,6 +3,9 @@ import { getExtraAccountMetaAddress } from '@solana/spl-token';
 import type { PublicKey } from '@solana/web3.js';
 import { explorerUrl } from '../config.ts';
 import type { PoolContext } from '../lib/chain.ts';
+import type { Balances } from '../hooks/useWalletBalances.ts';
+import { formatAmount } from '../lib/amounts.ts';
+import { fundCommand } from '../lib/faucet-client.ts';
 import type { SwapOutcome } from '../lib/run-swap.ts';
 
 function validationPda(mint: PublicKey, hook: PublicKey): string {
@@ -17,6 +20,10 @@ export interface DeveloperDetailsProps {
   environment: HookEnvironment;
   context: PoolContext | null;
   outcome: SwapOutcome | null;
+  /** The connected wallet, if any, and what it holds of the pool's two tokens. */
+  wallet?: string | null;
+  balances?: Balances | null;
+  labelOf?: (mint: PublicKey) => string;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -29,7 +36,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 /** Collapsed by default. Shows exactly what the transaction layer did, so the page doubles as documentation. */
-export function DeveloperDetails({ environment, context, outcome }: DeveloperDetailsProps) {
+export function DeveloperDetails({ environment, context, outcome, wallet = null, balances = null, labelOf }: DeveloperDetailsProps) {
   const details = outcome?.details;
   const prepared = details?.prepared;
   const hooked = context
@@ -59,6 +66,7 @@ export function DeveloperDetails({ environment, context, outcome }: DeveloperDet
               ? `${context.pool.kind.toUpperCase()}  ${context.adapter.instruction}`
               : '—'}
         </Row>
+        <Row label="Your tokens">{yourTokens(environment, context, wallet, balances, labelOf)}</Row>
         <Row label="Transaction version">v0</Row>
         <Row label="Simulation compute">
           {details?.simulation?.unitsConsumed != null ? `${details.simulation.unitsConsumed} units` : '—'}
@@ -77,4 +85,24 @@ export function DeveloperDetails({ environment, context, outcome }: DeveloperDet
       </dl>
     </details>
   );
+}
+
+/** What the page knows about the wallet before anything is clicked, and what to do when it holds nothing. */
+function yourTokens(
+  environment: HookEnvironment,
+  context: PoolContext | null,
+  wallet: string | null,
+  balances: Balances | null,
+  labelOf?: (mint: PublicKey) => string
+): string {
+  if (!context) return '—';
+  if (!wallet) return 'No wallet connected, so no balances. Connect one to see what it holds of this pool’s two tokens.';
+  if (!balances) return 'Reading this wallet’s balances…';
+  const { tokenA, tokenB } = context.pool;
+  const label = (mint: PublicKey) => (labelOf ? labelOf(mint) : `${mint.toBase58().slice(0, 4)}…${mint.toBase58().slice(-4)}`);
+  const held = `${formatAmount(balances.a, tokenA.decimals)} ${label(tokenA.mint)} and ${formatAmount(balances.b, tokenB.decimals)} ${label(tokenB.mint)}`;
+  if (balances.a === 0n && balances.b === 0n) {
+    return `${held}. This wallet holds none of this pool’s tokens, so there is nothing to swap yet. Click “Get test tokens” (it mints 100 of each from the dev server’s faucet), or run: ${fundCommand(environment, wallet, context.pool.poolId.toBase58())}`;
+  }
+  return held;
 }

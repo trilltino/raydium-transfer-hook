@@ -1,6 +1,7 @@
 import { EXPERIMENTAL_NOTICE, type HookEnvironment } from '@raydium-transfer-hook/client';
 import { ENVIRONMENTS } from './generated/environments.ts';
 import { type PoolCheck, parsePoolParam } from './lib/pool.ts';
+import { solscanUrl } from './lib/solscan.ts';
 
 export { EXPERIMENTAL_NOTICE };
 
@@ -38,9 +39,6 @@ export type { PoolCheck };
 /** The browser test wallet exists only in builds made with `VITE_E2E=1`; a normal build contains no key handling. */
 export const E2E_BUILD = import.meta.env.VITE_E2E === '1';
 
-export const explorerUrl = (environment: HookEnvironment, kind: 'tx' | 'address', value: string): string => {
-  const base = `https://explorer.solana.com/${kind}/${value}`;
-  return environment.cluster === 'devnet'
-    ? `${base}?cluster=devnet`
-    : `${base}?cluster=custom&customUrl=${encodeURIComponent(environment.rpcUrl)}`;
-};
+/** Every link to the chain goes to Solscan (see `lib/solscan.ts`). */
+export const explorerUrl = (environment: HookEnvironment, kind: 'tx' | 'address', value: string): string =>
+  solscanUrl(environment, kind === 'tx' ? 'tx' : 'account', value);

@@ -29,10 +29,12 @@ beforeEach(() => {
 });
 
 describe('App', () => {
-  it('always says the environment is experimental and not Raydium', () => {
+  it('is a devnet page: a network label and the Raydium mark, no environment switch and no banner', () => {
     open('');
-    expect(screen.getByText('Experimental Raydium Transfer Hook environment')).toBeTruthy();
-    expect(screen.getByText('Not an official Raydium deployment')).toBeTruthy();
+    expect(screen.getByText('Devnet')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Raydium' })).toBeTruthy();
+    expect(screen.queryByLabelText('Environment')).toBeNull();
+    expect(screen.queryByText(/Experimental Raydium Transfer Hook environment/)).toBeNull();
   });
 
   it('offers a pool picker when no pool is given', () => {
@@ -62,11 +64,5 @@ describe('App', () => {
     poolState.current = { status: 'error', message: 'fetch pool info error' };
     open(`?pool=${key(1).toBase58()}`);
     expect(screen.getByRole('alert').textContent).toContain('fetch pool info error');
-  });
-
-  it('lists only localnet and integration devnet', () => {
-    open('');
-    const options = Array.from(document.querySelectorAll('#environment option')).map((option) => option.textContent);
-    expect(options).toEqual(['localnet', 'integration-devnet']);
   });
 });

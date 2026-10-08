@@ -113,11 +113,10 @@ a {
   gap: 10px;
   font-weight: 700;
 }
-.brand-mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--brand-gradient);
+.raydium-mark {
+  width: 31px;
+  height: 36px;
+  flex: 0 0 auto;
 }
 .nav {
   display: flex;
@@ -296,16 +295,18 @@ input.amount {
   padding: 0 18px;
   border-radius: var(--radius);
   border: 1px solid var(--border-strong);
-  background: var(--surface-3);
+  background: transparent;
   color: var(--text);
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
 }
 .btn-primary {
-  border: 0;
-  background: var(--brand-gradient);
-  box-shadow: 0 0 22px rgba(81, 120, 255, 0.35);
+  background: transparent;
+  border-color: var(--cyan);
+}
+.btn-primary:hover:not(:disabled) {
+  background: rgba(47, 211, 230, 0.1);
 }
 .btn-ghost {
   background: transparent;
@@ -506,4 +507,114 @@ input.amount {
 }
 .developer[open] summary::after {
   content: '▴';
+}
+
+/* Transaction trace */
+.trace-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.trace-head h3 {
+  margin: 0;
+}
+.trace-summary,
+.trace-hooks {
+  margin: 8px 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.trace-hooks {
+  color: var(--cyan);
+}
+.trace-steps {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.trace-step {
+  border-left: 2px solid var(--border-strong);
+  padding: 4px 0 4px 10px;
+}
+.trace-step.trace-hook {
+  border-left-color: var(--cyan);
+}
+.trace-step.trace-failed {
+  border-left-color: var(--red);
+}
+.trace-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.trace-number {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.trace-program {
+  font-weight: 600;
+}
+.trace-instruction,
+.trace-cu {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.trace-badge {
+  color: var(--red);
+  font-size: 0.8rem;
+}
+.trace-more summary {
+  cursor: pointer;
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+.trace-accounts {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 0.8rem;
+}
+.trace-more pre {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 6px 0 0;
+}
+
+.test-tokens {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.policy-rules h3 {
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+}
+.policy-rules ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.policy-try {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.test-tokens-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
 }

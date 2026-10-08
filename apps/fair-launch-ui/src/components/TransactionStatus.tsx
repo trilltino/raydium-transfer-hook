@@ -1,5 +1,6 @@
 import type { HookEnvironment } from '@raydium-transfer-hook/client';
 import { explorerUrl } from '../config.ts';
+import { TransactionTrace } from './TransactionTrace.tsx';
 import type { SwapState } from '../hooks/useHookAwareSwap.ts';
 
 const PHASE_TEXT: Record<string, string> = {
@@ -21,12 +22,15 @@ export function TransactionStatus({ state, environment }: { state: SwapState; en
   const { outcome } = state;
   if (outcome.status === 'success') {
     return (
-      <div className="status status-ok" role="status" aria-live="polite" data-testid="tx-status">
-        <strong>Swap confirmed</strong>
-        <a href={explorerUrl(environment, 'tx', outcome.signature)} target="_blank" rel="noreferrer" className="mono wrap">
-          {outcome.signature}
-        </a>
-      </div>
+      <>
+        <div className="status status-ok" role="status" aria-live="polite" data-testid="tx-status">
+          <strong>Swap confirmed</strong>
+          <a href={explorerUrl(environment, 'tx', outcome.signature)} target="_blank" rel="noreferrer" className="mono wrap">
+            {outcome.signature}
+          </a>
+        </div>
+        <TransactionTrace environment={environment} signature={outcome.signature} />
+      </>
     );
   }
   const { failure } = outcome;

@@ -2,7 +2,8 @@
 
 A small web app that swaps a hooked token on a hook-aware Raydium deployment and shows the hook
 allow or refuse the trade. It is a reference and a pattern to copy, not the Raydium app, and it
-talks only to **our** experimental deployments (localnet and integration devnet), never to
+talks only to **our** experimental devnet deployment (and, for the browser tests and development, a local
+validator), never to
 Raydium's.
 
 ```text
@@ -58,7 +59,9 @@ the built programs. It can also run against our integration devnet (`E2E_ENV=dev
 needs the deployer key in `.keys/` (pool creation is admin-only) and a fraction of a SOL, and it was run
 that way once; the deterministic CI run uses the local validator only.
 
-The page lists only `localnet` and `integration-devnet`. There is no official-Raydium mode: Raydium's
+The page is a devnet page: it shows a "Devnet" label and has no environment switch. A local validator is reached
+only by opening the page with `?env=localnet`, which is how the browser tests and local development use it. There is no
+official-Raydium mode: Raydium's
 own programs do not contain the hook-aware instructions.
 
 ## How the Raydium SDK is used, and why the swap is built separately
@@ -102,6 +105,86 @@ declared priority fee. A meter turns red and a warning appears before signing wh
 rule. The warning is advisory: the Swap button stays enabled so the simulation, which runs the real hook,
 has the last word. Outside the window the panel says so and shows no meters.
 
+Above the meters the panel says, in words, what the launch enforces: the per-buy size, the wallet cap, the buys-per-slot limit
+("a bundle with more is refused as a whole", the anti-bundle rule), the priority-fee limit (anti-snipe), and that selling is
+never restricted. Two buttons, **A buy inside the limits** and **A buy over the limit**, fill the swap box so you can press Swap and
+see the hook allow or refuse it. Which rules show is read from the launch's own config account, so a limit set to 0 does not appear.
+
+## Getting tokens into a wallet
+
+A wallet needs some of the pool's tokens (and SOL, for fees) before it can swap. **Developer details has a "Your tokens"
+line that says what the wallet holds before you click anything**, and, when it holds none of the pool's tokens, what to do
+about it. There are three ways to get tokens, and none puts a key in the browser:
+
+* **You made the token: "Mint 100 to my wallet".** If the connected wallet is the mint authority of a token in the pool, the
+  page builds the mint, simulates it, and your wallet signs it. This is how the creator of any custom hooked token funds
+  themselves; no server is involved.
+* **Our demo tokens: "Get test tokens".** The dev server mints 100 of each demo token into the wallet with the key that
+  created them (`FAUCET_KEYPAIR` in `apps/fair-launch-ui/.env.local`; a local validator uses the committed fixture admin). It
+  only answers this machine, once every few seconds per wallet, and a static build has no such route. It mints only tokens whose
+  mint authority is that key; for any other token it says why it skipped it.
+* **From a terminal:** `npm --workspace apps/fair-launch-ui run fund -- <WALLET> --pool <POOL> --cluster devnet` does the
+  same as the server button (`--mint <MINT>` instead of `--pool` names the tokens directly).
+
+A trader who is not the mint authority gets a launch's tokens by buying them in the pool, which is the point of the page. A
+token whose mint authority has been given up (Holder Rewards does that) cannot be minted by anyone.
+
+A swap from a wallet with no SOL on the network says "Your wallet has no SOL on this network" (the runtime's own
+`AccountNotFound`), not the raw error; nothing is submitted.
+
+## Transaction trace (Triton One, Solscan)
+
+After a swap (or a Register / Claim) lands, the page shows a **Transaction trace** card: every program the
+transaction ran, in the order the runtime ran them and nested as they called each other, each with its compute, its
+accounts and its logs.
+
+![The trace card after a hooked swap](images/fair-launch-ui-trace.png)
+
+For a hooked CLMM swap on devnet it reads:
+
+```text
+1  Compute Budget                    set_compute_unit_limit
+2  Raydium CLMM (hook-aware fork)    swap_v3                  109,176 CU
+3    Token-2022                      transfer_checked          34,473 CU   amount: 10
+4      Transfer Hook Cz3G…Q11X       Execute (Transfer Hook)   16,643 CU
+5    Token-2022                      transfer_checked           1,911 CU
+Transfer Hook Cz3G…Q11X ran 1 time
+```
+
+Each step links its program to Solscan, every account it named is a Solscan link, and the card links the transaction.
+All links to the chain on this page go to Solscan (devnet with `?cluster=devnet`; a local validator through Solscan's
+custom-RPC mode).
+
+**It is standalone: this app reads the transaction itself.** The page calls `getTransaction` (`jsonParsed`) and rebuilds
+the call tree from the runtime's log lines: the n-th program invocation in the logs is the n-th instruction in the
+transaction's outer-then-inner instruction list, and the `invoke [depth]` lines give the nesting. The idea is the one
+`raydium_debugger` uses for its execution tree; no code or server from that project is needed (`src/lib/trace.ts`).
+
+**Our Triton One endpoint** goes in `apps/fair-launch-ui/.env.local`, which is git-ignored (copy
+[`.env.example`](../apps/fair-launch-ui/.env.example)):
+
+```sh
+TRITON_DEVNET_RPC_URL=https://<your-endpoint>.devnet.rpcpool.com/<x-token>
+```
+
+The Vite dev server (and `vite preview`) forwards `/triton/devnet` to that URL on the server side, token and all.
+The variable has no `VITE_` prefix on purpose, so Vite never copies it into the page, and **the browser never holds the
+URL**. Without it the card reads devnet through the public devnet RPC, and a local validator is read from its own RPC. A
+static build served without the dev server has no proxy, so it uses the public RPC; put a server-side proxy in front
+of Triton if you deploy it.
+
+The card says where it read from ("Triton One (devnet)", "public devnet RPC" or "local validator"). A fresh signature can
+take a moment to reach the RPC, so the page asks up to six times before it reports that it has not seen it.
+
+The decoding is limited to what is in the transaction: Token-2022 and System instructions arrive decoded, our programs'
+instructions are named by their discriminators (the swaps, the hook's `Execute`, the holder-rewards Register and Claim),
+and anything else shows its program and logs only. Other things Triton offers could improve it, notably browser
+WebSockets for live status and its priority-fee percentiles; neither is built.
+
+The trace is covered by unit tests against a real `getTransaction` answer from our Triton devnet endpoint
+(`test/data/clmm-swap.json`) and by a browser test that swaps and checks the steps, the hook run count and the links, on a
+local validator in CI and, with `E2E_ENV=devnet`, on devnet through Triton.
+
 ## Copying the pattern for another hook
 
 Keep `packages/transfer-hook-client` and the transaction layer (`src/lib/swap.ts`, `run-swap.ts`) and
@@ -112,7 +195,7 @@ the vesting progress; Holder Rewards adds registered / earned / claimable and Re
 
 ## Limits
 
-* Experimental deployments only; no mainnet and no official Raydium.
+* Our experimental devnet deployment only (plus a local validator by `?env=localnet`); no mainnet and no official Raydium.
 * CPMM and CLMM exact-input swaps. Exact-output swaps and liquidity operations are not in the UI.
 * Wrapped SOL is not handled; use two SPL tokens.
 * Only the three example hooks (fair-launch, creator-commitment, holder-rewards) have a decoder and a panel.

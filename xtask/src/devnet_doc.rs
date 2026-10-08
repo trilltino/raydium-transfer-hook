@@ -54,14 +54,14 @@ impl Links {
             &signature[signature.len().saturating_sub(6)..]
         );
         format!(
-            "[`{short}`](https://explorer.solana.com/tx/{signature}?cluster={})",
+            "[`{short}`](https://solscan.io/tx/{signature}?cluster={})",
             self.cluster
         )
     }
 
     fn account(&self, key: &str) -> String {
         format!(
-            "[`{key}`](https://explorer.solana.com/address/{key}?cluster={})",
+            "[`{key}`](https://solscan.io/account/{key}?cluster={})",
             self.cluster
         )
     }

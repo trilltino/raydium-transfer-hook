@@ -10,6 +10,8 @@ export interface FairLaunchPolicyProps {
   decimals: number;
   hookProgramId: string;
   tokenLabel: string;
+  /** Fill the swap box with a buy that is inside the limits, or one over the per-buy limit, to see the hook's answer. */
+  onTry?: (kind: 'allowed' | 'over-limit') => void;
 }
 
 function duration(seconds: bigint): string {
@@ -26,7 +28,7 @@ export function protectionCount(config: FairLaunchConfig): number {
     .length;
 }
 
-export function FairLaunchPolicy({ config, counter, view, decimals, hookProgramId, tokenLabel }: FairLaunchPolicyProps) {
+export function FairLaunchPolicy({ config, counter, view, decimals, hookProgramId, tokenLabel, onTry }: FairLaunchPolicyProps) {
   const phase = view?.phase ?? 'active';
   const rowFor = (rule: string) => view?.rows.find((row) => row.rule === rule);
   const meter = (rule: 'max-buy' | 'max-wallet' | 'buys-per-slot' | 'priority-fee', label: string, limit: bigint, unit: (v: bigint) => string) => {
@@ -44,6 +46,16 @@ export function FairLaunchPolicy({ config, counter, view, decimals, hookProgramI
   };
   const tokens = (v: bigint) => formatAmount(v, decimals);
   const plain = (v: bigint) => v.toString();
+  // What each switched-on rule means, in words: the page shows numbers, this says what they are for.
+  const rules: { key: string; text: string }[] = [];
+  if (config.maxBuy > 0n) rules.push({ key: 'max-buy', text: `No single buy may take more than ${tokens(config.maxBuy)} ${tokenLabel}, so one sniper cannot sweep the launch in a trade.` });
+  if (config.maxWallet > 0n) rules.push({ key: 'max-wallet', text: `No wallet may hold more than ${tokens(config.maxWallet)} ${tokenLabel} after a buy.` });
+  if (config.maxBuysPerSlot > 0) {
+    rules.push({ key: 'per-slot', text: `At most ${config.maxBuysPerSlot} buys per slot, across every pool of this token: a bundle with more is refused as a whole.` });
+  }
+  if (config.maxPriorityMicroLamports > 0n) {
+    rules.push({ key: 'priority', text: `A buy that pays a priority fee above ${config.maxPriorityMicroLamports.toString()} µ-lamports per compute unit is refused, so fee wars do not decide who gets in.` });
+  }
 
   return (
     <section className="card policy" aria-labelledby="policy-title">
@@ -71,6 +83,28 @@ export function FairLaunchPolicy({ config, counter, view, decimals, hookProgramI
               <p className="muted">Priority fee rule disabled</p>
             )}
           </div>
+          {rules.length > 0 && (
+            <div className="policy-rules" data-testid="policy-rules">
+              <h3>What this launch enforces</h3>
+              <ul>
+                {rules.map((rule) => (
+                  <li key={rule.key}>{rule.text}</li>
+                ))}
+                <li>Selling is never restricted.</li>
+              </ul>
+              {onTry && config.maxBuy > 0n && (
+                <div className="policy-try">
+                  <span className="muted small">Try it, then press Swap:</span>
+                  <button type="button" className="btn btn-ghost" onClick={() => onTry('allowed')}>
+                    A buy inside the limits
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => onTry('over-limit')}>
+                    A buy over the limit
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {counter && (
             <p className="muted small">
               Last buy slot {counter.slot.toString()} · {counter.buys} buy{counter.buys === 1 ? '' : 's'}

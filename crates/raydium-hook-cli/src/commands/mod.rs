@@ -17,8 +17,8 @@ use crate::args::{keypair, Flags, Res};
 
 pub(crate) fn explorer(env: &Environment, signature: &str) -> String {
     match env.cluster.as_str() {
-        "devnet" => format!("https://explorer.solana.com/tx/{signature}?cluster=devnet"),
-        "mainnet-beta" => format!("https://explorer.solana.com/tx/{signature}"),
+        "devnet" => format!("https://solscan.io/tx/{signature}?cluster=devnet"),
+        "mainnet-beta" => format!("https://solscan.io/tx/{signature}"),
         _ => signature.to_string(),
     }
 }
