@@ -13,6 +13,9 @@ import type { PoolContext } from '../lib/chain.ts';
 import { type KnownHook, hookSummary, hookedToken } from '../lib/hooks.ts';
 import { CreatorCommitmentPolicy, type FloorCheck } from './CreatorCommitmentPolicy.tsx';
 import { DeveloperDetails } from './DeveloperDetails.tsx';
+import type { HookPolicy } from '../lib/hook-rules.ts';
+import { solscanUrl } from '../lib/solscan.ts';
+import { GetSol } from './GetSol.tsx';
 import { TestTokens } from './TestTokens.tsx';
 import { HolderRewardsPanel } from './HolderRewardsPanel.tsx';
 import { FairLaunchPolicy, protectionCount } from './FairLaunchPolicy.tsx';
@@ -123,6 +126,15 @@ export function SwapCard({ environment, connection, context, balances, reload, o
           ? 'Pays registered holders'
           : null;
   const outcome = swap.state.phase === 'done' ? swap.state.outcome : null;
+  // The hook's own rules, so the trace can name the ones it enforced on a transfer.
+  const policyDecimals = hooked ? (hooked.side === 'A' ? pool.tokenA : pool.tokenB).decimals : 0;
+  const hookPolicy: HookPolicy | undefined = context.launch
+    ? { kind: 'fair-launch', config: context.launch.config, decimals: policyDecimals }
+    : context.commitment
+      ? { kind: 'creator-commitment', config: context.commitment.config, decimals: policyDecimals }
+      : context.rewards
+        ? { kind: 'holder-rewards' }
+        : undefined;
   const hookProgram =
     hooked?.kind === 'fair-launch'
       ? environment.fairLaunchProgramId
@@ -150,6 +162,7 @@ export function SwapCard({ environment, connection, context, balances, reload, o
         {unconfirmed.map(({ info, mint }) => (
           <UnknownTokenGate
             key={mint.toBase58()}
+            environment={environment}
             mint={mint.toBase58()}
             hookName={hookNameOf(info.hookProgramId?.toBase58(), environment)}
             hookProgram={info.hookProgramId?.toBase58() ?? ''}
@@ -164,6 +177,7 @@ export function SwapCard({ environment, connection, context, balances, reload, o
           <TokenAmountInput
             label="From"
             tokenLabel={labelOf(tokenIn.mint)}
+            href={solscanUrl(environment, 'token', tokenIn.mint.toBase58())}
             value={text}
             onChange={setText}
             balance={balanceIn}
@@ -186,6 +200,7 @@ export function SwapCard({ environment, connection, context, balances, reload, o
           <TokenAmountInput
             label="To"
             tokenLabel={labelOf(tokenOut.mint)}
+            href={solscanUrl(environment, 'token', tokenOut.mint.toBase58())}
             value={outputText}
             balance={balanceOut}
             decimals={tokenOut.decimals}
@@ -228,6 +243,7 @@ export function SwapCard({ environment, connection, context, balances, reload, o
               This sale would leave the creator account below its vesting floor. The on-chain hook will reject it.
             </p>
           )}
+          {connected && publicKey && <GetSol environment={environment} connection={connection} wallet={publicKey} onFunded={onFunded ?? onSwapped} />}
           {connected && publicKey && (
             <TestTokens
               environment={environment}
@@ -245,7 +261,7 @@ export function SwapCard({ environment, connection, context, balances, reload, o
           >
             {button.label}
           </button>
-          <TransactionStatus state={swap.state} environment={environment} />
+          <TransactionStatus state={swap.state} environment={environment} policy={hookPolicy} />
           {quote && balances && (
             <p className="muted small">
               You receive at least {formatAmount(quote.minimumOut, tokenOut.decimals)} {labelOf(tokenOut.mint)}.
@@ -256,6 +272,8 @@ export function SwapCard({ environment, connection, context, balances, reload, o
       <div className="stack">
         {context.launch && (
           <FairLaunchPolicy
+            environment={environment}
+            tokenMint={hookedMint?.toBase58()}
             config={context.launch.config}
             counter={context.launch.counter}
             view={view}
@@ -275,6 +293,8 @@ export function SwapCard({ environment, connection, context, balances, reload, o
         )}
         {context.commitment && (
           <CreatorCommitmentPolicy
+            environment={environment}
+            tokenMint={hookedMint?.toBase58()}
             config={context.commitment.config}
             now={now}
             decimals={hookedDecimals}

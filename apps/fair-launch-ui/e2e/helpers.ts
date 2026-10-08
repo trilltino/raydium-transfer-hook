@@ -27,10 +27,16 @@ export const balanceOf = (fixture: Fixture, mint: string): Promise<bigint> =>
 
 export const signaturesOf = (fixture: Fixture): Promise<number> => signatureCount(fixture.wallet);
 
+/** Header "Connect wallet", then the test wallet in the wallet dialog (the only wallet a test build adds). */
+export async function connectTestWallet(page: Page): Promise<void> {
+  await page.locator('header').getByRole('button', { name: 'Connect wallet' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /E2E Test Wallet/ }).click();
+}
+
 /** Open the page on a fixture's pool with the test wallet connected, past the unknown-token gate. */
 export async function openAndConnect(page: Page, fixture: Fixture, policyTestId = 'policy-phase'): Promise<void> {
   await page.goto(`/?env=${ENV_NAME}&pool=${fixture.pool}&testWallet=${encodeURIComponent(JSON.stringify(secret))}`);
-  await page.getByRole('button', { name: /Connect E2E Test Wallet/ }).first().click();
+  await connectTestWallet(page);
   await expect(page.getByRole('button', { name: /Disconnect/ })).toBeVisible();
   // The pool, its policy and the unknown-token gate all appear together once the pool has loaded.
   await expect(page.getByTestId(policyTestId)).toBeVisible();

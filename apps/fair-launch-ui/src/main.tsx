@@ -1,16 +1,15 @@
 import './polyfills.ts';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
-import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
 import type { Adapter } from '@solana/wallet-adapter-base';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { E2E_BUILD, readSelection } from './config.ts';
+import { walletAdapters } from './lib/wallets.ts';
 import './styles.css';
 
 async function wallets(): Promise<Adapter[]> {
-  const list: Adapter[] = [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
+  const list: Adapter[] = walletAdapters(readSelection(window.location.search).environment);
   // The browser test wallet exists only in builds made with VITE_E2E=1; the condition is replaced at
   // build time, so a normal build contains neither this branch nor the adapter.
   if (E2E_BUILD) {

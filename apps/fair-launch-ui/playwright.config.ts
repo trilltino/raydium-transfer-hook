@@ -19,7 +19,8 @@ export default defineConfig({
     // The generated environments file is not tracked, so a clean checkout has to make it first.
     command: 'npm run generate && npx vite --host 127.0.0.1 --port 5173 --strictPort',
     url: 'http://127.0.0.1:5173',
-    reuseExistingServer: false,
+    // E2E_REUSE_SERVER=1 reuses a dev server already running on this port (started with VITE_E2E=1).
+    reuseExistingServer: process.env.E2E_REUSE_SERVER === '1',
     timeout: 120_000,
     env: { VITE_E2E: '1' },
   },

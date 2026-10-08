@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useNow } from '../hooks/useNow.ts';
 import { useRewardsAccount } from '../hooks/useRewardsAccount.ts';
 import { explorerUrl } from '../config.ts';
+import { AddressLink } from './AddressLink.tsx';
 import { TransactionTrace } from './TransactionTrace.tsx';
 import { formatAmount } from '../lib/amounts.ts';
 import type { PoolContext, RewardsState } from '../lib/chain.ts';
@@ -113,7 +114,9 @@ export function HolderRewardsPanel({ environment, connection, context, rewards, 
         </div>
         <div>
           <dt>Reward token</dt>
-          <dd className="mono wrap">{rewards.rewardMint.mint.toBase58()}</dd>
+          <dd className="mono wrap">
+            <AddressLink environment={environment} kind="token" value={rewards.rewardMint.mint.toBase58()} />
+          </dd>
         </div>
         <div>
           <dt>Token</dt>

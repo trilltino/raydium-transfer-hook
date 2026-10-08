@@ -43,6 +43,12 @@ export interface TraceView {
   computeLimit: number | null;
   /** Where the transaction was read from, e.g. "Triton One (devnet)". */
   source: string;
+  /** Unix time of the block, if the RPC gave one. */
+  blockTime: number | null;
+  /** The priority fee the transaction declared, in micro-lamports per compute unit. */
+  computeUnitPrice: number | null;
+  /** Each token account's raw balance after the transaction, by address. */
+  postBalances: Record<string, string>;
   steps: TraceStep[];
   /** How many times each hook program ran, for the "the hook ran N times" line. */
   hookRuns: { programId: string; programName: string; count: number }[];
@@ -225,6 +231,7 @@ export function buildTrace(transaction: ParsedTransactionWithMeta, environment: 
   const signature = transaction.transaction.signatures[0] ?? '';
 
   let computeLimit: number | null = null;
+  let computeUnitPrice: number | null = null;
   const steps: TraceStep[] = invocations.map((invocation, index) => {
     // The log of a very long transaction can be cut short; a step with no instruction still shows its program.
     const instruction = flat[index]?.programId === invocation.programId ? flat[index] : undefined;
@@ -233,6 +240,9 @@ export function buildTrace(transaction: ParsedTransactionWithMeta, environment: 
     const short = `${invocation.programId.slice(0, 4)}…${invocation.programId.slice(-4)}`;
     if (invocation.programId === COMPUTE_BUDGET && instruction?.data && instruction.data[0] === 2 && instruction.data.length >= 5) {
       computeLimit = new DataView(instruction.data.buffer, instruction.data.byteOffset + 1, 4).getUint32(0, true);
+    }
+    if (invocation.programId === COMPUTE_BUDGET && instruction?.data && instruction.data[0] === 3 && instruction.data.length >= 9) {
+      computeUnitPrice = Number(new DataView(instruction.data.buffer, instruction.data.byteOffset + 1, 8).getBigUint64(0, true));
     }
     const name =
       (instruction?.instruction ?? null) ||
@@ -264,6 +274,13 @@ export function buildTrace(transaction: ParsedTransactionWithMeta, environment: 
     runs.set(step.programId, entry);
   }
 
+  const keys = transaction.transaction.message.accountKeys;
+  const postBalances: Record<string, string> = {};
+  for (const balance of meta?.postTokenBalances ?? []) {
+    const key = keys[balance.accountIndex]?.pubkey.toBase58();
+    if (key) postBalances[key] = balance.uiTokenAmount.amount;
+  }
+
   return {
     signature,
     slot: transaction.slot,
@@ -272,6 +289,9 @@ export function buildTrace(transaction: ParsedTransactionWithMeta, environment: 
     feeLamports: meta?.fee ?? 0,
     computeUnits: meta?.computeUnitsConsumed ?? null,
     computeLimit,
+    computeUnitPrice,
+    blockTime: transaction.blockTime ?? null,
+    postBalances,
     source,
     steps,
     hookRuns: [...runs.values()],

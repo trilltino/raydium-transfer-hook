@@ -91,15 +91,8 @@ export async function ownedBalance(owner: string, mint: string): Promise<bigint>
   return result.value.reduce((sum, entry) => sum + BigInt(entry.account.data.parsed.info.tokenAmount.amount), 0n);
 }
 
-/** Give an address SOL on the local validator (devnet has its own faucet) and wait until it shows. */
-export async function airdrop(address: string, lamports: number): Promise<void> {
-  await rpc<string>('requestAirdrop', [address, lamports]);
-  for (let i = 0; i < 60; i += 1) {
-    const { value } = await rpc<{ value: number }>('getBalance', [address, { commitment: 'confirmed' }]);
-    if (value >= lamports) return;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error('the airdrop did not arrive');
+export async function solBalance(address: string): Promise<number> {
+  return (await rpc<{ value: number }>('getBalance', [address, { commitment: 'confirmed' }])).value;
 }
 
 export async function signatureCount(address: string): Promise<number> {

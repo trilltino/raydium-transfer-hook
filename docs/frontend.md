@@ -110,6 +110,20 @@ Above the meters the panel says, in words, what the launch enforces: the per-buy
 never restricted. Two buttons, **A buy inside the limits** and **A buy over the limit**, fill the swap box so you can press Swap and
 see the hook allow or refuse it. Which rules show is read from the launch's own config account, so a limit set to 0 does not appear.
 
+## Connecting a wallet
+
+**Connect wallet** opens a dialog that lists the wallets with their own logos (the wallets' own icons): Phantom and Solflare by name,
+and any other Wallet Standard extension the browser has, such as Backpack. A wallet the browser has is marked Detected and is one
+click (select and connect together); one it does not have is marked Install and opens its install page.
+
+**Use the real wallets on the devnet page.** The adapter tells Solflare the page is on Devnet (Solflare compares that with the network
+chosen in the wallet and refuses to sign on a mismatch: "this transaction is for mainnet"). A local validator is not one of Solflare's
+networks, so a transaction for it is reported as mainnet whatever the wallet is set to. For the local validator (`?env=localnet`,
+used by the browser tests) use the test wallet, which a `VITE_E2E=1` build adds.
+
+Every token, program and account on the page (the token chips, the policy panels, Developer details, each trace step) is a Solscan link on
+the page's cluster.
+
 ## Getting tokens into a wallet
 
 A wallet needs some of the pool's tokens (and SOL, for fees) before it can swap. **Developer details has a "Your tokens"
@@ -150,6 +164,12 @@ For a hooked CLMM swap on devnet it reads:
 5    Token-2022                      transfer_checked           1,911 CU
 Transfer Hook Cz3G…Q11X ran 1 time
 ```
+
+On the hook's own step the card names **what the hook enforced on that transfer**: for Fair Launch the max buy, the wallet cap, the
+buys per slot, the priority fee and the launch window, each with this transaction's number against the limit and a tick, and for a refused
+transaction the rule the hook broke (from the error it returned). Creator Commitment says whether the vesting floor applied (the transfer was
+out of the creator account) and Holder Rewards that it updated the reward records. The hook program itself only says `Execute`; the rules come
+from its config account, which the page has already read (`src/lib/hook-rules.ts`).
 
 Each step links its program to Solscan, every account it named is a Solscan link, and the card links the transaction.
 All links to the chain on this page go to Solscan (devnet with `?cluster=devnet`; a local validator through Solscan's

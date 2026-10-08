@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { balanceOf, dir, load, openAndConnect, secret, signaturesOf } from './helpers.ts';
-import { DEVNET, ENV_NAME, airdrop, newWallet, ownedBalance } from './rpc.ts';
+import { balanceOf, connectTestWallet, dir, load, openAndConnect, secret, signaturesOf } from './helpers.ts';
+import { DEVNET, ENV_NAME, newWallet, ownedBalance, solBalance } from './rpc.ts';
 
 // The same scenario against a CPMM pool and a CLMM pool: the page picks the adapter from the pool's owner.
 const scenarios = [
@@ -54,6 +54,10 @@ for (const [amm, instruction] of scenarios.filter(([name]) => !DEVNET || enabled
       expect(await page.getByTestId('trace-step').count()).toBeGreaterThanOrEqual(4);
       await expect(page.getByTestId('trace-step').filter({ hasText: instruction.split('  ')[1] })).toHaveCount(1);
       await expect(page.getByTestId('trace-step').filter({ hasText: 'Execute (Transfer Hook)' })).toHaveCount(1);
+      // The hook step names the rules the hook enforced on this transfer, with this buy's numbers.
+      await expect(page.getByTestId('trace-rules')).toContainText('Fair Launch checks');
+      await expect(page.getByTestId('trace-rules')).toContainText('Max buy per transaction');
+      await expect(page.getByTestId('trace-rules').locator('li[data-status=failed]')).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'program ↗' }).first()).toHaveAttribute(
         'href',
         DEVNET ? /solscan\.io\/account\/.*cluster=devnet/ : /solscan\.io\/account\/.*cluster=custom/
@@ -65,7 +69,7 @@ for (const [amm, instruction] of scenarios.filter(([name]) => !DEVNET || enabled
       test.skip(DEVNET, 'the devnet faucet needs the deployer key; the local one needs nothing');
       const empty = newWallet();
       await page.goto(`/?env=${ENV_NAME}&pool=${fixture.pool}&testWallet=${encodeURIComponent(JSON.stringify(empty.secret))}`);
-      await page.getByRole('button', { name: /Connect E2E Test Wallet/ }).first().click();
+      await connectTestWallet(page);
       await expect(page.getByTestId('policy-phase')).toBeVisible();
       const gate = page.getByRole('button', { name: 'I understand, continue' });
       while (await gate.first().isVisible().catch(() => false)) await gate.first().click();
@@ -84,7 +88,10 @@ for (const [amm, instruction] of scenarios.filter(([name]) => !DEVNET || enabled
       await expect(page.getByRole('alert')).toContainText('Your wallet has no SOL on this network');
       await expect(page.getByRole('alert')).toContainText('No transaction was submitted.');
       // With SOL the same swap goes through.
-      await airdrop(empty.address, 1_000_000_000);
+      // The page offers the fix itself: its Get SOL button asks the validator's faucet.
+      await page.getByRole('button', { name: 'Get 1 SOL' }).click();
+      await expect(page.getByTestId('get-sol')).toHaveCount(0);
+      expect(await solBalance(empty.address)).toBeGreaterThanOrEqual(1_000_000_000);
       await page.getByLabel('From').fill('11');
       await page.getByRole('button', { name: 'Swap', exact: true }).click();
       await expect(page.getByText('Swap confirmed')).toBeVisible();

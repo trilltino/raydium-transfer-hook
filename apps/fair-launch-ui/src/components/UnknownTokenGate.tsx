@@ -1,4 +1,8 @@
+import type { HookEnvironment } from '@raydium-transfer-hook/client';
+import { AddressLink } from './AddressLink.tsx';
+
 export interface UnknownTokenGateProps {
+  environment?: HookEnvironment;
   mint: string;
   hookName: string;
   hookProgram: string;
@@ -6,14 +10,16 @@ export interface UnknownTokenGateProps {
 }
 
 /** The mint address is the identity; a symbol could be anything. Shown once per mint until confirmed. */
-export function UnknownTokenGate({ mint, hookName, hookProgram, onConfirm }: UnknownTokenGateProps) {
+export function UnknownTokenGate({ environment, mint, hookName, hookProgram, onConfirm }: UnknownTokenGateProps) {
   return (
     <section className="card gate" aria-labelledby="gate-title" data-testid="unknown-token">
       <h2 id="gate-title">Unknown token</h2>
       <dl className="kv">
         <div>
           <dt>Mint</dt>
-          <dd className="mono wrap">{mint}</dd>
+          <dd className="mono wrap">
+            <AddressLink environment={environment} kind="token" value={mint} />
+          </dd>
         </div>
         <div>
           <dt>Hook</dt>
@@ -21,7 +27,9 @@ export function UnknownTokenGate({ mint, hookName, hookProgram, onConfirm }: Unk
         </div>
         <div>
           <dt>Program</dt>
-          <dd className="mono wrap">{hookProgram}</dd>
+          <dd className="mono wrap">
+            <AddressLink environment={environment} value={hookProgram} />
+          </dd>
         </div>
       </dl>
       <p className="muted">

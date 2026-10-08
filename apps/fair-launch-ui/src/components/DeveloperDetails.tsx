@@ -2,6 +2,7 @@ import type { HookEnvironment } from '@raydium-transfer-hook/client';
 import { getExtraAccountMetaAddress } from '@solana/spl-token';
 import type { PublicKey } from '@solana/web3.js';
 import { explorerUrl } from '../config.ts';
+import { AddressLink } from './AddressLink.tsx';
 import type { PoolContext } from '../lib/chain.ts';
 import type { Balances } from '../hooks/useWalletBalances.ts';
 import { formatAmount } from '../lib/amounts.ts';
@@ -46,17 +47,45 @@ export function DeveloperDetails({ environment, context, outcome, wallet = null,
     : [];
   const hookProgram = context?.hookA.hookProgramId ?? context?.hookB.hookProgramId ?? null;
   const slice = (slice: { pubkey: { toBase58(): string } }[] | undefined) =>
-    slice && slice.length > 0 ? slice.map((meta, i) => `${i}: ${meta.pubkey.toBase58()}`).join('\n') : 'none (0 accounts)';
+    slice && slice.length > 0 ? (
+      <ol className="address-list">
+        {slice.map((meta, i) => (
+          <li key={`${i}-${meta.pubkey.toBase58()}`}>
+            {i}: <AddressLink environment={environment} value={meta.pubkey.toBase58()} />
+          </li>
+        ))}
+      </ol>
+    ) : (
+      'none (0 accounts)'
+    );
   return (
     <details className="card developer" data-testid="developer-details">
       <summary>Developer details</summary>
       <dl className="kv">
         <Row label="Environment">{`${environment.name} (${environment.cluster})`}</Row>
-        <Row label="Raydium program">{context?.pool.programId.toBase58() ?? environment.cpmmProgramId}</Row>
-        {context && <Row label="Pool">{context.pool.poolId.toBase58()}</Row>}
-        {hookProgram && <Row label="Hook program">{hookProgram.toBase58()}</Row>}
-        {hooked[0] && <Row label="Hooked mint">{hooked[0].toBase58()}</Row>}
-        {hooked[0] && hookProgram && <Row label="Validation PDA">{validationPda(hooked[0], hookProgram)}</Row>}
+        <Row label="Raydium program">
+          <AddressLink environment={environment} value={context?.pool.programId.toBase58() ?? environment.cpmmProgramId} />
+        </Row>
+        {context && (
+          <Row label="Pool">
+            <AddressLink environment={environment} value={context.pool.poolId.toBase58()} />
+          </Row>
+        )}
+        {hookProgram && (
+          <Row label="Hook program">
+            <AddressLink environment={environment} value={hookProgram.toBase58()} />
+          </Row>
+        )}
+        {hooked[0] && (
+          <Row label="Hooked mint">
+            <AddressLink environment={environment} kind="token" value={hooked[0].toBase58()} />
+          </Row>
+        )}
+        {hooked[0] && hookProgram && (
+          <Row label="Validation PDA">
+            <AddressLink environment={environment} value={validationPda(hooked[0], hookProgram)} />
+          </Row>
+        )}
         <Row label={`Input hook accounts (${prepared?.input.slice.length ?? '-'})`}>{slice(prepared?.input.slice)}</Row>
         <Row label={`Output hook accounts (${prepared?.output.slice.length ?? '-'})`}>{slice(prepared?.output.slice)}</Row>
         <Row label="Instruction">

@@ -1,5 +1,6 @@
 import type { HookEnvironment } from '@raydium-transfer-hook/client';
 import { explorerUrl } from '../config.ts';
+import type { HookPolicy } from '../lib/hook-rules.ts';
 import { TransactionTrace } from './TransactionTrace.tsx';
 import type { SwapState } from '../hooks/useHookAwareSwap.ts';
 
@@ -10,7 +11,7 @@ const PHASE_TEXT: Record<string, string> = {
   confirming: 'Submitted. Waiting for confirmation…',
 };
 
-export function TransactionStatus({ state, environment }: { state: SwapState; environment: HookEnvironment }) {
+export function TransactionStatus({ state, environment, policy }: { state: SwapState; environment: HookEnvironment; policy?: HookPolicy }) {
   if (state.phase === 'idle') return null;
   if (state.phase !== 'done') {
     return (
@@ -29,7 +30,7 @@ export function TransactionStatus({ state, environment }: { state: SwapState; en
             {outcome.signature}
           </a>
         </div>
-        <TransactionTrace environment={environment} signature={outcome.signature} />
+        <TransactionTrace environment={environment} signature={outcome.signature} policy={policy} />
       </>
     );
   }

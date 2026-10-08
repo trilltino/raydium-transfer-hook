@@ -1,3 +1,5 @@
+import type { HookEnvironment } from '@raydium-transfer-hook/client';
+import { AddressLink } from './AddressLink.tsx';
 import { type CreatorCommitmentConfig, vestingView } from '@raydium-transfer-hook/client';
 import { formatAmount } from '../lib/amounts.ts';
 import { PolicyMeter } from './PolicyMeter.tsx';
@@ -10,6 +12,8 @@ export interface FloorCheck {
 }
 
 export interface CreatorCommitmentPolicyProps {
+  environment?: HookEnvironment;
+  tokenMint?: string;
   config: CreatorCommitmentConfig;
   now: bigint;
   decimals: number;
@@ -35,7 +39,7 @@ function duration(seconds: bigint): string {
 
 /** The creator's vesting schedule: how much is locked now, and when the rest unlocks. */
 export function CreatorCommitmentPolicy(props: CreatorCommitmentPolicyProps) {
-  const { config, now, decimals, hookProgramId, tokenLabel, floorCheck, walletIsCreator } = props;
+  const { environment, tokenMint, config, now, decimals, hookProgramId, tokenLabel, floorCheck, walletIsCreator } = props;
   const view = vestingView(config, now);
   const tokens = (value: bigint) => formatAmount(value, decimals);
   const headline =
@@ -83,16 +87,20 @@ export function CreatorCommitmentPolicy(props: CreatorCommitmentPolicyProps) {
         <div>
           <dt>Creator account</dt>
           <dd className="mono wrap" data-testid="creator-account">
-            {config.creatorAccount.toBase58()}
+            <AddressLink environment={environment} value={config.creatorAccount.toBase58()} className="" />
           </dd>
         </div>
         <div>
           <dt>Token</dt>
-          <dd>{tokenLabel}</dd>
+          <dd>
+            <AddressLink environment={environment} kind="token" value={tokenMint ?? ""} label={tokenLabel} />
+          </dd>
         </div>
         <div>
           <dt>Hook program</dt>
-          <dd className="mono wrap">{hookProgramId}</dd>
+          <dd className="mono wrap">
+            <AddressLink environment={environment} value={hookProgramId} />
+          </dd>
         </div>
       </dl>
       <p className="muted small">

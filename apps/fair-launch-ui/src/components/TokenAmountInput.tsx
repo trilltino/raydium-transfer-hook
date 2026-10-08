@@ -12,11 +12,13 @@ export interface TokenAmountInputProps {
   onHalf?: () => void;
   readOnly?: boolean;
   invalid?: boolean;
+  /** Where the token chip links to (Solscan page of the mint). */
+  href?: string;
 }
 
 export function TokenAmountInput(props: TokenAmountInputProps) {
   const id = useId();
-  const { label, tokenLabel, value, onChange, balance, decimals, onMax, onHalf, readOnly, invalid } = props;
+  const { label, tokenLabel, value, onChange, balance, decimals, onMax, onHalf, readOnly, invalid, href } = props;
   return (
     <div className={`field${invalid ? ' field-invalid' : ''}`}>
       <div className="field-top">
@@ -39,9 +41,15 @@ export function TokenAmountInput(props: TokenAmountInputProps) {
           aria-invalid={invalid ? true : undefined}
           onChange={(event) => onChange?.(event.target.value)}
         />
-        <span className="token-chip" title={tokenLabel}>
-          {tokenLabel}
-        </span>
+        {href ? (
+          <a className="token-chip" href={href} target="_blank" rel="noreferrer" title={`${tokenLabel}: open on Solscan`}>
+            {tokenLabel}
+          </a>
+        ) : (
+          <span className="token-chip" title={tokenLabel}>
+            {tokenLabel}
+          </span>
+        )}
       </div>
       {(onMax || onHalf) && (
         <div className="field-actions">

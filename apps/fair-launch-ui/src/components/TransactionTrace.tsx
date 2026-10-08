@@ -2,6 +2,7 @@ import type { HookEnvironment } from '@raydium-transfer-hook/client';
 import { useTransactionTrace } from '../hooks/useTransactionTrace.ts';
 import { solscanUrl } from '../lib/solscan.ts';
 import type { TraceSource } from '../lib/trace-client.ts';
+import { type Enforcement, type HookPolicy, enforcedRules } from '../lib/hook-rules.ts';
 import type { TraceStep, TraceView } from '../lib/trace.ts';
 
 const short = (value: string): string => (value.length > 12 ? `${value.slice(0, 5)}…${value.slice(-5)}` : value);
@@ -14,7 +15,27 @@ function Link({ environment, kind, value, label }: { environment: HookEnvironmen
   );
 }
 
-function Step({ step, environment }: { step: TraceStep; environment: HookEnvironment }) {
+const MARK = { passed: '✓', failed: '✗', info: 'ℹ', skipped: '–' } as const;
+
+function Rules({ enforcement }: { enforcement: Enforcement }) {
+  return (
+    <div className="trace-rules" data-testid="trace-rules">
+      <p className="trace-rules-head">{enforcement.headline}</p>
+      <ul>
+        {enforcement.lines.map((line) => (
+          <li key={line.name} className={`rule-${line.status}`} data-status={line.status}>
+            <span className="rule-mark" aria-hidden="true">
+              {MARK[line.status]}
+            </span>
+            <strong>{line.name}</strong> <span className="muted">{line.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Step({ step, environment, enforcement }: { step: TraceStep; environment: HookEnvironment; enforcement: Enforcement | null }) {
   return (
     <li
       className={`trace-step${step.failed ? ' trace-failed' : ''}${step.isHook ? ' trace-hook' : ''}`}
@@ -30,6 +51,7 @@ function Step({ step, environment }: { step: TraceStep; environment: HookEnviron
         {step.failed && <span className="trace-badge">failed</span>}
         <Link environment={environment} kind="account" value={step.programId} label="program ↗" />
       </div>
+      {enforcement && <Rules enforcement={enforcement} />}
       {step.details.length > 0 && (
         <div className="trace-token muted small">{step.details.map((detail) => `${detail.name}: ${short(detail.value)}`).join(' · ')}</div>
       )}
@@ -54,7 +76,7 @@ function Step({ step, environment }: { step: TraceStep; environment: HookEnviron
   );
 }
 
-function Ready({ trace, environment }: { trace: TraceView; environment: HookEnvironment }) {
+function Ready({ trace, environment, policy }: { trace: TraceView; environment: HookEnvironment; policy?: HookPolicy }) {
   const units = (value: number) => value.toLocaleString('en-US');
   return (
     <>
@@ -71,7 +93,7 @@ function Ready({ trace, environment }: { trace: TraceView; environment: HookEnvi
       )}
       <ol className="trace-steps">
         {trace.steps.map((step) => (
-          <Step key={step.id} step={step} environment={environment} />
+          <Step key={step.id} step={step} environment={environment} enforcement={enforcedRules(policy, trace, step)} />
         ))}
       </ol>
     </>
@@ -83,7 +105,18 @@ function Ready({ trace, environment }: { trace: TraceView; environment: HookEnvi
  * endpoint): every program that ran, nested as the runtime ran them, with its compute, its accounts and its
  * logs, and a Solscan link for the transaction and for each program and account.
  */
-export function TransactionTrace({ environment, signature, source }: { environment: HookEnvironment; signature: string; source?: TraceSource }) {
+export function TransactionTrace({
+  environment,
+  signature,
+  source,
+  policy,
+}: {
+  environment: HookEnvironment;
+  signature: string;
+  source?: TraceSource;
+  /** The hook's launch rules, so its step can say which of them it enforced on this transfer. */
+  policy?: HookPolicy;
+}) {
   const state = useTransactionTrace(environment, signature, source);
   return (
     <section className="card trace" data-testid="trace">
@@ -98,7 +131,7 @@ export function TransactionTrace({ environment, signature, source }: { environme
           Reading the transaction{state.attempt > 1 ? ` (try ${state.attempt} of ${state.of}, waiting for the RPC to index it)` : ''}…
         </p>
       )}
-      {state.status === 'ready' && <Ready trace={state.trace} environment={environment} />}
+      {state.status === 'ready' && <Ready trace={state.trace} environment={environment} policy={policy} />}
       {(state.status === 'unavailable' || state.status === 'not-observed') && (
         <p className="muted" data-testid="trace-note">
           {state.message}

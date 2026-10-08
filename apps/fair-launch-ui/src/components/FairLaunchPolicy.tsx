@@ -1,9 +1,13 @@
-import type { FairLaunchConfig, FairLaunchCounter } from '@raydium-transfer-hook/client';
+import type { FairLaunchConfig, FairLaunchCounter, HookEnvironment } from '@raydium-transfer-hook/client';
 import type { LaunchView } from '../hooks/useFairLaunch.ts';
 import { formatAmount } from '../lib/amounts.ts';
+import { AddressLink } from './AddressLink.tsx';
 import { PolicyMeter } from './PolicyMeter.tsx';
 
 export interface FairLaunchPolicyProps {
+  environment?: HookEnvironment;
+  /** The launch token's mint, so its name links to Solscan. */
+  tokenMint?: string;
   config: FairLaunchConfig;
   counter: FairLaunchCounter | null;
   view: LaunchView | null;
@@ -28,7 +32,7 @@ export function protectionCount(config: FairLaunchConfig): number {
     .length;
 }
 
-export function FairLaunchPolicy({ config, counter, view, decimals, hookProgramId, tokenLabel, onTry }: FairLaunchPolicyProps) {
+export function FairLaunchPolicy({ environment, tokenMint, config, counter, view, decimals, hookProgramId, tokenLabel, onTry }: FairLaunchPolicyProps) {
   const phase = view?.phase ?? 'active';
   const rowFor = (rule: string) => view?.rows.find((row) => row.rule === rule);
   const meter = (rule: 'max-buy' | 'max-wallet' | 'buys-per-slot' | 'priority-fee', label: string, limit: bigint, unit: (v: bigint) => string) => {
@@ -115,11 +119,15 @@ export function FairLaunchPolicy({ config, counter, view, decimals, hookProgramI
       <dl className="kv">
         <div>
           <dt>Token</dt>
-          <dd>{tokenLabel}</dd>
+          <dd>
+            <AddressLink environment={environment} kind="token" value={tokenMint ?? ""} label={tokenLabel} />
+          </dd>
         </div>
         <div>
           <dt>Hook program</dt>
-          <dd className="mono wrap">{hookProgramId}</dd>
+          <dd className="mono wrap">
+            <AddressLink environment={environment} value={hookProgramId} />
+          </dd>
         </div>
       </dl>
     </section>
