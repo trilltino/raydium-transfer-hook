@@ -369,10 +369,10 @@ async fn a_direct_execute_call_is_refused() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Configurations: the same program as an anti-bundle budget, and with several venues.
+// Configurations: the same program as a per-slot budget, and with several venues.
 // ---------------------------------------------------------------------------------------------
 
-/// Only the per-slot budget on, for the whole of time: the anti-bundle configuration.
+/// Only the per-slot budget on, for the whole of time: the per-slot-budget configuration.
 const PER_SLOT_ONLY: Params = Params {
     window_start: 0,
     window_end: i64::MAX,
@@ -383,7 +383,7 @@ const PER_SLOT_ONLY: Params = Params {
 };
 
 #[tokio::test]
-async fn the_per_slot_budget_alone_is_an_anti_bundle_guard() {
+async fn the_per_slot_budget_alone_slows_a_bundle() {
     let mut world = launched(PER_SLOT_ONLY).await;
 
     // No size or balance cap: three huge buys fit the budget...

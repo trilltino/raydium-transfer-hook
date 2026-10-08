@@ -20,9 +20,6 @@ pub mod processor;
 pub mod rule;
 pub mod state;
 
-#[cfg(test)]
-mod fixture_tests;
-
 pub use processor::process_instruction;
 
 // The entrypoint macro tests cfgs (`solana`, `custom-heap`, `custom-panic`) of the crate using it.

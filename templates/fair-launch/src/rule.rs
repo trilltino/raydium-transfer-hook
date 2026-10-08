@@ -17,15 +17,18 @@
 //!
 //! A limit of `0` switches that check off (at least one must be on), so the same program is:
 //!
-//! * a full **fair launch**: all four limits set;
-//! * an **anti-bundle** budget: only `max_buys_per_slot` set and a window that never ends, so a bundle
+//! * full **launch participation controls**: all four limits set;
+//! * a **per-slot budget**: only `max_buys_per_slot` set and a window that never ends, so a bundle
 //!   of many buys packed into one block is refused as a whole;
-//! * an **anti-snipe** guard: `max_buy` and `max_wallet` for the first minutes, with or without the
+//! * **snipe resistance**: `max_buy` and `max_wallet` for the first minutes, with or without the
 //!   fee cap.
 //!
 //! Up to four venues can be named, and they all draw on the same per-slot budget.
 //!
 //! ## What each check really guarantees
+//!
+//! These are participation controls, not complete bundle detection: nothing here knows who a
+//! person is, and per-account and per-slot limits can be spread across accounts and slots.
 //!
 //! * `max_wallet` is per **token account**, not per person: someone can open several accounts.
 //!   The per-slot counter is what slows that down, because all their buys still share the slot's
@@ -271,7 +274,7 @@ mod tests {
         ] {
             assert_eq!(bad.validate(), Err(FairLaunchError::InvalidParams));
         }
-        // Any one limit alone is a valid launch: anti-bundle is just the per-slot one.
+        // Any one limit alone is a valid launch: the per-slot budget is just one of them.
         for one in [
             Params {
                 max_buy: 50,

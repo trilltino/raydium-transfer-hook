@@ -439,3 +439,25 @@ async fn a_direct_execute_call_is_refused() {
         KitError::NotDirectInvocation.code(),
     );
 }
+
+#[tokio::test]
+async fn only_the_mints_hook_authority_can_initialize() {
+    let mut world = world_with_holders(true).await;
+    let reward = create_reward(&mut world, spl_token_2022::id()).await;
+    let impostor = Keypair::new();
+    let ix = initialize(
+        &program_id(),
+        &world.payer(),
+        &impostor.pubkey(),
+        &world.mint.pubkey(),
+        &world.account(POOL),
+        &reward.mint.pubkey(),
+        &reward.token_program,
+    );
+    assert_custom_error(
+        world.send(&[ix], &[&impostor]).await,
+        KitError::AuthorityMismatch.code(),
+    );
+    // Nothing was created: the real authority can still initialize.
+    init(&mut world, &reward).await.expect("initialize");
+}

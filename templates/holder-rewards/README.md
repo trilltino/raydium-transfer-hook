@@ -1,86 +1,80 @@
-# Holder rewards
+# Holder Rewards
 
-Holders earn a reward stream in another token (for example the quote token) in proportion to
-**balance x time held**. The loyal holder earns more than the one who arrived late, and buying right
-before a payout earns almost nothing.
+Holders earn a reward stream in another token in proportion to **balance x time held**, settled
+inside the transfer, with no loop over holders.
 
-**The rule is in [`src/rule.rs`](src/rule.rs). It is pure: no accounts, no Solana types.**
-Everything else in this folder is plumbing you can leave alone.
+**The rule is [`src/rule.rs`](src/rule.rs). It is pure: no accounts, no Solana types.** The rest of
+the folder is plumbing.
 
-## Two modes: an ongoing programme, or a one-time spin-off
+## WHAT
 
-`Initialize` takes a mode:
-
-| Mode | Funding | Use |
-|---|---|---|
-| **ongoing** (default) | can be topped up: funding again extends the stream | a loyalty programme paid from fees or a treasury |
-| **one-time** | funded **once**; a second funding is refused with `AlreadyFunded` (`0xC00E`), even after the window ends | a parent token spinning a child token off to its holders: "these tokens, over this window" cannot be extended, diluted or topped up |
-
-Everything else is the same, including what a transfer does:
-
-* **History stays with the historical holder.** What a holder earned up to the moment they sell is
-  theirs to claim, whoever holds the token afterwards.
-* **The future follows the balance.** From then on the buyer, if registered, accrues on the balance
-  they now hold.
-* **Only registered accounts earn,** and the pool's vault can never register.
-
-For a spin-off the child token must already exist and be a plain token (a child with a Transfer
-Hook of its own is refused: its claims would need extra accounts this program does not forward).
-This program does not create it. The window is chosen by whoever funds it, once: fund it from an
-account you trust to choose it, or revoke the program's upgrade authority.
-
-The CLI runs the two as `holder-rewards` and `holder-rewards-one-time`. This replaces the separate
-`loyalty-rewards` and `parent-spin-off` templates.
-
-## How it works
-
-A reward pool is funded with an `amount` to be paid out evenly over `duration` seconds. Every
+A reward pool is funded with an `amount` to be paid out evenly over `duration` seconds. Each
 second's share is split between the **registered** token accounts in proportion to their balance.
 
-The pool keeps one running number, the **index**: reward earned so far *per unit of balance*. It
-grows every second by `rate / eligible_supply`. A holder remembers the index at which they were last
-settled, so what they have earned is always `balance x (index - index_paid)`. No loop over holders:
-a transfer settles the two accounts it touches, in constant time. That is why it is cheap enough to
-run inside a swap.
+The pool keeps one running number, the **global reward index**: reward earned so far *per unit of
+balance*. It grows every second by `rate / eligible_supply`. A holder remembers the index at which
+they were last settled, so what they have earned is always `balance x (index - index_paid)`. A
+transfer settles the two accounts it touches in constant time. That is why it is cheap enough to run
+inside every transfer, and it is the reusable idea of this template.
 
 ```rust
-// src/rule.rs: what a transfer does to the two holders it touches
+// src/rule.rs: what a transfer does to each holder it touches
 holder.on_balance_change(&mut stream, balance_before, balance_after)?;
 ```
 
-## What is in this folder
+Two modes, chosen at `Initialize`:
 
-| Path | Role |
-|---|---|
-| `src/rule.rs` | **The rule**: `Stream`, `Holder`, the index maths. Unit-tested alone, including the loyal-vs-latecomer cases. |
-| `src/state.rs` | The global account (the stream) and one record per registered token account. |
-| `src/instruction.rs` | `Initialize`, `Register`, `Fund`, `Claim`. |
-| `src/processor/` | The instructions and `Execute`, built on [`hook-kit`](../../crates/hook-kit). |
-| `src/error.rs` | Error codes from `0xC001`. |
-| `tests/holder_rewards.rs` | Runtime tests with exact payouts (ongoing mode). |
-| `tests/one_time.rs` | The one-time mode: exact payouts, the single-funding rule, and the guards. |
-
-## The instructions
-
-| Instruction | Who | What |
+| Mode | Funding | Use |
 |---|---|---|
-| `Initialize` | the mint's hook authority | picks the mode (ongoing, or one-time) and creates the global, the reward vault and the validation list. The mint must have **no mint authority**, and the reward mint must have no hook. |
-| `Register` | anyone, who pays the record's rent | starts counting a token account in the stream. The pool vault is refused. |
-| `Fund` | anyone | pays reward tokens into the vault and starts or extends the stream. What the current period has not yet paid is rolled into the new one. In one-time mode only the first funding is accepted. |
-| `Claim` | the token account's owner | pays what the account has earned to an account of the reward mint. |
+| **ongoing** (default) | can be topped up; the unpaid part rolls into the new period | a loyalty programme paid from fees or a treasury |
+| **one-time** | funded **once**; a second funding is refused with `AlreadyFunded` (`0xC00E`) | a parent token spinning a child token off to its holders: "these tokens, over this window" cannot be extended or diluted |
 
-The **reward vault** is a token account at a program-derived address, owned (as a token account) by
-the global PDA, so only this program can move rewards out. The reward token can be any plain mint of
-Token-2022 or the classic SPL Token program.
+## WHY
 
-## Accounts
+Paying holders by *balance x time* rewards loyalty: the long-term holder earns more than the
+latecomer, and buying just before a payout earns almost nothing. The naive implementation loops over
+every holder (impossible on chain); the global index makes it constant time.
 
-Three extra accounts per transfer, all **writable**, so a swap leg is 5 accounts: the global, the
-source's record and the destination's record (`["holder", token_account]`), then the hook program
-and the validation list. An integrator must name them as allowed writable accounts
-(`PrivilegePolicy::allowing_writable`), or the SDK refuses the leg.
+## TRIGGER
 
-## Errors
+Every transfer of the hooked mint in which either side has a registered record. The hook settles
+both sides, then moves the eligible supply by the balance change. Transfers between unregistered
+accounts only read (the records do not exist) and change nothing.
+
+* **History stays with the historical holder.** What a holder earned up to the moment they sell is
+  theirs to claim, whoever holds the token afterwards.
+* **The future follows the balance.** From then on the buyer, if registered, accrues on what they
+  now hold.
+* **Only registered accounts earn.** The pool's vault can never register.
+
+## EXAMPLE
+
+Fund 1,000 reward tokens over 100 seconds (10 per second). A holds 600, B holds 400, both registered.
+
+| Time | Event | Earned so far |
+|---|---|---|
+| t = 50 | nothing yet | A 300, B 200 |
+| t = 50 | A transfers 300 to B | settled first: A 300, B 200; then A holds 300, B 700 |
+| t = 100 | the period ends | A 300 + 150 = 450, B 200 + 350 = 550 |
+
+The two add up to the 1,000 funded (up to a few units of rounding dust, which stay in the vault).
+A claims 450 whenever they like, even though they sold half their balance at t = 50.
+
+## RULES
+
+* `Initialize` (the mint's hook authority): picks the mode; creates the global, the **reward vault**
+  (a token account at a program-derived address, owned by the global PDA so only this program can
+  move rewards out) and the validation list. The hooked mint must have **no mint authority**, and the
+  reward mint must have no Transfer Hook of its own. The reward token can be any plain Token-2022 or
+  classic SPL Token mint.
+* `Register` (anyone, who pays the record's rent): starts counting a token account. The pool vault is
+  refused.
+* `Fund` (anyone): pays reward tokens into the vault and starts or extends the stream. Rejects a zero
+  amount, less than one unit per second, a zero duration, or one longer than `MAX_DURATION`
+  (315,360,000 s, about ten years).
+* `Claim` (the token account's owner): pays what the account has earned to an account of the reward
+  mint.
+* Rounding goes down: the vault never owes more than it was funded with.
 
 | Code | Name | When |
 |---|---|---|
@@ -98,40 +92,78 @@ and the validation list. An integrator must name them as allowed writable accoun
 | `0xC00C` | `NothingToClaim` | no earnings yet |
 | `0xC00D` | `PoolVaultMismatch` | the pool vault is for another mint |
 | `0xC00E` | `AlreadyFunded` | a one-time allocation was already funded |
-| `0x8001..` | `hook_kit::KitError` | shared checks: wrong authority, mint authority not revoked, direct `Execute`, already registered, ... |
+| `0x8001..` | `hook_kit::KitError` | shared checks: wrong authority, mint authority not revoked, direct `Execute`, already initialised, ... |
 
-## Run it
+## LIMITATIONS
 
-```bash
-cargo test -p holder-rewards-hook                       # native
-cargo build-sbf --manifest-path templates/holder-rewards/Cargo.toml --sbf-out-dir target/integration-sbf
-SBF_OUT_DIR=target/integration-sbf cargo test -p holder-rewards-hook   # the real SBF binary
-```
-
-Through Raydium: `cpmm_with_the_holder_rewards_template` and `clmm_with_the_holder_rewards_template`,
-and `cpmm_with_the_holder_rewards_one_time_mode` and `clmm_with_the_holder_rewards_one_time_mode`, in
-`tests/program-test/tests/local_flows.rs`. They check that swaps settle the registered holder, then
-fund the stream, let time pass, claim, and confirm the reward arrived in the holder's quote account;
-in one-time mode they also try a second funding and require the hook's own refusal.
-
-## Honest limits
-
-* **Registration is explicit.** An account earns nothing until someone calls `Register` (and pays
-  about 0.0015 SOL of rent). A wallet UI would add `Register` to a buyer's first transaction. We did
-  **not** build lazy creation inside the swap: it would need a funded rent vault and the system
-  program on every transfer, two more accounts per leg, and a policy for when the vault runs dry.
-* **The pool earns nothing; other pools and contracts might.** Only the configured pool vault is
-  refused. A second pool's vault, or any program-owned account, can register and collect rewards
-  that belong to holders.
-* **Burning is invisible to a hook.** A holder's earnings are capped by their actual balance when
-  they settle, and the eligible supply is corrected at their next transfer or claim, but until then
-  burned tokens dilute everyone else a little. That is why the mint authority must be revoked:
-  minting would be invisible too.
+* **Registration is explicit.** An account earns nothing until someone calls `Register` (about
+  0.0015 SOL of rent). A wallet would add `Register` to a buyer's first transaction. Lazy creation
+  inside the transfer was not built: it needs a funded rent vault and the system program on every
+  transfer, and a policy for when the vault runs dry.
+* **Only the configured pool vault is excluded.** A second pool's vault, or any program-owned
+  account, can register and collect rewards that belong to holders.
+* **Burning is invisible to a hook.** A holder's earnings are capped by their real balance when they
+  settle, and the eligible supply is corrected at their next transfer or claim, but until then burned
+  tokens dilute everyone else a little. That is why the mint authority must be revoked: minting is
+  invisible too. The rule assumes a fixed supply.
 * **Time with nobody registered pays nobody.** While the eligible supply is zero, that time's
   rewards stay in the vault.
-* **Contention.** The global is a writable account in every transfer where either side is
-  registered, so those transfers serialise on it.
-* **Rounding goes down.** The vault never owes more than it was funded with, and a few units of
-  dust can stay in it.
-* **Fixed supply only.** The rule assumes balances change only through transfers.
-* **The program's upgrade authority can replace this rule.** Disclose it or revoke it.
+* **A one-time allocation's window is chosen by whoever funds it first.** Fund it from an account
+  you trust to choose it, or revoke the program's upgrade authority.
+* **A one-time child token must already exist and be a plain token** (a child with a Transfer Hook
+  of its own is refused: its claims would need extra accounts this program does not forward). This
+  program does not create it.
+* Rounding leaves a few units of dust in the vault.
+
+## TRUST
+
+* **Config authority:** `Initialize` is signed by the mint's live Transfer Hook authority, once.
+  There is no update instruction. Funding is open to anyone: in ongoing mode anyone can top up; in
+  one-time mode the *first* funder fixes the amount and the window.
+* **Program upgrade authority:** can replace this rule, including how the vault pays out, for every
+  mint that uses the program. Disclose it or revoke it
+  (`solana program set-upgrade-authority <ID> --final`).
+* **Mint hook selection:** the mint's Transfer Hook authority can re-point the mint at a different
+  hook and stop accounting. Revoke the extension's authority to make the programme durable.
+* The reward vault is owned by a program-derived account, so only this program can pay out of it.
+
+## STATE / COST
+
+Three extra accounts per transfer, **all writable**: the global (`["rewards", mint]`), the source's
+record and the destination's record (`["holder", token_account]`); plus the hook program and the
+validation list, so a transfer leg carries 5 hook accounts. Every writable extra is a **contention
+point**: the global is written by every transfer where either side is registered, so those transfers
+serialise on it. Each registered account costs a 73-byte record (about 0.0015 SOL rent); the global
+is 186 bytes. Callers (and tests) must allow the three writable accounts explicitly, or a careful
+integrator will refuse the transfer.
+
+## TESTS
+
+`cargo test` from this directory. Rule unit tests (`src/rule.rs`) cover the index maths; runtime
+tests (`tests/holder_rewards.rs`, `tests/one_time.rs`) run inside real Token-2022 transfers with exact
+payouts.
+
+| Behaviour | Test |
+|---|---|
+| valid, exact payouts | `earnings_follow_balance_and_time_with_exact_payouts`, `rewards_split_in_proportion_to_balance`, `a_lone_holder_earns_the_whole_stream` |
+| loyal vs latecomer | `the_loyal_holder_earns_more_than_the_latecomer`, `buying_just_before_the_end_earns_almost_nothing` |
+| state update correctness | `a_transfer_settles_both_sides_and_moves_the_eligible_supply`, `history_stays_with_the_seller_and_the_future_follows_the_buyer` (rule and runtime) |
+| boundaries | `invalid_funding_is_rejected`, `funding_validates_amount_and_duration_and_rolls_over`, `the_arithmetic_cannot_overflow_at_the_extremes`, `payouts_never_exceed_the_funded_amount_even_with_awkward_numbers` |
+| rejections, exact codes | `claims_are_guarded`, `the_allocation_can_only_be_funded_once`, `a_child_token_with_a_hook_of_its_own_is_refused`, `initialize_creates_the_vault_and_validates_its_inputs` |
+| malformed state | `global_and_record_round_trip_and_reject_bad_shapes`, `instructions_round_trip` |
+| unauthorized | `only_the_mints_hook_authority_can_initialize`, `claims_are_guarded` (`WrongOwner`) |
+| irrelevant path | `an_unregistered_account_earns_nothing`, `nothing_is_paid_to_a_holder_who_never_registered_or_to_the_pool`, `registering_counts_a_balance_once_and_never_the_pool` |
+| burn | `a_burned_balance_stops_earning_at_the_next_settlement` |
+| direct `Execute` call | `a_direct_execute_call_is_refused` |
+
+```sh
+cargo test                                     # in this directory
+cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test   # real SBF binary
+```
+
+| Path | Role |
+|---|---|
+| `src/rule.rs` | **The rule**: `Stream`, `Holder`, the index maths |
+| `src/state.rs` | the global account and one record per registered token account |
+| `src/instruction.rs`, `src/processor/` | `Initialize`, `Register`, `Fund`, `Claim` and `Execute`, on [`hook-kit`](../../hook-kit) |
+| `src/error.rs` | error codes from `0xC001` |

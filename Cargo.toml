@@ -1,22 +1,12 @@
 [workspace]
 members = [
-    "crates/hook-kit",
-    "crates/hook-policy-model",
-    "crates/transfer-hook-sdk",
-    "crates/raydium-adapters",
-    "crates/raydium-hook-driver",
-    "crates/raydium-hook-cli",
-    "programs/arbitrary-test-hook",
-    "programs/bench-hook",
+    "hook-kit",
     "templates/creator-commitment",
     "templates/fair-launch",
     "templates/holder-rewards",
-    "benches/harness",
-    "tests/program-test",
-    "tests/third-party-hook",
-    "xtask",
 ]
-exclude = ["templates/transfer-hook-starter"]
+# The starter is standalone on purpose (you copy it out). `legacy/` is its own workspace.
+exclude = ["starter", "legacy"]
 resolver = "2"
 
 [workspace.package]
