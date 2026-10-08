@@ -109,7 +109,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: browser E2E (Fair Launch UI against the local validator: a passing buy, a hook-refused buy, a sell)
+      - name: "browser E2E (Fair Launch UI on the local validator - a passing buy, a hook-refused buy, a sell)"
         run: |
           npm ci
           npx playwright install --with-deps chromium
