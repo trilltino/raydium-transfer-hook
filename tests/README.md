@@ -11,7 +11,6 @@ run them:
 ```sh
 cargo xtask localnet build
 cargo test -p program-test-flows -p third-party-hook-acceptance -- --ignored
-SBF_OUT_DIR=$PWD/target/localnet-sbf cargo test -p reference-hook-onchain -- --ignored
 cargo xtask localnet e2e --skip-build        # the same flows on a real solana-test-validator
 ```
 
@@ -20,9 +19,9 @@ cargo xtask localnet e2e --skip-build        # the same flows on a real solana-t
 
 | Where | What it proves | Needs |
 |---|---|---|
-| `programs/reference-hook-onchain/tests/hook_program.rs` | Every init/update/authority/execute rule of the reference hook, with exact error codes | nothing (SBF run when `SBF_OUT_DIR` is set) |
-| `programs/reference-hook-onchain/tests/token_2022_transfer.rs` | The real Token-2022 transfer calls the hook; a refused transfer rolls back | nothing |
-| `programs/reference-hook-onchain/tests/{cpmm_swap_base_input_v2,clmm_swap_v3}_runtime.rs` | Hooked swaps through the real CPMM / CLMM SBF programs: hook runs once per hooked leg, refusals originate in the hook, pool state is untouched | `SBF_OUT_DIR` with `raydium_cp_swap.so` / `raydium_clmm.so` and the hook `.so` |
+| `templates/transfer-hook-starter/tests/hook_program.rs` | Every init/update/authority/execute rule of the starter (the reference hook), with exact error codes | nothing (SBF run when `SBF_OUT_DIR` is set) |
+| `templates/transfer-hook-starter/tests/token_2022_transfer.rs` | The real Token-2022 transfer calls the hook; a refused transfer rolls back | nothing |
+| `tests/program-test/tests/{cpmm_swap_base_input_v2,clmm_swap_v3}_runtime.rs` | Hooked swaps through the real CPMM / CLMM SBF programs: hook runs once per hooked leg, refusals originate in the hook, pool state is untouched | `SBF_OUT_DIR` with `raydium_cp_swap.so` / `raydium_clmm.so` and the hook `.so` |
 | `programs/arbitrary-test-hook/tests` | The unrelated hook: init, N+2 resolution through the unchanged SDK, state mutation, rollback of balances and its counter | nothing |
 | `templates/*/tests` | Each example hook inside real Token-2022 transfers: every boundary of the rule, exact error codes, rollback after each refusal, setup validation, direct-call refusal | nothing (SBF run when `SBF_OUT_DIR` is set) |
 | `crates/hook-kit` | Shared hook plumbing compiles and is exercised through the templates' tests | nothing |

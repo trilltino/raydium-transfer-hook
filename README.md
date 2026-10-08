@@ -45,6 +45,24 @@ Raydium builders.
 keys; see [`docs/forking.md`](docs/forking.md) (your own deployment) and
 [`docs/devnet.md`](docs/devnet.md) (ours, with transactions).
 
+## Try it in a browser
+
+A reference UI swaps a Fair Launch token on a hook-aware CPMM or CLMM pool and shows the hook allow or
+refuse the trade (a buy inside the limits, a hook-refused over-limit buy, a sell). It simulates before
+the wallet signs, and is clearly labelled experimental. [`docs/frontend.md`](docs/frontend.md) has the
+details.
+
+```sh
+npm install
+cargo xtask localnet build                    # once
+cargo xtask localnet validator                # leave running (uses Docker where the validator has no native build)
+cargo xtask localnet ui-fixture --wallet <YOUR_WALLET_PUBKEY> --out target/ui-e2e/fixture.json
+npm run ui:dev                                # then open http://127.0.0.1:5173/?env=localnet&pool=<pool from fixture.json>
+```
+
+`npm run ui:test` runs the client and UI tests and `npm run ui:e2e` the browser test against a local
+validator.
+
 ## Example hooks
 
 In each, **the custom logic is one short file, `src/rule.rs`**: pure Rust with no accounts and no
@@ -94,6 +112,7 @@ of the forks, under our program ids) < `official Raydium` (Raydium's own deploym
 | `hook build DIR`, `hook deploy`, `hook setup`, `hook inspect MINT` | The author's loop for one hook |
 | `mint create [--hook PROGRAM]` | A Token-2022 mint with the TransferHook extension |
 | `mint approve`, `mint approval` | Approve hooked mints for pool creation (admin only; many at once; `--dry-run`), and check whether a mint is approved: [`docs/forking.md`](docs/forking.md#approving-a-hooked-mint) |
+| `ui-fixture` | A Fair Launch pool plus a funded wallet, for the browser UI and its test |
 | `e2e` | The checked end-to-end flows and the results table (`--hook NAME|all`, `--hook-dir DIR`, `--setup FILE`, `--second-hook`, `--transfer-fee-bps`, `--keep-state`, `--record`) |
 | `cpmm swap`, `clmm swap` | Swap on a pool `e2e --keep-state` left: resolve each leg, simulate, explain a refusal, send |
 | `inspect MINT`, `env probe` | Transport readiness of a mint; whether a cluster's Raydium programs have the hook-aware instructions |
@@ -106,6 +125,7 @@ cargo xtask upstream verify            # the pins in upstream.lock.toml exist, n
 cargo xtask localnet build             # fetch the locked forks, build them (`localnet`) and every hook
 cargo xtask localnet validator         # solana-test-validator with every program preloaded
 cargo xtask localnet e2e               # build, start the validator, run every flow, stop it
+cargo xtask localnet ui-fixture ...    # on a running validator: a Fair Launch pool and a funded wallet for the UI
 cargo xtask env deploy-devnet          # build (`integration`), deploy what is missing, run, record
 cargo xtask devnet-doc                 # regenerate docs/devnet.md from environments/devnet.json
 ```
@@ -129,6 +149,8 @@ third-party-hook-acceptance -- --ignored` after `cargo xtask localnet build`
 | `environments/` | Cluster manifests: `localnet.json` (keyless), `devnet.json` (integration), `raydium-devnet.json` (official) |
 | `tests/` | In-process flows, third-party acceptance tests, the localnet fixtures |
 | `xtask` | Upstream locks, localnet, devnet deployment, evidence page |
+| `packages/transfer-hook-client` | The hook-aware TypeScript client (Apache-2.0): resolves each leg's hook accounts, builds `swap_base_input_v2` / `swap_v3`, decodes failures. Checked byte for byte against the Rust goldens |
+| `apps/fair-launch-ui` | The Fair Launch reference UI (React + Vite; GPL-3.0-or-later because it uses Raydium SDK V2) and its browser test |
 | `scripts/` | `approve-hooked-mints.ts`: approve hooked mints for pool creation, or check them (TypeScript, no Raydium SDK) |
 | `docs/` | Start at [docs/README.md](docs/README.md) |
 

@@ -1,0 +1,23 @@
+{
+  "name": "raydium-transfer-hook",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JavaScript workspace: the hook-aware Raydium client and the Fair Launch reference UI. Cargo manages the Rust side.",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "ui:dev": "npm --workspace apps/fair-launch-ui run dev",
+    "ui:build": "npm --workspace apps/fair-launch-ui run build",
+    "ui:test": "npm --workspace packages/transfer-hook-client test && npm --workspace apps/fair-launch-ui test",
+    "ui:e2e": "npm --workspace apps/fair-launch-ui run test:e2e",
+    "typecheck": "npm --workspace packages/transfer-hook-client run typecheck && npm --workspace apps/fair-launch-ui run typecheck"
+  },
+  "overrides": {
+    "@solana/web3.js": "1.98.4"
+  }
+}

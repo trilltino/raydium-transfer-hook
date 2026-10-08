@@ -48,6 +48,23 @@ jobs:
       - name: git status is clean (nothing fetched or generated is tracked)
         run: git diff --exit-code && test -z "$(git status --porcelain)"
 
+  frontend:
+    name: TypeScript client and Fair Launch UI (typecheck, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: client and UI tests (the client is checked against the Rust goldens under crates/ and tests/fixtures)
+        run: npm run ui:test
+      - run: npm --workspace apps/fair-launch-ui run build
+      - name: git status is clean (the generated environments file is ignored)
+        run: test -z "$(git status --porcelain)"
+
   runtime:
     name: SBF builds, Raydium runtime tests, local validator E2E
     runs-on: ubuntu-latest
@@ -88,5 +105,14 @@ jobs:
           cargo test -p hook-bench -- --ignored
       - name: solana-test-validator E2E (every hook through CPMM and CLMM, and the starter built from source)
         run: cargo xtask localnet e2e --skip-build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: browser E2E (Fair Launch UI against the local validator: a passing buy, a hook-refused buy, a sell)
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run ui:e2e
       - name: git status is clean after fetching and building upstream
         run: test -z "$(git status --porcelain)"

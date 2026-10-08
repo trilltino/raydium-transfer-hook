@@ -257,9 +257,11 @@ pub async fn run_cpmm_session<C: Chain>(
         enable_hook(chain, &mut rec, entry.hook, &entry.ctx, role).await?;
     }
     if let Some(fixture) = inputs.ui_fixture {
-        fund_ui_wallet(chain, &mut rec, &fixture, &world).await?;
+        let wallet_accounts = fund_ui_wallet(chain, &mut rec, &fixture, &world).await?;
         let mut session = build_session("cpmm", &world, &kit);
         session.pool = Some(pool.pool_state.to_string());
+        // For a UI fixture the accounts are the wallet's, not the payer's.
+        session.accounts = wallet_accounts.map(|account| account.to_string());
         rec.push(
             "summary",
             None,
@@ -346,12 +348,12 @@ fn associated_account_instruction(
 }
 
 /// Give the browser test's wallet SOL and funded associated token accounts for both mints.
-async fn fund_ui_wallet<C: Chain>(
+pub(super) async fn fund_ui_wallet<C: Chain>(
     chain: &mut C,
     rec: &mut Recorder,
     fixture: &super::UiFixture,
     world: &World,
-) -> Result<()> {
+) -> Result<[solana_sdk::pubkey::Pubkey; 2]> {
     let payer = chain.payer().pubkey();
     let (hooked_account, create_hooked) =
         associated_account_instruction(&payer, &fixture.wallet, &world.hooked.pubkey());
@@ -362,23 +364,28 @@ async fn fund_ui_wallet<C: Chain>(
         rec,
         "create the wallet's token accounts and fund it",
         vec![
-            solana_sdk::system_instruction::transfer(&payer, &fixture.wallet, fixture.wallet_lamports),
+            solana_sdk::system_instruction::transfer(
+                &payer,
+                &fixture.wallet,
+                fixture.wallet_lamports,
+            ),
             create_hooked,
             create_quote,
             token::mint_to_instruction(
                 &world.hooked.pubkey(),
                 &hooked_account,
                 &payer,
-                fixture.wallet_amount,
+                fixture.wallet_hooked_amount,
             ),
             token::mint_to_instruction(
                 &world.quote.pubkey(),
                 &quote_account,
                 &payer,
-                fixture.wallet_amount,
+                fixture.wallet_quote_amount,
             ),
         ],
         &[],
     )
-    .await
+    .await?;
+    Ok([hooked_account, quote_account])
 }

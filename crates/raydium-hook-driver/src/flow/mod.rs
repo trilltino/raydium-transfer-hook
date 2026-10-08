@@ -40,8 +40,10 @@ pub struct UiFixture {
     pub wallet: solana_sdk::pubkey::Pubkey,
     /// Raw units seeded into the pool for each token.
     pub seed_amount: u64,
-    /// Raw units of each token minted to the wallet.
-    pub wallet_amount: u64,
+    /// Raw units of the hooked token minted to the wallet (keep it under the launch's per-account cap).
+    pub wallet_hooked_amount: u64,
+    /// Raw units of the quote token minted to the wallet.
+    pub wallet_quote_amount: u64,
     pub wallet_lamports: u64,
 }
 
@@ -64,7 +66,7 @@ pub struct FlowInputs<'a> {
     /// After the standard checks, also run the CPMM operations that move two tokens with the
     /// hook live: pool creation, deposit, withdraw and fee collection (`*_v2`). CPMM only.
     pub liquidity: bool,
-    /// Set up a pool and a funded wallet for a browser test, and stop before the swap checks. CPMM only.
+    /// Set up a pool and a funded wallet for a browser test, and stop before the swap checks.
     pub ui_fixture: Option<UiFixture>,
 }
 

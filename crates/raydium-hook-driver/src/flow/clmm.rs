@@ -219,6 +219,15 @@ pub async fn run_clmm_session<C: Chain>(
         };
         enable_hook(chain, &mut rec, entry.hook, &entry.ctx, role).await?;
     }
+    if let Some(fixture) = inputs.ui_fixture {
+        let wallet_accounts =
+            super::cpmm::fund_ui_wallet(chain, &mut rec, &fixture, &world).await?;
+        let mut session = build_session("clmm", &world, &kit);
+        session.pool = Some(pool.pool_state.to_string());
+        // For a UI fixture the accounts are the wallet's, not the payer's.
+        session.accounts = wallet_accounts.map(|account| account.to_string());
+        return Ok((rec.evidence, session));
+    }
     let builder = ClmmSwaps {
         kit: &kit,
         clmm,
@@ -237,7 +246,8 @@ pub async fn run_clmm_session<C: Chain>(
             world.quote.pubkey()
         ),
     );
-    let session = build_session("clmm", &world, &kit);
+    let mut session = build_session("clmm", &world, &kit);
+    session.pool = Some(pool.pool_state.to_string());
     Ok((rec.evidence, session))
 }
 

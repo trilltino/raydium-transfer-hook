@@ -7,7 +7,8 @@
 //!   and build this repository's hooks, all into `target/localnet-sbf`.
 //! * `validator`: start `solana-test-validator` with every program preloaded at the ids in
 //!   `environments/localnet.json`, the admin as the faucet, and the CPMM fee receiver (an address
-//!   nobody holds the key to) seeded as an empty wrapped-SOL account.
+//!   nobody holds the key to) seeded as an empty wrapped-SOL account. Where the validator is not
+//!   installed (it has no Windows build) and Docker is, it runs in a Linux container instead.
 //! * `e2e`: `build` (unless `--skip-build`), start the validator, run `raydium-hook e2e` for every
 //!   hook through both AMMs and for the starter built from source, then stop the validator.
 
@@ -29,6 +30,13 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const ENV_FILE: &str = "environments/localnet.json";
 const ADMIN_KEYPAIR: &str = "tests/fixtures/localnet/admin.json";
 const RPC: &str = "http://127.0.0.1:8899";
+const DOCKER_IMAGE: &str = "rth-validator:agave-4.0.0";
+const DOCKER_NAME: &str = "rth-validator";
+const DOCKERFILE: &str = "FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends curl bzip2 ca-certificates libssl3 libudev1 && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /opt && curl -sSfL https://github.com/anza-xyz/agave/releases/download/v4.0.0/solana-release-x86_64-unknown-linux-gnu.tar.bz2 | tar xj -C /opt
+ENV PATH=/opt/solana-release/bin:$PATH
+";
 
 /// This repository's hook programs: source directory, artifact name, environment key.
 const HOOKS: &[(&str, &str, &str)] = &[
@@ -122,7 +130,7 @@ pub fn run(args: &[&str]) -> Result<()> {
             e2e(rest)
         }
         ["ui-fixture", rest @ ..] => ui_fixture(rest),
-        _ => Err("usage: cargo xtask localnet <build | validator | e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] | ui-fixture --wallet PUBKEY --out FILE>".into()),
+        _ => Err("usage: cargo xtask localnet <build | validator | e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] | ui-fixture --wallet PUBKEY --out FILE [--amm cpmm|clmm]>".into()),
     }
 }
 
@@ -216,22 +224,126 @@ impl Drop for Validator {
     fn drop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
+        // Killing the Docker client does not stop the container.
+        let _ = Command::new("docker")
+            .args(["rm", "-f", DOCKER_NAME])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
+}
+
+/// Run the validator in a container when it is not installed here (it has no Windows build) and
+/// Docker is. `RTH_VALIDATOR=docker` forces the container, `RTH_VALIDATOR=native` forbids it.
+fn use_docker() -> bool {
+    match std::env::var("RTH_VALIDATOR").as_deref() {
+        Ok("docker") => return true,
+        Ok("native") => return false,
+        _ => {}
+    }
+    let native = Command::new("solana-test-validator")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    !native
+        && Command::new("docker")
+            .arg("version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+}
+
+/// Build the validator image once (it downloads the pinned Agave release).
+fn ensure_validator_image() -> Result<()> {
+    let present = Command::new("docker")
+        .args(["image", "inspect", DOCKER_IMAGE])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if present {
+        return Ok(());
+    }
+    println!("building {DOCKER_IMAGE} (downloads Agave v4.0.0, once)");
+    let mut build = Command::new("docker")
+        .args(["build", "-t", DOCKER_IMAGE, "-"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("docker build: {e}"))?;
+    {
+        use std::io::Write;
+        build
+            .stdin
+            .take()
+            .ok_or("docker build has no stdin")?
+            .write_all(DOCKERFILE.as_bytes())?;
+    }
+    let status = build.wait()?;
+    if !status.success() {
+        return Err(format!("docker build of {DOCKER_IMAGE} failed ({status})").into());
+    }
+    Ok(())
 }
 
 fn start_validator(stdout: Stdio) -> Result<Child> {
     let env = Env::load()?;
     let out = artifacts();
-    let mut command = Command::new("solana-test-validator");
+    let docker = use_docker();
+    let fee_receiver = fee_receiver_file(&env)?;
+    // Where the artifacts and the fee-receiver account are, as the validator sees them.
+    let (so_dir, fee_receiver_arg) = if docker {
+        ensure_validator_image()?;
+        ("/sbf".to_string(), "/work/fee-receiver.json".to_string())
+    } else {
+        (
+            out.display().to_string(),
+            fee_receiver.display().to_string(),
+        )
+    };
+    let mut command = if docker {
+        // A container left over from an earlier run would hold the ports.
+        let _ = Command::new("docker")
+            .args(["rm", "-f", DOCKER_NAME])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        let mut run = Command::new("docker");
+        // Agave 4 needs io_uring, which Docker's default seccomp profile blocks. The validator
+        // cannot bind 0.0.0.0 (gossip refuses an unspecified address), so it binds the container's
+        // own address, which the published ports reach.
+        run.args(["run", "--rm", "--name", DOCKER_NAME])
+            .args(["--security-opt", "seccomp=unconfined", "--ulimit", "memlock=-1:-1"])
+            .args(["-p", "8899:8899", "-p", "8900:8900"])
+            .arg("-v")
+            .arg(format!("{}:/sbf:ro", out.display()))
+            .arg("-v")
+            .arg(format!("{}:/work:ro", work_dir().display()))
+            .arg(DOCKER_IMAGE)
+            .args([
+                "sh",
+                "-c",
+                "exec solana-test-validator --bind-address \"$(hostname -i | cut -d' ' -f1)\" --ledger /tmp/ledger \"$@\"",
+                "sh",
+            ]);
+        run
+    } else {
+        let mut native = Command::new("solana-test-validator");
+        native.arg("--ledger").arg(work_dir().join("ledger"));
+        native
+    };
     command
         .arg("--reset")
         .arg("--quiet")
-        .arg("--ledger")
-        .arg(work_dir().join("ledger"))
         .args(["--mint", &env.admin])
         .arg("--account")
         .arg(&env.cpmm_fee_receiver)
-        .arg(fee_receiver_file(&env)?);
+        .arg(&fee_receiver_arg);
     let programs = RAYDIUM
         .iter()
         .map(|(name, artifact, _)| (*name, *artifact))
@@ -245,7 +357,13 @@ fn start_validator(stdout: Stdio) -> Result<Child> {
             )
             .into());
         }
-        command.arg("--bpf-program").arg(env.program(key)?).arg(so);
+        command
+            .arg("--bpf-program")
+            .arg(env.program(key)?)
+            .arg(format!("{so_dir}/{artifact}.so"));
+    }
+    if std::env::var_os("RTH_DEBUG").is_some() {
+        eprintln!("{command:?}");
     }
     let child = command.stdout(stdout).spawn().map_err(|e| {
         format!("could not start solana-test-validator (is the Solana CLI on PATH?): {e}")
@@ -458,6 +576,7 @@ fn ui_fixture(rest: &[&str]) -> Result<()> {
             .and_then(|i| rest.get(i + 1).copied())
     };
     let wallet = value("--wallet").ok_or("ui-fixture needs --wallet PUBKEY")?;
+    let amm = value("--amm").unwrap_or("cpmm");
     let out = value("--out").ok_or("ui-fixture needs --out FILE")?;
     // The environment is copied so a run never rewrites the committed manifest.
     let env_copy = work_dir().join("localnet.json");
@@ -475,6 +594,8 @@ fn ui_fixture(rest: &[&str]) -> Result<()> {
             wallet,
             "--out",
             out,
+            "--amm",
+            amm,
             "--window-seconds",
             "3600",
             "--max-buy",
@@ -487,7 +608,9 @@ fn ui_fixture(rest: &[&str]) -> Result<()> {
             "1000",
             "--seed-amount",
             "2000000000",
-            "--wallet-amount",
+            "--wallet-hooked-amount",
+            "100000000",
+            "--wallet-quote-amount",
             "1000000000",
         ]),
         "raydium-hook ui-fixture",
