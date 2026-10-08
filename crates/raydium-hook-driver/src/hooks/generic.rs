@@ -301,6 +301,7 @@ impl GenericExternalHook {
             vaults: [Pubkey::new_unique(), Pubkey::new_unique()],
             now: 0,
             wallet_accounts: None,
+            extra_venues: Vec::new(),
         };
         let vars = Vars::from_context(self.program, &dummy);
         for instruction in &self.spec.setup {
@@ -433,6 +434,7 @@ mod tests {
             vaults: [Pubkey::new_unique(); 2],
             now: 0,
             wallet_accounts: None,
+            extra_venues: Vec::new(),
         };
         let instructions = hook.enable_instructions(&ctx);
         assert_eq!(

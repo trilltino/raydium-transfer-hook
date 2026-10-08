@@ -7,7 +7,10 @@
 //! cargo test -p program-test-flows --test local_flows -- --ignored --nocapture
 //! ```
 
-use program_test_flows::{arbitrary, reference, run, run_full, run_with, setup, template_id};
+use program_test_flows::{
+    arbitrary, reference, run, run_full, run_with, run_with_extra_pools, run_with_rewards, setup,
+    template_id,
+};
 use raydium_hook_driver::HookSetup;
 use raydium_hook_driver::{
     ArbitraryHook, CreatorCommitmentHook, FairLaunchHook, HolderRewardsHook, ReferenceHook,
@@ -161,4 +164,22 @@ liquidity_flows! {
     clmm_liquidity_with_the_reference_hook: "clmm", |s| (reference(&s), None, 0);
     clmm_liquidity_with_the_same_hook_program_on_both_legs: "clmm", |s| (reference(&s), Some(Box::new(reference(&s))), 0);
     clmm_liquidity_with_a_transfer_fee: "clmm", |s| (reference(&s), None, 500);
+}
+
+/// Several pools of one hooked mint (the contention measurement builds these): the flow creates them
+/// from separate AmmConfigs and the first pool's checks still pass.
+#[tokio::test]
+#[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
+async fn cpmm_with_more_pools_of_the_same_hooked_mint() {
+    let s = setup();
+    run_with_extra_pools(&reference(&s), 2, &s).await;
+}
+
+/// CLMM reward emissions paid in a hooked token: the reward funding, the payout to a position, the
+/// top-up and the unemitted remainder each run the hook.
+#[tokio::test]
+#[ignore = "needs `cargo xtask localnet build` (or RTH_PROFILE=integration, see docs/forking.md)"]
+async fn clmm_reward_emissions_in_a_hooked_token() {
+    let s = setup();
+    run_with_rewards(&reference(&s), &s).await;
 }

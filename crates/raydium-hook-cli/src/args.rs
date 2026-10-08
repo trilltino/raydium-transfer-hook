@@ -45,7 +45,7 @@ run it through Raydium
   e2e          --env FILE --keypair FILE [--fee-receiver-keypair FILE] [--amm cpmm|clmm|all]
                [--hook NAME|all | --hook-dir DIR [--setup FILE] [--keys DIR] | --setup FILE]
                [--second-hook NAME] [--transfer-fee-bps N] [--keep-state FILE]
-               [--vest-seconds N] [--window-seconds N] [--reward-seconds N] [--exact-output] [--liquidity] [--record]
+               [--vest-seconds N] [--window-seconds N] [--reward-seconds N] [--exact-output] [--liquidity] [--rewards] [--record]
                Run the checked end-to-end flows: admin setup, hooked mint, real pool, hooked swaps
                in both directions, the hook's refusals with rollback, its own follow-up steps.
                NAME: reference, arbitrary, creator-commitment, fair-launch,
@@ -55,11 +55,13 @@ run it through Raydium
                happened and exits non-zero on any failure. --keep-state saves the pool for
                `cpmm swap`. --exact-output also swaps for an exact output amount on CPMM
                (`swap_base_output_v2`; needs a CPMM build that has it). --liquidity also creates a second
-               CPMM pool with the hook live and deposits, withdraws and collects fees (`*_v2`).
+               CPMM pool with the hook live and deposits, withdraws and collects fees (`*_v2`), and on CLMM opens
+               positions, places limit orders and removes liquidity. --rewards (CLMM, with --liquidity) also runs reward
+               emissions in the hooked token; a reward period lasts days, so on a live cluster only the funding runs.
                --record writes evidence (and a --hook-dir deployment) to the env file.
   ui-fixture   --env FILE --keypair FILE --wallet PUBKEY --out FILE [--amm cpmm|clmm] [--hook NAME] [--fee-receiver-keypair FILE]
                [--window-seconds N] [--vest-seconds N] [--locked-total N] [--reward-seconds N] [--reward-amount N] [--max-buy N] [--max-wallet N] [--max-buys-per-slot N] [--max-priority N]
-               [--seed-amount N] [--wallet-hooked-amount N] [--wallet-quote-amount N] [--wallet-lamports N]
+               [--seed-amount N] [--extra-pools N] [--wallet-hooked-amount N] [--wallet-quote-amount N] [--wallet-lamports N]
                Set up a Fair Launch CPMM pool and give WALLET SOL and funded token accounts, then stop:
                what the browser UI and its end-to-end test need. Only the wallet's public key is used.
                The limits are raw token units; the launch window starts now.
@@ -100,6 +102,7 @@ const SWITCHES: &[&str] = &[
     "hookable",
     "exact-output",
     "liquidity",
+    "rewards",
     "dry-run",
 ];
 

@@ -92,6 +92,10 @@ impl Chain for LocalChain<'_> {
         Ok(Sent { signature })
     }
 
+    fn can_warp(&self) -> bool {
+        true
+    }
+
     async fn advance_time(&mut self, seconds: u64) -> Result<()> {
         let mut clock: solana_sdk::clock::Clock = self
             .context

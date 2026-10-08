@@ -67,13 +67,25 @@ async fn run_hooked<C: Chain>(
     instruction: Instruction,
     signers: &[&Keypair],
 ) -> Result<(String, String)> {
+    run_hooked_runs(chain, label, instruction, signers, expected_runs(kit)).await
+}
+
+/// [`run_hooked`] with the number of times each hook program must run given (an operation that moves
+/// one token runs one hook once).
+pub(super) async fn run_hooked_runs<C: Chain>(
+    chain: &mut C,
+    label: &str,
+    instruction: Instruction,
+    signers: &[&Keypair],
+    runs: Vec<(Pubkey, usize)>,
+) -> Result<(String, String)> {
     let transaction = with_budget(vec![instruction]);
     let sim = chain.simulate(&transaction, signers).await?;
     require(
         sim.succeeded,
         format!("{label}: simulation failed: {:?} {:?}", sim.error, sim.logs),
     )?;
-    for (program, expected) in expected_runs(kit) {
+    for (program, expected) in runs {
         require(
             sim.invocations_of(&program) == expected,
             format!(
@@ -115,7 +127,7 @@ fn deposit_legs(
 }
 
 /// A transfer out of the pool: the vault to a recipient account, signed by the pool state.
-fn withdrawal_legs(
+pub(super) fn withdrawal_legs(
     pool: &ClmmPool,
     recipients: [Pubkey; 2],
     amount: u64,
@@ -138,7 +150,10 @@ fn withdrawal_legs(
     )
 }
 
-async fn balances<C: Chain>(chain: &mut C, accounts: &[Pubkey; 2]) -> Result<(u64, u64)> {
+pub(super) async fn balances<C: Chain>(
+    chain: &mut C,
+    accounts: &[Pubkey; 2],
+) -> Result<(u64, u64)> {
     Ok((
         amount_of(chain, &accounts[0]).await?,
         amount_of(chain, &accounts[1]).await?,
@@ -211,6 +226,7 @@ pub(super) async fn clmm_liquidity_checks<C: Chain>(
             payer,
             pool.pool_state,
             [pool.vault_0, pool.vault_1],
+            &[],
             now,
         ),
     };
@@ -365,8 +381,10 @@ pub(super) async fn clmm_liquidity_checks<C: Chain>(
         world,
     };
     for mint0_in in [true, false] {
-        for _ in 0..SWAPS_EACH_WAY {
-            let instruction = swaps.build(chain, mint0_in, SWAP_AMOUNT, 1).await?;
+        for repeat in 0..SWAPS_EACH_WAY {
+            // A different amount each time: an identical transaction in the same block would be a duplicate.
+            let amount = SWAP_AMOUNT + repeat as u64;
+            let instruction = swaps.build(chain, mint0_in, amount, 1).await?;
             let label = if mint0_in {
                 "hooked token in"
             } else {
@@ -461,32 +479,58 @@ pub(super) async fn clmm_liquidity_checks<C: Chain>(
         );
     }
 
-    // 7. Take the whole position out.
+    // 7. Limit orders: placed, topped up, partly cancelled, filled by swaps, settled, cancelled, closed.
+    super::clmm_limit_order::limit_order_checks(chain, rec, clmm, &swaps, provider).await?;
+
+    // 8. Reward emissions in the hooked token: fund a period, then (where the clock can move) pay the
+    // position and extend the period. While a reward exists every decrease must pass its group.
+    let mut reward = None;
+    if inputs.rewards {
+        let mut state =
+            super::clmm_rewards::start_rewards(chain, rec, clmm, &swaps, provider).await?;
+        super::clmm_rewards::accrue_pay_and_extend(
+            chain, rec, clmm, &swaps, provider, &position, &mut state,
+        )
+        .await?;
+        reward = Some(state);
+    }
+
+    // 9. Take the whole position out, in three parts: by now the swaps have moved the price, so one token
+    // makes up more of the position, and a hook that caps each transfer would refuse it all at once.
     let before = balances(chain, &provider).await?;
     let vaults_before = (
         amount_of(chain, &pool.vault_0).await?,
         amount_of(chain, &pool.vault_1).await?,
     );
-    let mut remove = clmm.decrease_liquidity_instruction(
-        &pool,
-        &position,
-        &provider[0],
-        &provider[1],
-        OPEN_LIQUIDITY + INCREASE_LIQUIDITY,
-        0,
-        0,
-    );
-    let (leg_0, leg_1) = withdrawal_legs(&pool, provider, 1);
-    frame(
-        chain,
-        kit,
-        ClmmLiquidityOp::DecreaseLiquidity,
-        &mut remove,
-        leg_0,
-        leg_1,
-    )
-    .await?;
-    let (signature, detail) = run_hooked(chain, kit, "remove liquidity", remove, &[]).await?;
+    let total = OPEN_LIQUIDITY + INCREASE_LIQUIDITY;
+    let part = total / 3;
+    let mut signatures = Vec::new();
+    let mut detail = String::new();
+    for (index, liquidity) in [part, part, total - 2 * part].into_iter().enumerate() {
+        let remove = super::clmm_rewards::decrease_instruction(
+            chain,
+            kit,
+            clmm,
+            &pool,
+            &position,
+            provider,
+            liquidity,
+            reward
+                .as_ref()
+                .map(|state| (state, swaps.world.trader[0].pubkey())),
+        )
+        .await?;
+        let (signature, this) = run_hooked(
+            chain,
+            kit,
+            &format!("remove liquidity (part {})", index + 1),
+            remove,
+            &[],
+        )
+        .await?;
+        signatures.push(signature);
+        detail = this;
+    }
     let after = balances(chain, &provider).await?;
     let vaults_after = (
         amount_of(chain, &pool.vault_0).await?,
@@ -503,8 +547,16 @@ pub(super) async fn clmm_liquidity_checks<C: Chain>(
     )?;
     rec.push(
         "hooked liquidity removal (decrease_liquidity_v3)",
-        Some(signature),
-        format!("vaults {vaults_before:?} -> {vaults_after:?}; {detail}"),
+        signatures.last().cloned(),
+        format!(
+            "in {} parts; vaults {vaults_before:?} -> {vaults_after:?}; last part: {detail}",
+            signatures.len()
+        ),
     );
+
+    // 10. With the position gone nothing more is emitted; once the period is over the funder takes the rest back.
+    if let Some(state) = &reward {
+        super::clmm_rewards::collect_remaining(chain, rec, clmm, &swaps, provider, state).await?;
+    }
     Ok(())
 }

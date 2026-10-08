@@ -48,10 +48,13 @@ pub use error::{
     HookProgramInvalidReason, LegError, LegField, LegRole, SliceFault, SplResolveError,
 };
 pub use frame::{
-    frame_clmm_liquidity_or_passthrough, frame_clmm_liquidity_v3, frame_clmm_or_passthrough,
+    frame_clmm_decrease_with_rewards_v4, frame_clmm_limit_order_or_passthrough,
+    frame_clmm_limit_order_v2, frame_clmm_liquidity_or_passthrough, frame_clmm_liquidity_v3,
+    frame_clmm_or_passthrough, frame_clmm_reward_or_passthrough, frame_clmm_reward_v2,
     frame_clmm_swap_v3, frame_cpmm_or_passthrough, frame_cpmm_output_or_passthrough,
     frame_cpmm_pair_or_passthrough, frame_cpmm_pair_v2, frame_cpmm_swap_base_input_v2,
-    frame_cpmm_swap_base_output_v2, ClmmLiquidityOp, CpmmPairOp, FramedAbi, FramedSwap,
+    frame_cpmm_swap_base_output_v2, ClmmLimitOrderOp, ClmmLiquidityOp, ClmmRewardOp, CpmmPairOp,
+    FramedAbi, FramedDecreaseWithRewards, FramedSwap,
 };
 pub use resolve::{
     default_allowed_loaders, resolve_leg, resolve_legs, HookFingerprint, HookSlice, LegHook,

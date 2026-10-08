@@ -8,14 +8,23 @@
 use std::ops::Range;
 
 mod clmm;
+mod clmm_limit_order;
 mod clmm_liquidity;
+mod clmm_rewards;
 mod cpmm;
 mod cpmm_pair;
 mod layout;
 
 pub use clmm::{frame_clmm_or_passthrough, frame_clmm_swap_v3};
+pub use clmm_limit_order::{
+    frame_clmm_limit_order_or_passthrough, frame_clmm_limit_order_v2, ClmmLimitOrderOp,
+};
 pub use clmm_liquidity::{
     frame_clmm_liquidity_or_passthrough, frame_clmm_liquidity_v3, ClmmLiquidityOp,
+};
+pub use clmm_rewards::{
+    frame_clmm_decrease_with_rewards_v4, frame_clmm_reward_or_passthrough, frame_clmm_reward_v2,
+    ClmmRewardOp, FramedDecreaseWithRewards,
 };
 pub use cpmm::{
     frame_cpmm_or_passthrough, frame_cpmm_output_or_passthrough, frame_cpmm_swap_base_input_v2,
@@ -33,6 +42,12 @@ pub enum FramedAbi {
     ClmmSwapV3,
     /// A two-token CLMM operation other than a swap: positions, liquidity, fee collection.
     ClmmLiquidity(ClmmLiquidityOp),
+    /// A CLMM limit-order operation: open, increase, decrease, settle.
+    ClmmLimitOrder(ClmmLimitOrderOp),
+    /// A CLMM reward instruction that moves one reward token: funding, top-up, remaining rewards.
+    ClmmReward(ClmmRewardOp),
+    /// `decrease_liquidity_v4`: a decrease that also pays rewards through their hooks.
+    ClmmDecreaseWithRewards,
 }
 
 /// What `frame_*` did to the instruction, with the account ranges of each slice.

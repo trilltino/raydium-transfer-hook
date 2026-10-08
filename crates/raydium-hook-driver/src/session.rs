@@ -30,6 +30,9 @@ pub struct Session {
     /// The pool the flow created (CPMM: the pool-state account), when the flow recorded it.
     #[serde(default)]
     pub pool: Option<String>,
+    /// Further pools of the same hooked mint, when the flow was asked for them (CPMM).
+    #[serde(default)]
+    pub extra_pools: Vec<String>,
 }
 
 fn key(label: &str, text: &str) -> Result<Pubkey> {
@@ -111,6 +114,7 @@ mod tests {
             }],
             allowed_writable: vec![extra.to_string()],
             pool: None,
+            extra_pools: Vec::new(),
         };
         let path = std::env::temp_dir().join(format!("session-{m0}.json"));
         session.save(&path).unwrap();
@@ -135,6 +139,7 @@ mod tests {
             hooks: vec![],
             allowed_writable: vec![],
             pool: None,
+            extra_pools: Vec::new(),
         };
         assert!(session.mint_0().unwrap_err().message.contains("mint_0"));
         session.mint_0 = Pubkey::new_unique().to_string();

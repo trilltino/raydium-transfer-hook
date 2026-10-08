@@ -29,8 +29,13 @@ pub(crate) async fn ui_fixture(flags: &Flags) -> Res<()> {
         wallet_quote_amount: flags.number("wallet-quote-amount", 1_000_000_000u64)?,
         wallet_lamports: flags.number("wallet-lamports", 2_000_000_000u64)?,
     };
-    let inputs =
-        FlowInputs::new(&env, provider.as_ref(), fee_receiver.as_ref()).with_ui_fixture(fixture);
+    let extra_pools: u16 = flags.number("extra-pools", 0u16)?;
+    if extra_pools > 0 && flags.get("amm").unwrap_or("cpmm") != "cpmm" {
+        return Err("--extra-pools is for --amm cpmm".into());
+    }
+    let inputs = FlowInputs::new(&env, provider.as_ref(), fee_receiver.as_ref())
+        .with_ui_fixture(fixture)
+        .with_extra_pools(extra_pools);
     println!(
         "UI FIXTURE  environment {} ({})  payer {}  wallet {}",
         env.name,
@@ -61,6 +66,7 @@ fn write_fixture(path: &str, env: &Environment, session: &Session, wallet: &str)
         "amm": session.amm,
         "rpc_url": env.rpc_url,
         "pool": session.pool,
+        "extra_pools": session.extra_pools,
         "hooked_mint": session.mint_0,
         "quote_mint": session.mint_1,
         "hook_program": hook_program,

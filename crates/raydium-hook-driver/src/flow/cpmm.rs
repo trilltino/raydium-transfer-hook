@@ -12,6 +12,9 @@ use crate::{
 };
 
 const CPMM_SEED_AMOUNT: u64 = 1_000_000;
+/// The AmmConfig index of the first extra pool; the next ones follow. Clear of the indices the liquidity
+/// checks use.
+const EXTRA_POOL_CONFIG_BASE: u16 = 10;
 
 pub(super) struct CpmmSwaps<'a> {
     pub(super) kit: &'a SwapKit<'a>,
@@ -233,6 +236,18 @@ pub async fn run_cpmm_session<C: Chain>(
             && (!exact || (seeded.0 == seed_amount && seeded.1 == seed_amount)),
         format!("the pool vaults must hold the seeded liquidity, found {seeded:?}"),
     )?;
+    // More pools of the same hooked mint, when asked for: each from its own AmmConfig, seeded like the first.
+    let extra_pools = create_extra_pools(
+        chain,
+        &mut rec,
+        &cpmm,
+        &world,
+        &hooked_mints,
+        admin,
+        seed_amount,
+        inputs.extra_pools,
+    )
+    .await?;
     // CPMM opens a new pool one second after creation.
     chain.advance_time(5).await?;
 
@@ -252,6 +267,10 @@ pub async fn run_cpmm_session<C: Chain>(
             payer,
             pool.authority,
             [pool.vault_0, pool.vault_1],
+            &extra_pools
+                .iter()
+                .map(|extra| extra.vault_0)
+                .collect::<Vec<_>>(),
             now,
         ),
     };
@@ -270,6 +289,10 @@ pub async fn run_cpmm_session<C: Chain>(
         }
         let mut session = build_session("cpmm", &world, &kit);
         session.pool = Some(pool.pool_state.to_string());
+        session.extra_pools = extra_pools
+            .iter()
+            .map(|extra| extra.pool_state.to_string())
+            .collect();
         // For a UI fixture the accounts are the wallet's, not the payer's.
         session.accounts = wallet_accounts.map(|account| account.to_string());
         rec.push(
@@ -322,7 +345,80 @@ pub async fn run_cpmm_session<C: Chain>(
     );
     let mut session = build_session("cpmm", &world, &kit);
     session.pool = Some(pool.pool_state.to_string());
+    session.extra_pools = extra_pools
+        .iter()
+        .map(|extra| extra.pool_state.to_string())
+        .collect();
     Ok((rec.evidence, session))
+}
+
+/// Create `count` more pools of the hooked mint and the quote mint, each under its own AmmConfig (the
+/// pool address is derived from the config, so one pair can have several pools) and seeded from the
+/// same liquidity providers.
+#[allow(clippy::too_many_arguments)]
+async fn create_extra_pools<C: Chain>(
+    chain: &mut C,
+    rec: &mut Recorder,
+    cpmm: &Cpmm,
+    world: &World,
+    hooked_mints: &[solana_sdk::pubkey::Pubkey],
+    admin: solana_sdk::pubkey::Pubkey,
+    seed_amount: u64,
+    count: u16,
+) -> Result<Vec<CpmmPool>> {
+    let payer = chain.payer().pubkey();
+    require(
+        u64::from(count + 1) * seed_amount <= PROVIDER_FUNDS,
+        format!(
+            "{} pools of {seed_amount} need more than the providers hold ({PROVIDER_FUNDS}); lower --seed-amount",
+            count + 1
+        ),
+    )?;
+    let mut pools = Vec::new();
+    for index in 0..count {
+        let config = cpmm.amm_config(EXTRA_POOL_CONFIG_BASE + index);
+        if chain.account(&config).await?.is_none() {
+            send_step(
+                chain,
+                rec,
+                "create an AmmConfig for another pool of the same mint (admin instruction)",
+                vec![cpmm.create_amm_config_instruction(
+                    &admin,
+                    EXTRA_POOL_CONFIG_BASE + index,
+                    2_500,
+                    120_000,
+                    0,
+                    0,
+                    0,
+                )],
+                &[],
+            )
+            .await?;
+        }
+        let pool = cpmm.pool(config, world.hooked.pubkey(), world.quote.pubkey());
+        send_step(
+            chain,
+            rec,
+            "create another CPMM pool of the same hooked mint",
+            with_budget(vec![cpmm.initialize_instruction(
+                &payer,
+                &pool,
+                &world.provider[0].pubkey(),
+                &world.provider[1].pubkey(),
+                seed_amount,
+                seed_amount,
+                0,
+                &hooked_mints
+                    .iter()
+                    .map(|mint| cpmm.support_mint(mint))
+                    .collect::<Vec<_>>(),
+            )]),
+            &[],
+        )
+        .await?;
+        pools.push(pool);
+    }
+    Ok(pools)
 }
 
 /// Run the CPMM flow.

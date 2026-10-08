@@ -63,6 +63,11 @@ pub enum FrameError {
         address: Pubkey,
         other: ConflictSite,
     },
+    /// A limit-order operation was given a leg for a token it does not move, or none for one it does.
+    UnexpectedLeg {
+        leg: LegRole,
+        moved: bool,
+    },
 }
 
 impl fmt::Display for FrameError {
@@ -100,6 +105,18 @@ impl fmt::Display for FrameError {
                 f,
                 "{leg} leg slice account {address} escalates privileges shared with {other:?}"
             ),
+            Self::UnexpectedLeg { leg, moved: true } => {
+                write!(
+                    f,
+                    "the operation moves the {leg} token but no {leg} leg was given"
+                )
+            }
+            Self::UnexpectedLeg { leg, moved: false } => {
+                write!(
+                    f,
+                    "the operation does not move the {leg} token but a {leg} leg was given"
+                )
+            }
         }
     }
 }

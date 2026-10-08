@@ -217,6 +217,7 @@ pub async fn run_clmm_session<C: Chain>(
             // In CLMM the pool-state PDA owns both vaults.
             pool.pool_state,
             [pool.vault_0, pool.vault_1],
+            &[],
             now,
         ),
     };

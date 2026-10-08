@@ -141,6 +141,15 @@ pub(crate) async fn e2e(flags: &Flags) -> Res<()> {
             if flags.has("liquidity") {
                 inputs = inputs.with_liquidity();
             }
+            if flags.has("rewards") {
+                if !flags.has("liquidity") {
+                    return Err("--rewards needs --liquidity".into());
+                }
+                // Reward emissions are a CLMM feature; a CPMM run in the same command skips them.
+                if *amm == "clmm" {
+                    inputs = inputs.with_rewards();
+                }
+            }
             let run = match *amm {
                 "cpmm" => run_cpmm_session(&mut chain, &inputs).await,
                 _ => run_clmm_session(&mut chain, &inputs).await,

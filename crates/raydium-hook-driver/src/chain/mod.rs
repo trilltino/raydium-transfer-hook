@@ -103,6 +103,12 @@ pub trait Chain {
 
     /// Let at least `seconds` of cluster time pass (a pool is only tradable after its open time).
     async fn advance_time(&mut self, seconds: u64) -> Result<()>;
+
+    /// Whether `advance_time` moves the clock at once (an in-process bank) rather than waiting for it.
+    /// A flow with something that takes days only runs it where this is true.
+    fn can_warp(&self) -> bool {
+        false
+    }
 }
 
 pub(super) fn sign(

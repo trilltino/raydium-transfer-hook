@@ -130,7 +130,7 @@ pub fn run(args: &[&str]) -> Result<()> {
             e2e(rest)
         }
         ["ui-fixture", rest @ ..] => ui_fixture(rest),
-        _ => Err("usage: cargo xtask localnet <build | validator | e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] | ui-fixture --wallet PUBKEY --out FILE [--amm cpmm|clmm] [--hook NAME]>".into()),
+        _ => Err("usage: cargo xtask localnet <build | validator | e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] | ui-fixture --wallet PUBKEY --out FILE [--amm cpmm|clmm] [--hook NAME] [--extra-pools N] [--seed-amount N]>".into()),
     }
 }
 
@@ -617,7 +617,9 @@ fn ui_fixture(rest: &[&str]) -> Result<()> {
             "--max-priority",
             "1000",
             "--seed-amount",
-            "2000000000",
+            value("--seed-amount").unwrap_or("2000000000"),
+            "--extra-pools",
+            value("--extra-pools").unwrap_or("0"),
             "--wallet-hooked-amount",
             "100000000",
             "--wallet-quote-amount",
@@ -670,6 +672,12 @@ fn e2e(rest: &[&str]) -> Result<()> {
             vec!["--hook-dir", "templates/transfer-hook-starter"],
         ));
     }
+    // Liquidity, positions, limit orders and reward funding with the reference hook, on a real validator. The
+    // reference hook has no timed or per-slot rules, so the extra steps are the only difference.
+    runs.push((
+        "liquidity, limit orders and reward funding (reference hook)".into(),
+        vec!["--hook", "reference", "--liquidity", "--rewards"],
+    ));
     let mut failed = Vec::new();
     for (label, extra) in &runs {
         println!("==================== {label}");

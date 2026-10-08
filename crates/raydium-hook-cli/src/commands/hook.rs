@@ -281,6 +281,7 @@ pub(crate) async fn setup(flags: &Flags) -> Res<()> {
         vaults: [pool_vault.unwrap_or_default(), Pubkey::default()],
         now: cluster_time(&mut chain).await?,
         wallet_accounts: None,
+        extra_venues: Vec::new(),
     };
     let sent = chain
         .send(&hook.enable_instructions(&ctx), &[])

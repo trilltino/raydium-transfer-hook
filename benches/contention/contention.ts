@@ -1,19 +1,22 @@
 // Concurrent hooked swaps on one local validator: does a hook that writes shared state slow
-// simultaneous trades more than a hook that only reads its config?
+// simultaneous trades more than a hook that only reads its config, and does it matter whether the
+// trades hit one pool or several pools of the same hooked mint?
 //
 //   cargo xtask localnet validator          (leave running)
 //   cargo xtask localnet ui-fixture --wallet <any pubkey> --amm cpmm --hook reference \
-//       --out target/contention/stateless.json
+//       --extra-pools 3 --seed-amount 400000000 --out target/contention/stateless.json
 //   cargo xtask localnet ui-fixture --wallet <any pubkey> --amm cpmm --hook fair-launch \
-//       --max-buys-per-slot 100000 --out target/contention/stateful.json
+//       --max-buys-per-slot 100000 --extra-pools 3 --seed-amount 400000000 --out target/contention/stateful.json
 //   node --experimental-transform-types benches/contention/contention.ts
 //
-// Every swap is a buy on the SAME pool, so the pool state and its vaults are write-contended in both
-// scenarios. The only difference is the hook: the starter reads its config; fair-launch also writes
-// one counter account per mint on every buy. The numbers are from a single-node test validator and
-// say nothing about a real cluster's scheduler, leaders or latency (see benches/contention/README.md).
+// Four scenarios: the starter (reads its config) and fair-launch (also writes one counter account per
+// mint on every buy), each with every buy on ONE pool and with the buys spread over all the pools of
+// the mint. On one pool the pool state and its vaults are write-contended in every scenario; spread
+// out, the only account the buys can share is the hook's per-mint one. The numbers are from a
+// single-node test validator and say nothing about a real cluster's scheduler, leaders or latency
+// (see benches/contention/README.md).
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Raydium } from '@raydium-io/raydium-sdk-v2';
@@ -36,6 +39,7 @@ const WALLETS = Math.max(...CONCURRENCY);
 
 interface Fixture {
   pool: string;
+  extra_pools?: string[];
   hooked_mint: string;
   quote_mint: string;
 }
@@ -45,10 +49,24 @@ const connection = new Connection(environment.rpcUrl, 'confirmed');
 const admin = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(join(root, 'tests/fixtures/localnet/admin.json'), 'utf8'))));
 
 const load = (name: string): Fixture => JSON.parse(readFileSync(join(root, 'target', 'contention', `${name}.json`), 'utf8'));
-const scenarios = [
-  { name: 'stateless hook (starter: reads its config)', fixture: load('stateless'), launch: false },
-  { name: 'stateful hook (fair-launch: writes a counter per buy)', fixture: load('stateful'), launch: true },
-] as const;
+const stateless = load('stateless');
+const stateful = load('stateful');
+// Optional: fair-launch with a per-slot budget (--max-buys-per-slot 3), to see whether the budget is shared
+// by the pools of one mint.
+const budget = existsSync(join(root, 'target', 'contention', 'budget.json')) ? load('budget') : null;
+const poolsOf = (fixture: Fixture): string[] => [fixture.pool, ...(fixture.extra_pools ?? [])];
+const scenarios: { name: string; fixture: Fixture; launch: boolean; spread: boolean; minK?: number }[] = [
+  { name: 'stateless hook (starter: reads its config)', fixture: stateless, launch: false, spread: false },
+  { name: 'stateful hook (fair-launch: writes a counter per buy)', fixture: stateful, launch: true, spread: false },
+  { name: 'stateless hook (starter: reads its config)', fixture: stateless, launch: false, spread: true },
+  { name: 'stateful hook (fair-launch: writes a counter per buy)', fixture: stateful, launch: true, spread: true },
+  ...(budget
+    ? [
+        { name: 'fair-launch, per-slot budget of 3', fixture: budget, launch: true, spread: false, minK: 8 },
+        { name: 'fair-launch, per-slot budget of 3', fixture: budget, launch: true, spread: true, minK: 8 },
+      ]
+    : []),
+].filter((scenario) => !scenario.spread || poolsOf(scenario.fixture).length > 1);
 
 async function send(tx: Transaction, signers: Keypair[]): Promise<void> {
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
@@ -70,16 +88,20 @@ interface Outcome {
   error?: string;
 }
 
+type Pool = Awaited<ReturnType<typeof cpmmAdapter.loadPool>>;
+
+/** K buys at once; buyer i trades on pools[i mod pools.length]. */
 async function round(
   buyers: { keypair: Keypair }[],
   k: number,
-  pool: Awaited<ReturnType<typeof cpmmAdapter.loadPool>>,
+  pools: Pool[],
   launchMint: PublicKey | null
 ): Promise<Outcome[]> {
-  const quote = cpmmAdapter.quote(pool, false, BUY, 9_900);
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
   const signed: VersionedTransaction[] = [];
-  for (const { keypair } of buyers.slice(0, k)) {
+  for (const [index, { keypair }] of buyers.slice(0, k).entries()) {
+    const pool = pools[index % pools.length]!;
+    const quote = cpmmAdapter.quote(pool, false, BUY, 9_900);
     const prepared = await prepareSwap({
       connection,
       environment,
@@ -88,7 +110,7 @@ async function round(
       inputIsA: false,
       amountIn: BUY,
       payer: keypair.publicKey,
-      launchMint,
+      hooked: launchMint ? { side: 'A', mint: launchMint, kind: 'fair-launch' } : null,
     });
     const tx = compileV0(keypair.publicKey, blockhash, prepared.instructions);
     tx.sign([keypair]);
@@ -118,14 +140,10 @@ async function main(): Promise<void> {
 
   // Buyers: fresh wallets, each with SOL and quote tokens; the admin is the mint authority.
   const buyers = Array.from({ length: WALLETS }, () => ({ keypair: Keypair.generate() }));
-  const prepared = new Map<string, Awaited<ReturnType<typeof cpmmAdapter.loadPool>>>();
-  for (const scenario of scenarios) {
-    prepared.set(scenario.name, await cpmmAdapter.loadPool({ connection, raydium, environment }, new PublicKey(scenario.fixture.pool)));
-  }
   for (const { keypair } of buyers) {
     const tx = new Transaction().add(SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: keypair.publicKey, lamports: 200_000_000 }));
-    for (const scenario of scenarios) {
-      const mint = new PublicKey(scenario.fixture.quote_mint);
+    for (const fixture of [stateless, stateful, ...(budget ? [budget] : [])]) {
+      const mint = new PublicKey(fixture.quote_mint);
       const account = getAssociatedTokenAddressSync(mint, keypair.publicKey, false, TOKEN_2022_PROGRAM_ID);
       tx.add(createAssociatedTokenAccountIdempotentInstruction(admin.publicKey, account, keypair.publicKey, mint, TOKEN_2022_PROGRAM_ID));
       tx.add(createMintToInstruction(mint, account, admin.publicKey, 100_000_000n, [], TOKEN_2022_PROGRAM_ID));
@@ -138,7 +156,8 @@ async function main(): Promise<void> {
   const report: unknown[] = [];
   for (const k of CONCURRENCY) {
     for (const scenario of scenarios) {
-      const pool = prepared.get(scenario.name)!;
+      if (scenario.minK && k < scenario.minK) continue;
+      const addresses = scenario.spread ? poolsOf(scenario.fixture) : [scenario.fixture.pool];
       const launchMint = scenario.launch ? new PublicKey(scenario.fixture.hooked_mint) : null;
       const times: number[] = [];
       const slots: number[] = [];
@@ -147,7 +166,7 @@ async function main(): Promise<void> {
       let perSlotMax = 0;
       for (let r = 0; r < ROUNDS; r += 1) {
         // The pool changes with every trade; reload it so each round quotes the current reserves.
-        const fresh = await cpmmAdapter.loadPool({ connection, raydium, environment }, new PublicKey(scenario.fixture.pool));
+        const fresh = await Promise.all(addresses.map((address) => cpmmAdapter.loadPool({ connection, raydium, environment }, new PublicKey(address))));
         const outcomes = await round(buyers, k, fresh, launchMint);
         const counts = new Map<number, number>();
         for (const outcome of outcomes) {
@@ -163,16 +182,15 @@ async function main(): Promise<void> {
           }
         }
         perSlotMax = Math.max(perSlotMax, ...counts.values(), 0);
-        void pool;
       }
       const total = k * ROUNDS;
-      const row = `| ${k} | ${scenario.name} | ${total - failed}/${total} | ${median(times).toFixed(0)} | ${percentile(times, 0.95).toFixed(0)} | ${new Set(slots).size} | ${perSlotMax} |`;
+      const row = `| ${k} | ${scenario.name} | ${addresses.length} | ${total - failed}/${total} | ${median(times).toFixed(0)} | ${percentile(times, 0.95).toFixed(0)} | ${new Set(slots).size} | ${perSlotMax} |`;
       rows.push(row);
-      report.push({ k, scenario: scenario.name, ok: total - failed, total, medianMs: median(times), p95Ms: percentile(times, 0.95), slots: new Set(slots).size, maxInOneSlot: perSlotMax, errors: [...errors] });
+      report.push({ k, scenario: scenario.name, pools: addresses.length, ok: total - failed, total, medianMs: median(times), p95Ms: percentile(times, 0.95), slots: new Set(slots).size, maxInOneSlot: perSlotMax, errors: [...errors] });
       console.log(row + (errors.size ? `   errors: ${[...errors].join(' | ')}` : ''));
     }
   }
-  console.log('\n| concurrent buys | hook | landed | median ms | p95 ms | slots used | most in one slot |\n|---|---|---|---|---|---|---|\n' + rows.join('\n'));
+  console.log('\n| concurrent buys | hook | pools | landed | median ms | p95 ms | slots used | most in one slot |\n|---|---|---|---|---|---|---|---|\n' + rows.join('\n'));
   writeFileSync(join(root, 'target', 'contention', 'result.json'), JSON.stringify(report, null, 2));
 }
 

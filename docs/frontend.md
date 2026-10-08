@@ -23,7 +23,19 @@ apps/fair-launch-ui             the React app (GPL-3.0-or-later, because it uses
   and, by swapping the policy panel, for the other examples.
 
 The browser test in [`apps/fair-launch-ui/e2e`](../apps/fair-launch-ui/e2e) runs exactly this against a
-local validator: one passing buy, one hook-refused buy, one sell.
+local validator, for a CPMM and a CLMM pool: one passing buy, one hook-refused buy, one sell. The same shell
+carries a policy panel for each of the three example hooks, and the browser test covers all three (16 tests):
+
+| Hook | Panel | What the browser test does |
+|---|---|---|
+| Fair Launch | the launch window, meters for each limit, buy-only rules | a buy inside the limits, an over-limit buy refused by the hook, a sell |
+| Creator Commitment | the vesting schedule, the amount still locked, and whether the connected wallet is the creator account | a sale that would leave the account below the locked amount is refused by the hook (shown in words, nothing submitted); a sale that leaves it above goes through; buying is never restricted |
+| Holder Rewards | the stream, whether the wallet is registered, what it has earned and can claim | Register, wait for the stream to accrue, Claim into the wallet, then a swap that carries the reward accounts |
+
+The panel decides nothing: the hook does. The creator-commitment and holder-rewards decoders and their
+vesting and reward arithmetic are TypeScript in `packages/transfer-hook-client`, checked against fixtures
+the Rust hook programs write (`tests/fixtures/typescript`), so a change to the on-chain layout or arithmetic
+fails the TypeScript tests.
 
 ## Run it on a local validator
 
@@ -32,6 +44,7 @@ npm install
 cargo xtask localnet build                    # the pinned Raydium forks and this repo's hooks
 cargo xtask localnet validator                # leave running; in another terminal:
 cargo xtask localnet ui-fixture --wallet <YOUR_WALLET_PUBKEY> --out target/ui-e2e/fixture.json
+# or --hook creator-commitment | holder-rewards, and --amm clmm
 npm run ui:dev
 ```
 
@@ -102,8 +115,12 @@ the vesting progress; Holder Rewards adds registered / earned / claimable and Re
 * Experimental deployments only; no mainnet and no official Raydium.
 * CPMM and CLMM exact-input swaps. Exact-output swaps and liquidity operations are not in the UI.
 * Wrapped SOL is not handled; use two SPL tokens.
-* Only the fair-launch hook has a decoder. Another hook's errors are reported as "Transfer Hook rejected
-  this transaction" with the raw code, never guessed.
+* Only the three example hooks (fair-launch, creator-commitment, holder-rewards) have a decoder and a panel.
+  Another hook's errors are reported as "Transfer Hook rejected this transaction" with the raw code, never
+  guessed.
+* The creator-commitment and holder-rewards panels are covered by the browser test on a CPMM pool on the local
+  validator only (the fair-launch panel on CPMM and CLMM, and on integration devnet); the TypeScript logic of
+  the other two is checked against the Rust fixtures for either AMM.
 * The test wallet used by the browser test exists only in builds made with `VITE_E2E=1`; normal builds
   contain no key handling. The app has no backend and holds no secrets.
 * Licence: the client package is Apache-2.0 like the Rust crates; the app is GPL-3.0-or-later because it

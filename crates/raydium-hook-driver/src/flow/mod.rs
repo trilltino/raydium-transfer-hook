@@ -15,7 +15,9 @@
 //! The hooked mint is always `mint_0`, so the first swap is `zero_for_one` on CLMM.
 
 mod clmm;
+mod clmm_limit_order;
 mod clmm_liquidity;
+mod clmm_rewards;
 mod cpmm;
 mod liquidity;
 mod recorder;
@@ -69,6 +71,14 @@ pub struct FlowInputs<'a> {
     pub liquidity: bool,
     /// Set up a pool and a funded wallet for a browser test, and stop before the swap checks.
     pub ui_fixture: Option<UiFixture>,
+    /// Also create this many more pools of the same hooked mint (CPMM only, each from its own AmmConfig and
+    /// seeded like the first), and list their hooked-token vaults as venues of the hook. For measuring how
+    /// a hook that writes one account per mint behaves across pools.
+    pub extra_pools: u16,
+    /// With `liquidity`, also run CLMM reward emissions in the hooked token: funding a period, paying a
+    /// position, extending it and taking back what was not emitted. The parts that need the clock to move
+    /// by days run only on a chain that can do that. CLMM only.
+    pub rewards: bool,
 }
 
 impl<'a> FlowInputs<'a> {
@@ -87,7 +97,19 @@ impl<'a> FlowInputs<'a> {
             exact_output: false,
             liquidity: false,
             ui_fixture: None,
+            extra_pools: 0,
+            rewards: false,
         }
+    }
+
+    pub fn with_rewards(mut self) -> Self {
+        self.rewards = true;
+        self
+    }
+
+    pub fn with_extra_pools(mut self, pools: u16) -> Self {
+        self.extra_pools = pools;
+        self
     }
 
     pub fn with_ui_fixture(mut self, fixture: UiFixture) -> Self {

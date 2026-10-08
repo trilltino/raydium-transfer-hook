@@ -34,7 +34,7 @@ No upstream pull request to `raydium-io` has been opened.
 | Program | Fork / branch | Hook-support commit | Adds |
 |---|---|---|---|
 | CPMM | [`trilltino/raydium-cp-swap`](https://github.com/trilltino/raydium-cp-swap) `transfer-hook-support` | `842724dd9396508f8a653f14628dd78f597eff85` | `swap_base_input_v2`, `swap_base_output_v2`, and `_v2` variants of `initialize`, `initialize_with_permission`, `deposit`, `withdraw` and the four fee collections; the `integration` build feature |
-| CLMM | [`trilltino/raydium-clmm`](https://github.com/trilltino/raydium-clmm) `transfer-hook-support` | `40291d53d84c6a28991ed966aa2efd261843f662` | `swap_v3`; the `integration` build feature |
+| CLMM | [`trilltino/raydium-clmm`](https://github.com/trilltino/raydium-clmm) `transfer-hook-support` | `1c263b3aad133af24f73f141d2773c154a506328` | `swap_v3`, the `*_v3` position and liquidity instructions, `collect_*_fee_v2` and the `*_limit_order_v2` instructions; the `integration` build feature |
 
 The `integration` feature selects a program id, admin and fee-receiver/owner keys, so the hook-aware
 builds can be deployed under ids you control. Default, `devnet` and `localnet` behavior is unchanged,

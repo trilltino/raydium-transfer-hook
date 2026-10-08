@@ -96,6 +96,10 @@ impl HookSetup for FairLaunchHook {
             max_buys_per_slot: self.max_buys_per_slot,
             max_priority_micro_lamports: self.max_priority_micro_lamports,
         };
+        // The pool vault the hooked token is bought from, then the same side of every further pool.
+        let venues: Vec<Pubkey> = std::iter::once(ctx.vaults[0])
+            .chain(ctx.extra_venues.iter().copied())
+            .collect();
         vec![
             point_mint_at_hook(&ctx.hooked_mint, &ctx.payer, &self.program_id),
             initialize(
@@ -103,7 +107,7 @@ impl HookSetup for FairLaunchHook {
                 &ctx.payer,
                 &ctx.payer,
                 &ctx.hooked_mint,
-                &[ctx.vaults[0]],
+                &venues,
                 params,
             ),
         ]

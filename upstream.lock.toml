@@ -29,7 +29,7 @@ package = "raydium-clmm"
 program_dir = "programs/amm"
 hook_repository = "https://github.com/trilltino/raydium-clmm"
 hook_branch = "transfer-hook-support"
-hook_revision = "280724a50aa5b3bc1e71d560815ba5f43e4b26c2"
+hook_revision = "1c263b3aad133af24f73f141d2773c154a506328"
 
 [sdk]
 repository = "https://github.com/raydium-io/raydium-sdk-V2"

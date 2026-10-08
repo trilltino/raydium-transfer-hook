@@ -19,8 +19,8 @@
 use std::path::{Path, PathBuf};
 
 use raydium_hook_driver::{
-    env::Programs, run_clmm, run_cpmm, token::empty_wsol_account, ArbitraryHook, Direction,
-    Environment, FlowInputs, HookSetup, LocalChain, ReferenceHook,
+    env::Programs, run_clmm, run_cpmm, run_cpmm_session, token::empty_wsol_account, ArbitraryHook,
+    Direction, Environment, FlowInputs, HookSetup, LocalChain, ReferenceHook,
 };
 use solana_program_test::{ProgramTest, ProgramTestContext};
 use solana_sdk::{
@@ -304,6 +304,10 @@ pub async fn run_full(
                 "hooked position-fee collection (decrease_liquidity_v3 with zero liquidity)",
                 "hooked protocol-fee collection (collect_protocol_fee_v2)",
                 "hooked fund-fee collection (collect_fund_fee_v2)",
+                "hooked limit order opening (open_limit_order_v2)",
+                "hooked limit order increase (increase_limit_order_v2)",
+                "hooked limit order decrease (decrease_limit_order_v2)",
+                "hooked limit order settlement (settle_limit_order_v2)",
                 "hooked liquidity removal (decrease_liquidity_v3)",
             ],
         };
@@ -359,5 +363,59 @@ pub fn arbitrary(setup: &Setup) -> ArbitraryHook {
     ArbitraryHook {
         program_id: setup.env.arbitrary_hook_program().unwrap(),
         max_per_slot: 2,
+    }
+}
+
+/// The CPMM flow with `pools` more pools of the same hooked mint, each under its own AmmConfig: the
+/// flow must create them and still finish its swap checks on the first pool.
+pub async fn run_with_extra_pools(hook: &dyn HookSetup, pools: u16, setup: &Setup) {
+    let mut context = context(setup).await;
+    let mut chain = LocalChain::with_payer(&mut context, clone(&setup.deployer));
+    let inputs =
+        FlowInputs::new(&setup.env, hook, setup.fee_receiver.as_ref()).with_extra_pools(pools);
+    let (evidence, session) = run_cpmm_session(&mut chain, &inputs)
+        .await
+        .unwrap_or_else(|e| panic!("cpmm flow with {pools} extra pools failed: {e}"));
+    let created = evidence
+        .iter()
+        .filter(|e| e.step == "create another CPMM pool of the same hooked mint")
+        .count();
+    assert_eq!(
+        created,
+        usize::from(pools),
+        "one creation step per extra pool"
+    );
+    assert_eq!(session.extra_pools.len(), usize::from(pools));
+    assert!(
+        session
+            .extra_pools
+            .iter()
+            .all(|pool| Some(pool) != session.pool.as_ref()),
+        "an extra pool is a different pool"
+    );
+}
+
+/// The CLMM liquidity flow with reward emissions in the hooked token too: funding a period, paying a
+/// position, extending it and taking back what was not emitted.
+pub async fn run_with_rewards(hook: &dyn HookSetup, setup: &Setup) {
+    let mut context = context(setup).await;
+    let mut chain = LocalChain::with_payer(&mut context, clone(&setup.deployer));
+    let inputs = FlowInputs::new(&setup.env, hook, setup.fee_receiver.as_ref())
+        .with_liquidity()
+        .with_rewards();
+    let evidence = run_clmm(&mut chain, &inputs)
+        .await
+        .unwrap_or_else(|e| panic!("clmm flow with rewards failed: {e}"));
+    for step in [
+        "hooked reward funding (initialize_reward_v2)",
+        "hooked reward payout (decrease_liquidity_v4)",
+        "hooked reward top-up (set_reward_params_v2)",
+        "hooked remaining-reward collection (collect_remaining_rewards_v2)",
+        "hooked liquidity removal (decrease_liquidity_v3)",
+    ] {
+        assert!(
+            evidence.iter().any(|e| e.step == step),
+            "the flow must record `{step}`"
+        );
     }
 }

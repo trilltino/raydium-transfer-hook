@@ -1,7 +1,9 @@
 //! Unit tests. Every resolution test uses real Token-2022 mint bytes and real
 //! `spl-tlv-account-resolution` validation lists, never a fake PDA.
 
+mod clmm_limit_order_tests;
 mod clmm_liquidity_tests;
+mod clmm_rewards_tests;
 mod frame_tests;
 mod golden_tests;
 mod pair_tests;

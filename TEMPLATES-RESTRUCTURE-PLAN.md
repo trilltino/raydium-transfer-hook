@@ -32,10 +32,16 @@ Found along the way: the first CI run after the UI commit had an invalid workflo
 name) and the approval check depended on a `keys/` directory a previous local run had left behind; both were
 fixed. Devnet runs against the public RPC occasionally drop a connection; a flow that hit that was re-run.
 
-Not done, with reasons: CLMM liquidity and fee collection (the fork rejects hooked mints there; new fork code
-would be needed), v1 transactions (the pinned `solana-sdk` cannot build them), contention on a real cluster
-(only a local single-node measurement exists, see `benches/contention`), and a different pool-admission policy
-(D9: admin only, the repository owner's decision).
+Done afterwards: CLMM liquidity and fee collection with hooked mints (new instructions in the CLMM fork, `open_position_v3`,
+`open_position_with_token22_nft_v3`, `increase_liquidity_v3`, `decrease_liquidity_v3`, `collect_protocol_fee_v2`,
+`collect_fund_fee_v2`; in-process, on a validator and on devnet, see `docs/transfer-surface-matrix.md`), and a contention
+measurement across four pools of one hooked mint (`benches/contention`). Then CLMM limit orders (`*_limit_order_v2`) and
+reward emissions in a hooked reward mint (`initialize_reward_v2`, `set_reward_params_v2`, `collect_remaining_rewards_v2`,
+`decrease_liquidity_v4`): in-process against the real program, with the funding also run on devnet (a reward period
+lasts at least seven days, so the rest needs a clock that can be moved).
+
+Not done, with reasons: v1 transactions (the pinned `solana-sdk` cannot build them), contention on a real cluster
+(only local single-node measurements exist), a different pool-admission policy (D9: admin only, the repository owner's decision).
 
 ## Goal
 

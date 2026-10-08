@@ -180,6 +180,33 @@ pub(super) async fn pair_legs<C: Chain>(
     Ok((first, second))
 }
 
+/// Resolve one transfer leg against the hook of its own mint (a mint without a hook must come back
+/// unhooked).
+pub(super) async fn one_leg<C: Chain>(
+    chain: &C,
+    kit: &SwapKit<'_>,
+    role: LegRole,
+    leg: SplTransferLeg,
+) -> Result<LegHook> {
+    let (program, writable) = match kit.entry_for(&leg.mint) {
+        Some(entry) => (
+            Some(entry.hook.program_id()),
+            entry.hook.allowed_writable(&entry.ctx, &leg),
+        ),
+        None => (None, Vec::new()),
+    };
+    let hooked = kit.entry_for(&leg.mint).is_some();
+    let resolved = resolve(chain, role, leg, program, writable).await?;
+    require(
+        resolved.is_hooked() == hooked,
+        format!(
+            "exactly the hooked mint must resolve a hook ({role}: hooked {}, expected {hooked})",
+            resolved.is_hooked()
+        ),
+    )?;
+    Ok(resolved)
+}
+
 /// Approve the hooked mints the way an operator does (`raydium-hook mint approve`, the same code),
 /// after proving that the program refuses to create a pool with them first. `unapproved_pool` is the
 /// pool-creation instruction built without the approval records.
@@ -622,6 +649,7 @@ pub(super) fn hook_entries<'a>(
     payer: Pubkey,
     pool_authority: Pubkey,
     vaults: [Pubkey; 2],
+    extra_venues: &[Pubkey],
     now: i64,
 ) -> Vec<HookEntry<'a>> {
     use solana_sdk::signature::Signer;
@@ -643,6 +671,7 @@ pub(super) fn hook_entries<'a>(
             vaults,
             now,
             wallet_accounts,
+            extra_venues: extra_venues.to_vec(),
         },
     }];
     if let Some(second) = inputs.second_hook {
@@ -657,6 +686,7 @@ pub(super) fn hook_entries<'a>(
                 vaults: [vaults[1], vaults[0]],
                 now,
                 wallet_accounts: wallet_accounts.map(|[hooked, quote]| [quote, hooked]),
+                extra_venues: Vec::new(),
             },
         });
     }
@@ -710,6 +740,7 @@ pub(super) fn build_session(
             .collect(),
         allowed_writable: allowed.iter().map(|k| k.to_string()).collect(),
         pool: None,
+        extra_pools: Vec::new(),
     }
 }
 

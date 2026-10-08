@@ -1346,5 +1346,10 @@ Implemented, with these deviations and findings. Everything listed as passing wa
 | UI-8 docs | `docs/frontend.md`, README quick start, screenshots. No "known demo pool list": pools come from `?pool=`. |
 
 Not built, by the plan's own scope: mainnet, an official-Raydium mode, LaunchLab, a pool indexer, a backend.
-Not covered: Creator Commitment and Holder Rewards panels (the shell is built to take them; only the Fair Launch
-panel exists), exact-output swaps and liquidity in the UI, wrapped SOL.
+Follow-up, done afterwards: the Creator Commitment and Holder Rewards panels. The client gained decoders and the vesting
+and reward arithmetic for both hooks (65 client tests, checked against fixtures the Rust hook crates write to
+`tests/fixtures/typescript`), the app gained the two panels, Register and Claim as simulated-then-signed transactions,
+and a hook-specific refusal message for the creator's vesting floor (64 app tests). The browser suite now has 16 tests
+(fair-launch on CPMM and CLMM plus a phone layout, four for creator-commitment, three for holder-rewards); it passed
+against a local validator. The two new panels are exercised in the browser on CPMM only.
+Not covered: exact-output swaps and liquidity in the UI, wrapped SOL.

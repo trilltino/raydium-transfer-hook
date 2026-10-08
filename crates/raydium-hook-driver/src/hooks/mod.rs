@@ -87,6 +87,9 @@ pub struct HookContext {
     /// preparing one (a UI fixture). A hook about "the creator's account" uses it so that wallet is the
     /// creator; the others ignore it.
     pub wallet_accounts: Option<[Pubkey; 2]>,
+    /// The hooked-token vaults of other pools of the same hooked mint that the flow created, for hooks
+    /// that list the venues a rule applies to (fair-launch). Empty unless a flow was asked for more pools.
+    pub extra_venues: Vec<Pubkey>,
 }
 
 /// A step a hook needs after the standard swap checks (fund a vault, claim, snapshot...).
