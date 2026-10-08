@@ -57,7 +57,7 @@ and 130,000 units for a CPMM swap with one hooked leg.
 | **Priority-fee check** | It reads the `SetComputeUnitPrice` instruction. It cannot see a tip to a block builder, and it does not work on v1 transactions (SIMD-0385), where those instructions are no-ops | fair-launch README |
 | **Per-slot rules** | A per-slot budget slows a bundle but does not stop many accounts, many slots, or a private bundle | fair-launch README |
 | **`max_wallet`** | Per token account, not per person | fair-launch README |
-| **Contention** | Fair-launch and holder-rewards write one account on every transfer, so transfers of that mint in a block serialise on it. **Not measured under load** (the in-process runtime runs one transaction at a time) | [hook-thickness.md](hook-thickness.md) |
+| **Contention** | Fair-launch and holder-rewards write one account on every transfer, so transfers of that mint in a block serialise on it. Measured only on a local single-node validator: 16 simultaneous buys on one pool all landed, in the same slot, with no difference between a read-only and a writing hook. That says nothing about a busy real cluster, where the runtime's per-account compute cap per block is what bounds a hot account, and it does not cover several pools of one mint | [`benches/contention`](../benches/contention/README.md) |
 | **Burn and owner changes** | Neither is a transfer, so a hook never runs for them | creator-commitment README |
 
 ## Raydium's per-mint approval is a business gate
@@ -84,7 +84,7 @@ this repository holds only pointers to them (`upstream.lock.toml`).
 
 ## Not measured
 
-* Contention under load, and the cost of a shared writable account in a busy block.
+* Contention on a real cluster, and the cost of a shared writable account in a busy block; and several pools of one hooked mint contending for one hook account (only simultaneous buys on a single pool were run, on a local validator).
 * v1 transactions (SIMD-0385): the pinned `solana-sdk` cannot build them.
 * A real cluster: latency, confirmation time, leader scheduling.
 * Swaps as v0 transactions with a lookup table, and literal-address extras.

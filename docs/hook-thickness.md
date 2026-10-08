@@ -76,7 +76,9 @@ reading instructions. See `templates/fair-launch`.
 
 `fair-launch` and `holder-rewards` write one account on every transfer (a slot counter; the global
 reward account), so transfers of those mints in the same block serialise on it. That is the real
-cost of those two rules, and it has not been measured under load. `creator-commitment` only reads.
+cost of those two rules. On a local single-node validator, 16 simultaneous buys on one pool all landed in the
+same slot whether the hook wrote shared state or only read its config ([`benches/contention`](../benches/contention/README.md)); a
+real cluster, and several pools of one mint, were not measured. `creator-commitment` only reads.
 
 ## Setup rent
 

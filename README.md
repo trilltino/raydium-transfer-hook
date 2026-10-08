@@ -101,7 +101,7 @@ of the forks, under our program ids) < `official Raydium` (Raydium's own deploym
 | CPMM permissioned pool creation and creator-fee collection (`initialize_with_permission_v2`, `collect_creator_fee_v2`, `collect_creator_fee_permissionless_v2`) | **Integration devnet** | The liquidity flow creates the permission record (admin), a permissioned pool with the hook live, swaps both ways, and collects the creator's fee both ways with the hook running on both transfers; [`docs/devnet.md`](docs/devnet.md) |
 | Creating a pool with a hooked mint | **Needs the pool admin's per-mint record** (`raydium-hook mint approve`, run by whoever holds the admin key) | Upstream's mint admission requires a `SupportMintAssociated` record for any mint with a TransferHook. Per mint, not per hook program: [`docs/transfer-surface-matrix.md`](docs/transfer-surface-matrix.md#raydiums-mint-admission-a-real-gate-and-what-it-is) |
 | LaunchLab | **Blocked** | Its on-chain handler is not public, so there is nothing to patch or test |
-| Hook-thickness benchmarks (accounts, compute, v0/v1, contention) | **Partial** | Measured compute and sizes in [`docs/hook-thickness.md`](docs/hook-thickness.md); no benchmark suite yet ([`benches/`](benches)) |
+| Hook-thickness benchmarks (accounts, compute, v0/v1, contention) | **Partial** | A benchmark suite ([`benches/`](benches)) measured compute, sizes and the practical extra-account ceiling in-process; contention only on a local validator ([`benches/contention`](benches/contention/README.md)); v1 transactions are not measured (the pinned `solana-sdk` cannot build them). See [`docs/hook-thickness.md`](docs/hook-thickness.md) |
 
 ## The CLI
 

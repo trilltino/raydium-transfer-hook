@@ -20,7 +20,7 @@ pub(crate) async fn ui_fixture(flags: &Flags) -> Res<()> {
         .get("fee-receiver-keypair")
         .map(crate::args::keypair)
         .transpose()?;
-    let provider = hook::provider("fair-launch", flags, &env)?;
+    let provider = hook::provider(flags.get("hook").unwrap_or("fair-launch"), flags, &env)?;
 
     let fixture = UiFixture {
         wallet,

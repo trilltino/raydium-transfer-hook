@@ -130,7 +130,7 @@ pub fn run(args: &[&str]) -> Result<()> {
             e2e(rest)
         }
         ["ui-fixture", rest @ ..] => ui_fixture(rest),
-        _ => Err("usage: cargo xtask localnet <build | validator | e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] | ui-fixture --wallet PUBKEY --out FILE [--amm cpmm|clmm]>".into()),
+        _ => Err("usage: cargo xtask localnet <build | validator | e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] | ui-fixture --wallet PUBKEY --out FILE [--amm cpmm|clmm] [--hook NAME]>".into()),
     }
 }
 
@@ -574,6 +574,7 @@ fn ui_fixture(rest: &[&str]) -> Result<()> {
     };
     let wallet = value("--wallet").ok_or("ui-fixture needs --wallet PUBKEY")?;
     let amm = value("--amm").unwrap_or("cpmm");
+    let hook = value("--hook").unwrap_or("fair-launch");
     let out = value("--out").ok_or("ui-fixture needs --out FILE")?;
     // The environment is copied so a run never rewrites the committed manifest.
     let env_copy = work_dir().join("localnet.json");
@@ -593,6 +594,10 @@ fn ui_fixture(rest: &[&str]) -> Result<()> {
             out,
             "--amm",
             amm,
+            "--hook",
+            hook,
+            "--max-transfer",
+            "1000000000000",
             "--window-seconds",
             "3600",
             "--max-buy",
@@ -600,7 +605,7 @@ fn ui_fixture(rest: &[&str]) -> Result<()> {
             "--max-wallet",
             "300000000",
             "--max-buys-per-slot",
-            "3",
+            value("--max-buys-per-slot").unwrap_or("3"),
             "--max-priority",
             "1000",
             "--seed-amount",

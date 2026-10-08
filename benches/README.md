@@ -25,9 +25,9 @@ the example templates' figures are in [`../docs/hook-thickness.md`](../docs/hook
 
 Stated in every report, because an absence must not be read as a result:
 
-* **Contention under load.** `solana-program-test` runs one transaction at a time. Writable-account
-  serialisation is a property of a cluster's scheduler under concurrent load; the `write` rows show
-  only what the extra write costs in compute, never any waiting.
+* **Contention under load.** `solana-program-test` runs one transaction at a time, so the sweeps here
+  never wait. A separate script, [`contention/`](contention/README.md), sends simultaneous swaps at a
+  local validator; it is a single-node measurement and does not cover a real cluster's scheduler.
 * **v1 transactions (SIMD-0385).** The pinned `solana-sdk 2.2.2` cannot build or sign them, and this
   repository does not move its dependency line opportunistically. Measuring v1 needs a deliberate
   compatibility migration first.
