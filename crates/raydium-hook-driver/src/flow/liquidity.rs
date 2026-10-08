@@ -23,6 +23,9 @@ use crate::{
 
 /// Index of the second AmmConfig, whose fees accrue to the protocol, the fund and the creator.
 const FEE_CONFIG_INDEX: u16 = 1;
+/// Index of the third AmmConfig, for the pool made with `initialize_with_permission`, the only kind
+/// that accrues creator fees.
+const CREATOR_FEE_CONFIG_INDEX: u16 = 2;
 /// Tokens put into the second pool, and the size of the swaps run on it.
 const POOL_SEED_AMOUNT: u64 = 400;
 const POOL_SWAP_AMOUNT: u64 = 300;
@@ -460,5 +463,169 @@ pub(super) async fn cpmm_liquidity_checks<C: Chain>(
         );
     }
 
+    creator_fee_checks(chain, rec, cpmm, world, kit, &support_mints, admin).await
+}
+
+/// Creator fees: a pool made with `initialize_with_permission_v2` (which needs an admin-created
+/// permission record), swaps in both directions so fees accrue in both tokens, then the creator's fee
+/// collected by `collect_creator_fee_v2` and, after more swaps, by
+/// `collect_creator_fee_permissionless_v2`. Both transfers of each collection run the hook.
+async fn creator_fee_checks<C: Chain>(
+    chain: &mut C,
+    rec: &mut Recorder,
+    cpmm: &Cpmm,
+    world: &World,
+    kit: &SwapKit<'_>,
+    support_mints: &[Pubkey],
+    admin: Pubkey,
+) -> Result<()> {
+    let payer = chain.payer().pubkey();
+    let provider = [world.provider[0].pubkey(), world.provider[1].pubkey()];
+
+    let config = cpmm.amm_config(CREATOR_FEE_CONFIG_INDEX);
+    if chain.account(&config).await?.is_none() {
+        send_step(
+            chain,
+            rec,
+            "create a third CPMM AmmConfig with a creator fee (admin instruction)",
+            vec![cpmm.create_amm_config_instruction(
+                &admin,
+                CREATOR_FEE_CONFIG_INDEX,
+                200_000,
+                100_000,
+                100_000,
+                0,
+                100_000,
+            )],
+            &[],
+        )
+        .await?;
+    }
+    let permission = cpmm.permission(&payer);
+    if chain.account(&permission).await?.is_none() {
+        send_step(
+            chain,
+            rec,
+            "give the pool creator a permission record (admin instruction)",
+            vec![cpmm.create_permission_instruction(&admin, &payer)],
+            &[],
+        )
+        .await?;
+    }
+
+    // Pool creation with a permission record and the hook live.
+    let pool = cpmm.pool(config, world.hooked.pubkey(), world.quote.pubkey());
+    let mut create = cpmm.initialize_with_permission_instruction(
+        &payer,
+        &pool,
+        &provider[0],
+        &provider[1],
+        POOL_SEED_AMOUNT,
+        POOL_SEED_AMOUNT,
+        0,
+        0,
+        support_mints,
+    );
+    frame_pair(
+        chain,
+        kit,
+        CpmmPairOp::InitializeWithPermission,
+        &mut create,
+        SplTransferLeg {
+            source: provider[0],
+            mint: pool.mint_0,
+            destination: pool.vault_0,
+            authority: payer,
+            amount: POOL_SEED_AMOUNT,
+        },
+        SplTransferLeg {
+            source: provider[1],
+            mint: pool.mint_1,
+            destination: pool.vault_1,
+            authority: payer,
+            amount: POOL_SEED_AMOUNT,
+        },
+    )
+    .await?;
+    let (signature, detail) = run_hooked(chain, kit, "permissioned pool creation", create).await?;
+    rec.push(
+        "hooked pool creation with a permission record (initialize_with_permission_v2)",
+        Some(signature),
+        detail,
+    );
+    chain.advance_time(5).await?;
+
+    let swaps = CpmmSwaps {
+        kit,
+        cpmm: *cpmm,
+        pool,
+        world,
+    };
+    let creator_accounts = [
+        Cpmm::associated_token_2022(&payer, &pool.mint_0),
+        Cpmm::associated_token_2022(&payer, &pool.mint_1),
+    ];
+    for (permissionless, step) in [
+        (
+            false,
+            "hooked creator-fee collection (collect_creator_fee_v2)",
+        ),
+        (
+            true,
+            "hooked creator-fee collection by anyone (collect_creator_fee_permissionless_v2)",
+        ),
+    ] {
+        accrue_fees(chain, rec, &swaps, kit).await?;
+        let before = (
+            amount_of(chain, &creator_accounts[0]).await.unwrap_or(0),
+            amount_of(chain, &creator_accounts[1]).await.unwrap_or(0),
+        );
+        let mut collect = cpmm.collect_creator_fee_instruction(permissionless, &payer, &payer, &pool);
+        let op = if permissionless {
+            CpmmPairOp::CollectCreatorFeePermissionless
+        } else {
+            CpmmPairOp::CollectCreatorFee
+        };
+        // The amounts only seed hook resolution; the program sends whatever has accrued.
+        frame_pair(
+            chain,
+            kit,
+            op,
+            &mut collect,
+            SplTransferLeg {
+                source: pool.vault_0,
+                mint: pool.mint_0,
+                destination: creator_accounts[0],
+                authority: pool.authority,
+                amount: 1,
+            },
+            SplTransferLeg {
+                source: pool.vault_1,
+                mint: pool.mint_1,
+                destination: creator_accounts[1],
+                authority: pool.authority,
+                amount: 1,
+            },
+        )
+        .await?;
+        let (signature, detail) = run_hooked(chain, kit, "creator fee", collect).await?;
+        let after = (
+            amount_of(chain, &creator_accounts[0]).await?,
+            amount_of(chain, &creator_accounts[1]).await?,
+        );
+        require(
+            after.0 > before.0 && after.1 > before.1,
+            format!("creator fee: creator balances {before:?}->{after:?}, both tokens' fees should have arrived"),
+        )?;
+        rec.push(
+            step,
+            Some(signature),
+            format!(
+                "creator received {} and {}; {detail}",
+                after.0 - before.0,
+                after.1 - before.1
+            ),
+        );
+    }
     Ok(())
 }

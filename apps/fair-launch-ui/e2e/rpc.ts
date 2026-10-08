@@ -4,7 +4,11 @@ import { generateKeyPairSync } from 'node:crypto';
  * The end-to-end files avoid @solana/web3.js on purpose: Playwright's own TypeScript loader cannot load
  * its websocket dependency. A throwaway key and plain JSON-RPC are all the setup needs.
  */
-export const RPC_URL = 'http://127.0.0.1:8899';
+export const DEVNET = process.env.E2E_ENV === 'devnet';
+/** The cluster the test runs against: the local validator, or our integration devnet (`E2E_ENV=devnet`). */
+export const RPC_URL = DEVNET ? 'https://api.devnet.solana.com' : 'http://127.0.0.1:8899';
+/** The environment name the page selects with `?env=`. */
+export const ENV_NAME = DEVNET ? 'integration-devnet' : 'localnet';
 
 const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 

@@ -542,12 +542,9 @@ fn approval_check(env: &str) -> Result<()> {
         &["FAILED"],
     )?;
 
-    // Any key that is not the admin: the command refuses before sending anything.
-    let other = fs::read_dir(work_dir().join("keys"))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .find(|path| path.extension().is_some_and(|ext| ext == "json"))
-        .ok_or("no program keypair to use as a non-admin key")?;
+    // Any key that is not the admin: the command refuses before sending anything. A committed
+    // program keypair serves (nothing here depends on a directory a previous run left behind).
+    let other = root().join("tests/fixtures/localnet/reference-hook.json");
     let other = other.to_string_lossy().to_string();
     let (ok, text) = capture(&[
         "mint",

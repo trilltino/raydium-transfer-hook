@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { signatureCount, tokenBalance } from './rpc.ts';
+import { DEVNET, ENV_NAME, signatureCount, tokenBalance } from './rpc.ts';
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'target', 'ui-e2e');
 const secret = JSON.parse(readFileSync(join(dir, 'wallet.json'), 'utf8')) as number[];
@@ -20,7 +20,7 @@ interface Fixture {
 const load = (amm: string): Fixture => JSON.parse(readFileSync(join(dir, `fixture-${amm}.json`), 'utf8')) as Fixture;
 
 async function openAndConnect(page: Page, fixture: Fixture): Promise<void> {
-  await page.goto(`/?env=localnet&pool=${fixture.pool}&testWallet=${encodeURIComponent(JSON.stringify(secret))}`);
+  await page.goto(`/?env=${ENV_NAME}&pool=${fixture.pool}&testWallet=${encodeURIComponent(JSON.stringify(secret))}`);
   await page.getByRole('button', { name: /Connect E2E Test Wallet/ }).first().click();
   await expect(page.getByRole('button', { name: /Disconnect/ })).toBeVisible();
   // The pool, its policy and the unknown-token gate all appear together once the pool has loaded.
@@ -30,10 +30,12 @@ async function openAndConnect(page: Page, fixture: Fixture): Promise<void> {
 }
 
 // The same scenario against a CPMM pool and a CLMM pool: the page picks the adapter from the pool's owner.
-for (const [amm, instruction] of [
+const scenarios = [
   ['cpmm', 'CPMM  swap_base_input_v2'],
   ['clmm', 'CLMM  swap_v3'],
-] as const) {
+] as const;
+const enabled = (process.env.E2E_AMMS ?? 'cpmm,clmm').split(',');
+for (const [amm, instruction] of scenarios.filter(([name]) => !DEVNET || enabled.includes(name))) {
   test.describe(`${amm} Fair Launch pool`, () => {
     test.describe.configure({ mode: 'serial' });
     const fixture = load(amm);

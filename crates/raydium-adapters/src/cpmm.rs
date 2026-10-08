@@ -194,6 +194,83 @@ impl Cpmm {
         }
     }
 
+    /// The permission record of `authority`, which `initialize_with_permission` requires of its payer.
+    pub fn permission(&self, authority: &Pubkey) -> Pubkey {
+        self.pda(&[b"permission", authority.as_ref()])
+    }
+
+    /// Admin only: create the permission record that lets `authority` create pools with
+    /// `initialize_with_permission`, the only way to make a pool that accrues creator fees.
+    pub fn create_permission_instruction(&self, admin: &Pubkey, authority: &Pubkey) -> Instruction {
+        Instruction {
+            program_id: self.program_id,
+            accounts: vec![
+                AccountMeta::new(*admin, true),
+                AccountMeta::new_readonly(*authority, false),
+                AccountMeta::new(self.permission(authority), false),
+                AccountMeta::new_readonly(system_program::id(), false),
+            ],
+            data: anchor_discriminator("create_permission_pda").to_vec(),
+        }
+    }
+
+    /// `initialize_with_permission` (V1): like `initialize`, signed by a payer that has a permission
+    /// record, and with a `creator_fee_on` choice (0 both tokens, 1 token 0 only, 2 token 1 only).
+    /// The payer is the pool's creator, so creator fees accrue to it.
+    #[allow(clippy::too_many_arguments)]
+    pub fn initialize_with_permission_instruction(
+        &self,
+        payer: &Pubkey,
+        pool: &CpmmPool,
+        payer_token_0: &Pubkey,
+        payer_token_1: &Pubkey,
+        amount_0: u64,
+        amount_1: u64,
+        open_time: u64,
+        creator_fee_on: u8,
+        support_mints: &[Pubkey],
+    ) -> Instruction {
+        let payer_lp_token = Self::lp_token_account(payer, pool);
+        let mut data = anchor_discriminator("initialize_with_permission").to_vec();
+        data.extend_from_slice(&amount_0.to_le_bytes());
+        data.extend_from_slice(&amount_1.to_le_bytes());
+        data.extend_from_slice(&open_time.to_le_bytes());
+        data.push(creator_fee_on);
+        let mut accounts = vec![
+            AccountMeta::new(*payer, true),
+            AccountMeta::new_readonly(*payer, false),
+            AccountMeta::new_readonly(pool.amm_config, false),
+            AccountMeta::new_readonly(pool.authority, false),
+            AccountMeta::new(pool.pool_state, false),
+            AccountMeta::new_readonly(pool.mint_0, false),
+            AccountMeta::new_readonly(pool.mint_1, false),
+            AccountMeta::new(pool.lp_mint, false),
+            AccountMeta::new(*payer_token_0, false),
+            AccountMeta::new(*payer_token_1, false),
+            AccountMeta::new(payer_lp_token, false),
+            AccountMeta::new(pool.vault_0, false),
+            AccountMeta::new(pool.vault_1, false),
+            AccountMeta::new(self.fee_receiver, false),
+            AccountMeta::new(pool.observation, false),
+            AccountMeta::new_readonly(self.permission(payer), false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(spl_token_2022::id(), false),
+            AccountMeta::new_readonly(spl_token_2022::id(), false),
+            AccountMeta::new_readonly(ASSOCIATED_TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(system_program::id(), false),
+        ];
+        accounts.extend(
+            support_mints
+                .iter()
+                .map(|key| AccountMeta::new_readonly(*key, false)),
+        );
+        Instruction {
+            program_id: self.program_id,
+            accounts,
+            data,
+        }
+    }
+
     /// The creator's LP-token account: the associated token account of the classic token program.
     pub fn lp_token_account(owner: &Pubkey, pool: &CpmmPool) -> Pubkey {
         Pubkey::find_program_address(
