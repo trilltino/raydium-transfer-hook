@@ -580,7 +580,8 @@ async fn creator_fee_checks<C: Chain>(
             amount_of(chain, &creator_accounts[0]).await.unwrap_or(0),
             amount_of(chain, &creator_accounts[1]).await.unwrap_or(0),
         );
-        let mut collect = cpmm.collect_creator_fee_instruction(permissionless, &payer, &payer, &pool);
+        let mut collect =
+            cpmm.collect_creator_fee_instruction(permissionless, &payer, &payer, &pool);
         let op = if permissionless {
             CpmmPairOp::CollectCreatorFeePermissionless
         } else {
