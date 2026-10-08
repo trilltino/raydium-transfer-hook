@@ -35,16 +35,31 @@ export function newWallet(): { secret: number[]; address: string } {
   return { secret: [...seed, ...pub], address: base58(pub) };
 }
 
+/** Plain JSON-RPC. Public RPC endpoints rate-limit, so a 429 or a dropped connection is retried with a pause. */
 export async function rpc<T>(method: string, params: unknown[]): Promise<T> {
-  const response = await fetch(RPC_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  });
-  const body = (await response.json()) as { result?: T; error?: { message: string } };
-  if (body.error) throw new Error(`${method}: ${body.error.message}`);
-  return body.result as T;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const response = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      });
+      if (response.status === 429 || response.status >= 500) throw new Error(`HTTP ${response.status}`);
+      const body = (await response.json()) as { result?: T; error?: { message: string } };
+      if (body.error) throw new RpcError(`${method}: ${body.error.message}`);
+      return body.result as T;
+    } catch (error) {
+      if (error instanceof RpcError) throw error;
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  throw lastError;
 }
+
+/** An error the node answered with (as opposed to a transport failure, which is retried). */
+class RpcError extends Error {}
 
 export async function reachable(): Promise<boolean> {
   try {
@@ -60,8 +75,10 @@ export async function tokenBalance(account: string): Promise<bigint> {
   try {
     const result = await rpc<{ value: { amount: string } }>('getTokenAccountBalance', [account, { commitment: 'confirmed' }]);
     return BigInt(result.value.amount);
-  } catch {
-    return 0n;
+  } catch (error) {
+    // Only a missing account is a zero balance; anything else would hide a failed read.
+    if (error instanceof Error && /could not find account|Invalid param/i.test(error.message)) return 0n;
+    throw error;
   }
 }
 

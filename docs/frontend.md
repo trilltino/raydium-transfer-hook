@@ -40,6 +40,11 @@ one-hour window) and gives the wallet SOL and both tokens. Open
 `http://127.0.0.1:5173/?env=localnet&pool=<pool from fixture.json>` and connect Phantom or Solflare
 pointed at `http://127.0.0.1:8899`. `?env=devnet` selects our integration devnet deployment.
 
+The browser test (`npm run ui:e2e`) starts the validator itself if none is running, so a developer needs only
+the built programs. It can also run against our integration devnet (`E2E_ENV=devnet npm run ui:e2e`): that
+needs the deployer key in `.keys/` (pool creation is admin-only) and a fraction of a SOL, and it was run
+that way once; the deterministic CI run uses the local validator only.
+
 The page lists only `localnet` and `integration-devnet`. There is no official-Raydium mode: Raydium's
 own programs do not contain the hook-aware instructions.
 

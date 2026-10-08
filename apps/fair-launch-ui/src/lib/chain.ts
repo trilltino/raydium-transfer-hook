@@ -99,7 +99,9 @@ export async function loadBalance(
   try {
     const { value } = await connection.getTokenAccountBalance(address, 'confirmed');
     return BigInt(value.amount);
-  } catch {
-    return 0n;
+  } catch (error) {
+    // A missing account is a zero balance; any other failure (a rate-limited RPC) must not look like one.
+    if (error instanceof Error && /could not find account|Invalid param/i.test(error.message)) return 0n;
+    throw error;
   }
 }

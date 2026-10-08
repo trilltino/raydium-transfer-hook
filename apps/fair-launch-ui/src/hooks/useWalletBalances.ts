@@ -18,11 +18,16 @@ export function useWalletBalances(connection: Connection, owner: PublicKey | nul
       setBalances(null);
       return;
     }
-    const [a, b] = await Promise.all([
-      loadBalance(connection, owner, pool.tokenA.mint, pool.tokenA.tokenProgram),
-      loadBalance(connection, owner, pool.tokenB.mint, pool.tokenB.tokenProgram),
-    ]);
-    setBalances({ a, b });
+    try {
+      const [a, b] = await Promise.all([
+        loadBalance(connection, owner, pool.tokenA.mint, pool.tokenA.tokenProgram),
+        loadBalance(connection, owner, pool.tokenB.mint, pool.tokenB.tokenProgram),
+      ]);
+      setBalances({ a, b });
+    } catch (error) {
+      // Keep the last known balances rather than showing a failed read as zero.
+      console.debug('balance refresh failed', error);
+    }
   }, [connection, owner, pool]);
 
   useEffect(() => {
