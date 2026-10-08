@@ -78,7 +78,6 @@ jobs:
           RTH_PROFILE: localnet
           SBF_OUT_DIR: ${{ github.workspace }}/target/localnet-sbf
         run: |
-          cargo test -p reference-hook-onchain -- --ignored
           cargo test -p program-test-flows -p third-party-hook-acceptance -- --ignored
       - name: benchmark harness smoke test (quick sweep; the full sweep is `cargo run --release -p hook-bench`)
         env:

@@ -8,9 +8,8 @@ use std::{
 };
 
 use raydium_hook_driver::{
-    chain::Chain, inspect_readiness, AntiBundleHook, ArbitraryHook, CreatorCommitmentHook,
-    Environment, FairLaunchHook, GenericExternalHook, HookContext, HookSetup, LoyaltyRewardsHook,
-    ParentSpinOffHook, ReferenceHook,
+    chain::Chain, inspect_readiness, ArbitraryHook, CreatorCommitmentHook, Environment,
+    FairLaunchHook, GenericExternalHook, HolderRewardsHook, HookContext, HookSetup, ReferenceHook,
 };
 use sha2::{Digest, Sha256};
 use solana_sdk::{
@@ -173,10 +172,8 @@ fn program_for(kind: &str, flags: &Flags, env: &Environment) -> Res<Pubkey> {
         "reference" => env.reference_hook_program(),
         "arbitrary" => env.arbitrary_hook_program(),
         "creator-commitment" => env.template_program("creator_commitment"),
-        "fair-launch" => env.template_program("fair_launch"),
-        "anti-bundle" => env.template_program("anti_bundle"),
-        "loyalty-rewards" => env.template_program("loyalty_rewards"),
-        "parent-spin-off" => env.template_program("parent_spin_off"),
+        "fair-launch" | "fair-launch-per-slot" => env.template_program("fair_launch"),
+        "holder-rewards" | "holder-rewards-one-time" => env.template_program("holder_rewards"),
         other => return Err(format!("unknown --kind `{other}`")),
     };
     from_env.map_err(|e| format!("{e}; give --program"))
@@ -204,16 +201,21 @@ pub(crate) fn provider(kind: &str, flags: &Flags, env: &Environment) -> Res<Box<
             program,
             flags.number("vest-seconds", 120i64)?,
         )),
-        "fair-launch" => Box::new(FairLaunchHook::new(
-            program,
-            flags.number("window-seconds", 150i64)?,
-        )),
-        "anti-bundle" => Box::new(AntiBundleHook::new(program)),
-        "loyalty-rewards" => Box::new(LoyaltyRewardsHook::new(
+        "fair-launch" => {
+            let mut hook = FairLaunchHook::new(program, flags.number("window-seconds", 150i64)?);
+            hook.max_buy = flags.number("max-buy", hook.max_buy)?;
+            hook.max_wallet = flags.number("max-wallet", hook.max_wallet)?;
+            hook.max_buys_per_slot = flags.number("max-buys-per-slot", hook.max_buys_per_slot)?;
+            hook.max_priority_micro_lamports =
+                flags.number("max-priority", hook.max_priority_micro_lamports)?;
+            Box::new(hook)
+        }
+        "fair-launch-per-slot" => Box::new(FairLaunchHook::per_slot_only(program)),
+        "holder-rewards" => Box::new(HolderRewardsHook::new(
             program,
             flags.number("reward-seconds", 100u32)?,
         )),
-        "parent-spin-off" => Box::new(ParentSpinOffHook::new(
+        "holder-rewards-one-time" => Box::new(HolderRewardsHook::one_time(
             program,
             flags.number("reward-seconds", 100u32)?,
         )),
@@ -247,7 +249,7 @@ pub(crate) async fn setup(flags: &Flags) -> Res<()> {
     // The context a provider needs. Only what the kind uses has to be given.
     let need_vault = matches!(
         kind,
-        "fair-launch" | "anti-bundle" | "loyalty-rewards" | "parent-spin-off"
+        "fair-launch" | "fair-launch-per-slot" | "holder-rewards" | "holder-rewards-one-time"
     );
     let pool_vault = flags.pubkey_opt("pool-vault")?;
     if need_vault && pool_vault.is_none() {
@@ -262,7 +264,7 @@ pub(crate) async fn setup(flags: &Flags) -> Res<()> {
         );
     }
     let reward_mint = flags.pubkey_opt("reward-mint")?;
-    if matches!(kind, "loyalty-rewards" | "parent-spin-off") && reward_mint.is_none() {
+    if matches!(kind, "holder-rewards" | "holder-rewards-one-time") && reward_mint.is_none() {
         return Err(format!("`{kind}` needs --reward-mint (the token paid out)"));
     }
     let payer = chain.payer().pubkey();

@@ -9,11 +9,9 @@
     "reference_hook": "Cz3Ge1ENd1yZAbtXA88dYaxA8x4ZkSxxdHmSj7nxQ11X",
     "arbitrary_hook": "EtXNoNoYQdF9QFaSttjGzZkAk29EcBW9apdcE4En6WLB",
     "templates": {
-      "anti_bundle": "Aadi4nTDsYQhY23CA6LGzNph5obmw7TgeSbxKbh9K3CM",
       "creator_commitment": "EMN2CsndkRBFzf5qjQFzSRnbM8JJmWDowmisDdMNNBK6",
       "fair_launch": "7xyk1AQg7xCaQucPgWs13hmAs4dmD214raNgEZhLPQSu",
-      "loyalty_rewards": "Dn34iBwWW3vSheCafjqfP568hwvS1tGgDiqsUeHrTyL",
-      "parent_spin_off": "8gY1t2Cjtb6SDuFdPG17SuovTC6WJcLf8K8Yoy7X1d8X",
+      "holder_rewards": "Dn34iBwWW3vSheCafjqfP568hwvS1tGgDiqsUeHrTyL",
       "transfer_hook_starter": "8mKmPzbJecTeepGim5GTJoUttSd3LEFpv6vueuUUSutq"
     }
   },

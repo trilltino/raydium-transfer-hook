@@ -11,9 +11,7 @@
     "templates": {
       "creator_commitment": "EsMwcMyXyWJp6dKPW1wrdwQvwZYQaFvC12CSuYASAr95",
       "fair_launch": "DHFbvegDDqhtA2JQGzLkQQRMruG4a56eSEoYqRBvhcfp",
-      "anti_bundle": "2QgUsX212MgSAoGCU9iUcCpMBcBv9sBVE35zYsH3jXKs",
-      "loyalty_rewards": "9sTqvkE9nUEbNestwemnNm4xpdToMzJH2YsHfDQxDiCp",
-      "parent_spin_off": "HfHqWwZJR8QQL29M51SCTPpd9ch2hK7cDBWxCiWFpBWr"
+      "holder_rewards": "9sTqvkE9nUEbNestwemnNm4xpdToMzJH2YsHfDQxDiCp"
     }
   },
   "admin": "8hLCioUTm7bT8sBMxd7A5PweQZgVuQa6KHv4durmL6sk",

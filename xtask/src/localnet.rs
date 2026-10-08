@@ -33,8 +33,8 @@ const RPC: &str = "http://127.0.0.1:8899";
 /// This repository's hook programs: source directory, artifact name, environment key.
 const HOOKS: &[(&str, &str, &str)] = &[
     (
-        "programs/reference-hook-onchain",
-        "reference_hook_onchain",
+        "templates/transfer-hook-starter",
+        "transfer_hook_starter",
         "reference_hook",
     ),
     (
@@ -48,16 +48,10 @@ const HOOKS: &[(&str, &str, &str)] = &[
         "creator_commitment",
     ),
     ("templates/fair-launch", "fair_launch_hook", "fair_launch"),
-    ("templates/anti-bundle", "anti_bundle_hook", "anti_bundle"),
     (
-        "templates/loyalty-rewards",
-        "loyalty_rewards_hook",
-        "loyalty_rewards",
-    ),
-    (
-        "templates/parent-spin-off",
-        "parent_spin_off_hook",
-        "parent_spin_off",
+        "templates/holder-rewards",
+        "holder_rewards_hook",
+        "holder_rewards",
     ),
 ];
 
@@ -127,7 +121,8 @@ pub fn run(args: &[&str]) -> Result<()> {
             }
             e2e(rest)
         }
-        _ => Err("usage: cargo xtask localnet <build | validator | e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all]>".into()),
+        ["ui-fixture", rest @ ..] => ui_fixture(rest),
+        _ => Err("usage: cargo xtask localnet <build | validator | e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all] | ui-fixture --wallet PUBKEY --out FILE>".into()),
     }
 }
 
@@ -299,6 +294,206 @@ pub(crate) fn cli(args: &[&str]) -> Command {
     command
 }
 
+/// Run a CLI command and return whether it succeeded and everything it printed.
+fn capture(args: &[&str]) -> Result<(bool, String)> {
+    let output = cli(args).output()?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok((output.status.success(), text))
+}
+
+fn expect(what: &str, ok: bool, text: &str, wanted: &[&str], unwanted: &[&str]) -> Result<()> {
+    let missing: Vec<&&str> = wanted.iter().filter(|w| !text.contains(**w)).collect();
+    let present: Vec<&&str> = unwanted.iter().filter(|w| text.contains(**w)).collect();
+    if !ok || !missing.is_empty() || !present.is_empty() {
+        return Err(format!(
+            "{what}: success={ok}, missing {missing:?}, unexpectedly present {present:?}\n{text}"
+        )
+        .into());
+    }
+    println!("  ok: {what}");
+    Ok(())
+}
+
+/// `mint approve` and `mint approval` against the validator the flows just used: a fresh hookable
+/// mint is unapproved, a dry run changes nothing, the real run approves it on both AMMs, a second
+/// run skips it, and a key that is not the admin is refused.
+fn approval_check(env: &str) -> Result<()> {
+    let (ok, text) = capture(&[
+        "mint",
+        "create",
+        "--env",
+        env,
+        "--keypair",
+        ADMIN_KEYPAIR,
+        "--hookable",
+    ])?;
+    if !ok {
+        return Err(format!("mint create failed\n{text}").into());
+    }
+    let mint = text
+        .lines()
+        .find_map(|line| line.strip_prefix("mint "))
+        .map(|rest| rest.trim().to_string())
+        .ok_or("mint create printed no mint address")?;
+    println!("  a fresh hookable mint: {mint}");
+
+    let (ok, text) = capture(&["mint", "approval", "--env", env, "--mint", &mint])?;
+    expect(
+        "a new mint is not approved",
+        ok,
+        &text,
+        &["NOT approved"],
+        &["approved: a pool"],
+    )?;
+
+    let (ok, text) = capture(&[
+        "mint",
+        "approve",
+        "--env",
+        env,
+        "--keypair",
+        ADMIN_KEYPAIR,
+        "--mint",
+        &mint,
+        "--dry-run",
+    ])?;
+    expect(
+        "a dry run only simulates",
+        ok,
+        &text,
+        &["would approve"],
+        &["FAILED"],
+    )?;
+    let (ok, text) = capture(&["mint", "approval", "--env", env, "--mint", &mint])?;
+    expect(
+        "a dry run approved nothing",
+        ok,
+        &text,
+        &["NOT approved"],
+        &["approved: a pool"],
+    )?;
+
+    let (ok, text) = capture(&[
+        "mint",
+        "approve",
+        "--env",
+        env,
+        "--keypair",
+        ADMIN_KEYPAIR,
+        "--mint",
+        &mint,
+    ])?;
+    expect(
+        "the admin approves the mint",
+        ok,
+        &text,
+        &["approved"],
+        &["FAILED", "NOT approved"],
+    )?;
+    let (ok, text) = capture(&["mint", "approval", "--env", env, "--mint", &mint])?;
+    expect(
+        "the mint is approved on both AMMs",
+        ok,
+        &text,
+        &["approved: a pool can be created"],
+        &["NOT approved", "INVALID"],
+    )?;
+    if text.matches("approved: a pool can be created").count() != 2 {
+        return Err(format!("expected approval on both AMMs\n{text}").into());
+    }
+
+    let (ok, text) = capture(&[
+        "mint",
+        "approve",
+        "--env",
+        env,
+        "--keypair",
+        ADMIN_KEYPAIR,
+        "--mint",
+        &mint,
+    ])?;
+    expect(
+        "approving again is a no-op",
+        ok,
+        &text,
+        &["already approved"],
+        &["FAILED"],
+    )?;
+
+    // Any key that is not the admin: the command refuses before sending anything.
+    let other = fs::read_dir(work_dir().join("keys"))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "json"))
+        .ok_or("no program keypair to use as a non-admin key")?;
+    let other = other.to_string_lossy().to_string();
+    let (ok, text) = capture(&[
+        "mint",
+        "approve",
+        "--env",
+        env,
+        "--keypair",
+        &other,
+        "--mint",
+        &mint,
+    ])?;
+    if ok || !text.contains("cannot approve mints") {
+        return Err(format!("a non-admin key must be refused\n{text}").into());
+    }
+    println!("  ok: a key that is not the admin is refused");
+    Ok(())
+}
+
+/// Set up a Fair Launch pool and a funded wallet on a validator that is already running, for the
+/// browser UI and its end-to-end test. The launch window is an hour; the limits (raw units, 6
+/// decimals) are 100 tokens per buy, 300 per account and three buys per slot.
+fn ui_fixture(rest: &[&str]) -> Result<()> {
+    let value = |name: &str| {
+        rest.iter()
+            .position(|a| *a == name)
+            .and_then(|i| rest.get(i + 1).copied())
+    };
+    let wallet = value("--wallet").ok_or("ui-fixture needs --wallet PUBKEY")?;
+    let out = value("--out").ok_or("ui-fixture needs --out FILE")?;
+    // The environment is copied so a run never rewrites the committed manifest.
+    let env_copy = work_dir().join("localnet.json");
+    fs::create_dir_all(work_dir())?;
+    fs::copy(root().join(ENV_FILE), &env_copy)?;
+    let env_copy = env_copy.to_string_lossy().to_string();
+    run_checked(
+        &mut cli(&[
+            "ui-fixture",
+            "--env",
+            &env_copy,
+            "--keypair",
+            ADMIN_KEYPAIR,
+            "--wallet",
+            wallet,
+            "--out",
+            out,
+            "--window-seconds",
+            "3600",
+            "--max-buy",
+            "100000000",
+            "--max-wallet",
+            "300000000",
+            "--max-buys-per-slot",
+            "3",
+            "--max-priority",
+            "1000",
+            "--seed-amount",
+            "2000000000",
+            "--wallet-amount",
+            "1000000000",
+        ]),
+        "raydium-hook ui-fixture",
+    )
+}
+
 fn e2e(rest: &[&str]) -> Result<()> {
     let value = |name: &str| {
         rest.iter()
@@ -350,6 +545,12 @@ fn e2e(rest: &[&str]) -> Result<()> {
         args.extend_from_slice(extra);
         if let Err(e) = run_checked(&mut cli(&args), label) {
             failed.push(e.to_string());
+        }
+    }
+    if amm == "all" {
+        println!("==================== mint approval commands");
+        if let Err(e) = approval_check(&env_copy) {
+            failed.push(format!("mint approval commands: {e}"));
         }
     }
     if failed.is_empty() {

@@ -21,9 +21,9 @@ const SHIPPED: &[(&str, Option<&str>)] = &[
     ("arbitrary", None),
     ("creator-commitment", Some("creator_commitment")),
     ("fair-launch", Some("fair_launch")),
-    ("anti-bundle", Some("anti_bundle")),
-    ("loyalty-rewards", Some("loyalty_rewards")),
-    ("parent-spin-off", Some("parent_spin_off")),
+    ("fair-launch-per-slot", Some("fair_launch")),
+    ("holder-rewards", Some("holder_rewards")),
+    ("holder-rewards-one-time", Some("holder_rewards")),
 ];
 
 pub(crate) async fn e2e(flags: &Flags) -> Res<()> {

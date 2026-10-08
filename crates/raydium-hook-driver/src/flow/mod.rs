@@ -32,6 +32,19 @@ pub use support::resolve as resolve_swap_leg;
 /// Swap size that every hook in this repository allows.
 pub const SWAP_AMOUNT: u64 = 10;
 
+/// Leave a funded wallet and a live pool behind instead of running the swap checks: what a browser
+/// test needs. The wallet gets associated token accounts for both mints, funded by the payer (who is
+/// the mint authority), and some SOL for fees.
+#[derive(Clone, Copy, Debug)]
+pub struct UiFixture {
+    pub wallet: solana_sdk::pubkey::Pubkey,
+    /// Raw units seeded into the pool for each token.
+    pub seed_amount: u64,
+    /// Raw units of each token minted to the wallet.
+    pub wallet_amount: u64,
+    pub wallet_lamports: u64,
+}
+
 pub struct FlowInputs<'a> {
     pub env: &'a Environment,
     /// The hook on the first mint (`mint_0`, the smaller pubkey).
@@ -51,6 +64,8 @@ pub struct FlowInputs<'a> {
     /// After the standard checks, also run the CPMM operations that move two tokens with the
     /// hook live: pool creation, deposit, withdraw and fee collection (`*_v2`). CPMM only.
     pub liquidity: bool,
+    /// Set up a pool and a funded wallet for a browser test, and stop before the swap checks. CPMM only.
+    pub ui_fixture: Option<UiFixture>,
 }
 
 impl<'a> FlowInputs<'a> {
@@ -68,7 +83,13 @@ impl<'a> FlowInputs<'a> {
             transfer_fee_bps: 0,
             exact_output: false,
             liquidity: false,
+            ui_fixture: None,
         }
+    }
+
+    pub fn with_ui_fixture(mut self, fixture: UiFixture) -> Self {
+        self.ui_fixture = Some(fixture);
+        self
     }
 
     pub fn with_second_hook(mut self, hook: &'a dyn HookSetup) -> Self {

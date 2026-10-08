@@ -2,26 +2,22 @@
 //! setup is delegated to a provider. The flows and the Raydium builders only see [`HookSetup`]; a
 //! new hook adds a provider and nothing else changes.
 
-mod anti_bundle;
 mod arbitrary;
 mod creator_commitment;
 mod fair_launch;
 mod generic;
-mod loyalty_rewards;
-mod parent_spin_off;
+mod holder_rewards;
 mod reference;
 
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey, signature::Keypair};
 use spl_token_2022::extension::transfer_hook::instruction as transfer_hook_instruction;
 use transfer_hook_sdk::SplTransferLeg;
 
-pub use anti_bundle::AntiBundleHook;
 pub use arbitrary::ArbitraryHook;
 pub use creator_commitment::CreatorCommitmentHook;
 pub use fair_launch::FairLaunchHook;
 pub use generic::{GenericExternalHook, GenericHookSpec};
-pub use loyalty_rewards::LoyaltyRewardsHook;
-pub use parent_spin_off::ParentSpinOffHook;
+pub use holder_rewards::HolderRewardsHook;
 pub use reference::ReferenceHook;
 
 /// Which side of a swap the hooked token is on.

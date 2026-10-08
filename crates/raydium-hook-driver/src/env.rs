@@ -19,7 +19,7 @@ pub struct Programs {
     pub reference_hook: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arbitrary_hook: Option<String>,
-    /// The template hooks (`creator_commitment`, `fair_launch`, `loyalty_rewards`), by name.
+    /// The template hooks (`creator_commitment`, `fair_launch`, `holder_rewards`), by name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub templates: BTreeMap<String, String>,
 }

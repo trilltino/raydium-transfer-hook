@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       hook:
-        description: "Hook to run (all, reference, arbitrary, creator-commitment, fair-launch, anti-bundle, loyalty-rewards, parent-spin-off)"
+        description: "Hook to run (all, reference, arbitrary, creator-commitment, fair-launch, fair-launch-per-slot, holder-rewards, holder-rewards-one-time)"
         default: all
       amm:
         description: "cpmm, clmm or all"

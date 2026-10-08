@@ -1,4 +1,5 @@
-//! The repository's reference hook: a per-transfer maximum amount.
+//! The repository's reference hook, which is the starter template with its default rule: a
+//! per-transfer maximum amount.
 
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 
@@ -21,13 +22,13 @@ impl HookSetup for ReferenceHook {
     fn enable_instructions(&self, ctx: &HookContext) -> Vec<Instruction> {
         vec![
             point_mint_at_hook(&ctx.hooked_mint, &ctx.payer, &self.program_id),
-            reference_hook_onchain::initialize_hook_instruction(
+            transfer_hook_starter::initialize_hook_instruction(
                 self.program_id,
                 ctx.hooked_mint,
                 ctx.payer,
                 ctx.payer,
-                &reference_hook_onchain::InitializeHookArgs::max_transfer(
-                    reference_hook_onchain::AuthorityMode::ExtensionAuthority,
+                &transfer_hook_starter::InitializeHookArgs::max_transfer(
+                    transfer_hook_starter::AuthorityMode::ExtensionAuthority,
                     self.max_transfer,
                     Pubkey::default(),
                 ),
@@ -36,7 +37,7 @@ impl HookSetup for ReferenceHook {
     }
 
     fn refusals(&self) -> Vec<Refusal> {
-        let code = reference_hook_onchain::HookError::TransferExceedsLimit.code();
+        let code = transfer_hook_starter::HookError::TransferExceedsLimit.code();
         let plan = RejectionPlan::OverAmount {
             amount_in: self.max_transfer.saturating_add(100),
         };

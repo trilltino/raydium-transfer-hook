@@ -201,7 +201,9 @@ fn checkout(dir: &Path, url: &str, revision: &str, locked: bool) -> Result<()> {
         }
         if locked {
             return Err(format!(
-                "{} is at unexpected commit {head}, locked revision is {revision}",
+                "{} is at unexpected commit {head}, locked revision is {revision}. If the lock \
+                 changed, move it with `cargo xtask upstream fetch --hook` (without --locked), or \
+                 delete the directory to fetch it again",
                 dir.display()
             )
             .into());

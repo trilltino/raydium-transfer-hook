@@ -27,7 +27,7 @@ pub(crate) struct Artifact {
 pub(crate) const ARTIFACTS: &[Artifact] = &[
     Artifact {
         name: "reference-hook",
-        file: "reference_hook_onchain.so",
+        file: "transfer_hook_starter.so",
         keypair: "hook-program.json",
         program_id: |e| e.programs.reference_hook.as_ref(),
         source_key: "reference_hook",
@@ -58,27 +58,11 @@ pub(crate) const ARTIFACTS: &[Artifact] = &[
         lockfile: "Cargo.lock",
     },
     Artifact {
-        name: "loyalty-rewards",
-        file: "loyalty_rewards_hook.so",
-        keypair: "loyalty-rewards-program.json",
-        program_id: |e| e.programs.templates.get("loyalty_rewards"),
-        source_key: "loyalty_rewards",
-        lockfile: "Cargo.lock",
-    },
-    Artifact {
-        name: "anti-bundle",
-        file: "anti_bundle_hook.so",
-        keypair: "anti-bundle-program.json",
-        program_id: |e| e.programs.templates.get("anti_bundle"),
-        source_key: "anti_bundle",
-        lockfile: "Cargo.lock",
-    },
-    Artifact {
-        name: "parent-spin-off",
-        file: "parent_spin_off_hook.so",
-        keypair: "parent-spin-off-program.json",
-        program_id: |e| e.programs.templates.get("parent_spin_off"),
-        source_key: "parent_spin_off",
+        name: "holder-rewards",
+        file: "holder_rewards_hook.so",
+        keypair: "holder-rewards-program.json",
+        program_id: |e| e.programs.templates.get("holder_rewards"),
+        source_key: "holder_rewards",
         lockfile: "Cargo.lock",
     },
     Artifact {

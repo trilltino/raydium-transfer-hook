@@ -27,6 +27,9 @@ pub struct Session {
     pub hooks: Vec<SessionHook>,
     /// Writable extra accounts the hooks declare, which a swap must name to be accepted.
     pub allowed_writable: Vec<String>,
+    /// The pool the flow created (CPMM: the pool-state account), when the flow recorded it.
+    #[serde(default)]
+    pub pool: Option<String>,
 }
 
 fn key(label: &str, text: &str) -> Result<Pubkey> {
@@ -107,6 +110,7 @@ mod tests {
                 program: hook.to_string(),
             }],
             allowed_writable: vec![extra.to_string()],
+            pool: None,
         };
         let path = std::env::temp_dir().join(format!("session-{m0}.json"));
         session.save(&path).unwrap();
@@ -130,6 +134,7 @@ mod tests {
             ],
             hooks: vec![],
             allowed_writable: vec![],
+            pool: None,
         };
         assert!(session.mint_0().unwrap_err().message.contains("mint_0"));
         session.mint_0 = Pubkey::new_unique().to_string();

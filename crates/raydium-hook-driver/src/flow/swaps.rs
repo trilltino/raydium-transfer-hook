@@ -180,6 +180,63 @@ pub(super) async fn pair_legs<C: Chain>(
     Ok((first, second))
 }
 
+/// Approve the hooked mints the way an operator does (`raydium-hook mint approve`, the same code),
+/// after proving that the program refuses to create a pool with them first. `unapproved_pool` is the
+/// pool-creation instruction built without the approval records.
+pub(super) async fn approve_hooked_mints<C: Chain>(
+    chain: &mut C,
+    rec: &mut Recorder,
+    env: &crate::env::Environment,
+    amm: crate::approval::Amm,
+    step: &str,
+    mints: &[Pubkey],
+    unapproved_pool: Instruction,
+) -> Result<()> {
+    use crate::approval::{self, Outcome, RecordState};
+
+    let code = amm.not_support_mint_code();
+    let program = unapproved_pool.program_id;
+    let gate = chain
+        .simulate(&with_budget(vec![unapproved_pool]), &[])
+        .await?;
+    require(
+        !gate.succeeded && gate.program_failed_with(&program, code),
+        format!(
+            "creating a pool with an unapproved hooked mint must be refused with error {code}: {:?} {:?}",
+            gate.error, gate.logs
+        ),
+    )?;
+    rec.push(
+        "pool creation refused until the hooked mint is approved",
+        None,
+        format!("rejected with error {code}; {}", describe(&gate)),
+    );
+
+    for row in approval::approve(chain, env, &[amm], mints, false).await? {
+        match row.outcome {
+            Outcome::Approved { signature } => rec.push(step, Some(signature), ""),
+            Outcome::AlreadyApproved => rec.push(step, None, "already approved"),
+            other => {
+                return Err(DriverError::new(format!(
+                    "approving {} on {} did not succeed: {other}",
+                    row.mint,
+                    amm.name()
+                )))
+            }
+        }
+    }
+    for mint in mints {
+        require(
+            approval::state(chain, env, amm, mint).await? == RecordState::Approved,
+            format!(
+                "{mint} is not approved on {} after approving it",
+                amm.name()
+            ),
+        )?;
+    }
+    Ok(())
+}
+
 pub(super) fn describe(sim: &Simulation) -> String {
     format!(
         "simulation {}: {} log lines, {} compute units",
@@ -644,6 +701,7 @@ pub(super) fn build_session(
             })
             .collect(),
         allowed_writable: allowed.iter().map(|k| k.to_string()).collect(),
+        pool: None,
     }
 }
 

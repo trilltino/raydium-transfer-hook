@@ -1,5 +1,6 @@
 //! One module per command.
 
+pub(crate) mod approve;
 pub(crate) mod deploy;
 pub(crate) mod e2e;
 pub(crate) mod hook;
@@ -8,6 +9,7 @@ pub(crate) mod mint;
 pub(crate) mod probe;
 pub(crate) mod swap;
 pub(crate) mod table;
+pub(crate) mod ui_fixture;
 
 use raydium_hook_driver::{Environment, RpcChain};
 

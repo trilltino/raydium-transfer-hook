@@ -136,18 +136,18 @@ pub async fn run_clmm_session<C: Chain>(
     if inputs.second_hook.is_some() {
         hooked_mints.push(world.quote.pubkey());
     }
-    for mint in &hooked_mints {
-        send_step(
-            chain,
-            &mut rec,
-            "register a hooked mint with CLMM (admin instruction)",
-            vec![clmm.create_support_mint_instruction(&admin, mint)],
-            &[],
-        )
-        .await?;
-    }
-
     let pool = clmm.pool(amm_config, world.hooked.pubkey(), world.quote.pubkey());
+    let unapproved_pool = clmm.create_pool_instruction(&payer, &pool, 1u128 << 64, 0, &[]);
+    approve_hooked_mints(
+        chain,
+        &mut rec,
+        inputs.env,
+        crate::approval::Amm::Clmm,
+        "register a hooked mint with CLMM (admin instruction)",
+        &hooked_mints,
+        unapproved_pool,
+    )
+    .await?;
     send_step(
         chain,
         &mut rec,

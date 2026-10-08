@@ -1,0 +1,25 @@
+{
+  "name": "raydium-transfer-hook-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Approve hooked mints for pool creation on the Raydium CPMM / CLMM forks, or check whether they are approved.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "approve": "tsx approve-hooked-mints.ts approve",
+    "status": "tsx approve-hooked-mints.ts status",
+    "test": "tsx --test approve-hooked-mints.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.98.4"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

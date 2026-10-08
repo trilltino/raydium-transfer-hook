@@ -9,6 +9,7 @@
 //!   the `raydium-adapters` crate.
 //! * [`flow`]: the checked end-to-end flows.
 
+pub mod approval;
 pub mod chain;
 pub mod env;
 pub mod flow;
@@ -26,11 +27,11 @@ pub use chain::{Chain, DriverError, RpcChain};
 pub use env::{Environment, Evidence};
 pub use flow::{
     resolve_swap_leg, run_clmm, run_clmm_session, run_cpmm, run_cpmm_session, FlowInputs,
+    UiFixture,
 };
 pub use hooks::{
-    AntiBundleHook, ArbitraryHook, CreatorCommitmentHook, Direction, FairLaunchHook, FollowUp,
-    GenericExternalHook, HookContext, HookSetup, LoyaltyRewardsHook, ParentSpinOffHook,
-    ReferenceHook, Refusal, RejectionPlan,
+    ArbitraryHook, CreatorCommitmentHook, Direction, FairLaunchHook, FollowUp, GenericExternalHook,
+    HolderRewardsHook, HookContext, HookSetup, ReferenceHook, Refusal, RejectionPlan,
 };
 pub use readiness::{inspect_program, inspect_readiness, ProgramFacts, Readiness, UpgradeInfo};
 pub use report::{report, SimulationReport};

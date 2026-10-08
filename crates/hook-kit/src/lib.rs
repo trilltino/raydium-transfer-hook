@@ -19,6 +19,14 @@
 //! With the `test-support` feature, [`testing`] builds a hooked Token-2022 mint and funded
 //! accounts in-process and sends transfers that resolve the hook's accounts through the SDK.
 
+/// How many PDA-derived extra accounts a hook can practically declare today. Measured by
+/// `benches/` (a hook that does nothing but declare N extras): the hook program's 32 KiB heap runs out
+/// at 12 to 14 extras and Token-2022's at 16 and above, before transaction size or compute matter.
+/// Asking for a larger heap frame did not help in those runs. Literal-address extras are cheaper
+/// and were not measured, so treat this as a ceiling to stay well under, not a target.
+/// See `docs/commercial-and-limits.md`.
+pub const PRACTICAL_EXTRA_ACCOUNTS: usize = 10;
+
 pub mod accounts;
 pub mod error;
 pub mod execute;

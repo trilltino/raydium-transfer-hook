@@ -25,6 +25,9 @@ commands:
   localnet e2e [--skip-build] [--amm cpmm|clmm|all] [--hook NAME|all]
                                      build, start the validator, run `raydium-hook e2e` for every
                                      hook and for the starter built from source, stop the validator
+  localnet ui-fixture --wallet PUBKEY --out FILE
+                                     on a running validator: set up a Fair Launch CPMM pool and fund
+                                     PUBKEY with SOL and both tokens (for the browser UI and its test)
   env deploy-devnet [--skip-build] [--amm A] [--hook H] [--no-record]
                                      verify locks, build the integration forks and hooks, deploy what
                                      is missing to devnet (existing program ids are never replaced),

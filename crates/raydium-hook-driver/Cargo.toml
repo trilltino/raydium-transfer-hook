@@ -20,13 +20,11 @@ spl-token-2022 = { version = "=7.0.0", features = ["no-entrypoint"] }
 spl-transfer-hook-interface = "=0.10.0"
 raydium-adapters = { path = "../raydium-adapters" }
 transfer-hook-sdk = { path = "../transfer-hook-sdk" }
-reference-hook-onchain = { path = "../../programs/reference-hook-onchain", features = ["no-entrypoint"] }
+transfer-hook-starter = { path = "../../templates/transfer-hook-starter", features = ["no-entrypoint"] }
 arbitrary-test-hook = { path = "../../programs/arbitrary-test-hook", features = ["no-entrypoint"] }
-anti-bundle-hook = { path = "../../templates/anti-bundle", features = ["no-entrypoint"] }
 creator-commitment-hook = { path = "../../templates/creator-commitment", features = ["no-entrypoint"] }
 fair-launch-hook = { path = "../../templates/fair-launch", features = ["no-entrypoint"] }
-loyalty-rewards-hook = { path = "../../templates/loyalty-rewards", features = ["no-entrypoint"] }
-parent-spin-off-hook = { path = "../../templates/parent-spin-off", features = ["no-entrypoint"] }
+holder-rewards-hook = { path = "../../templates/holder-rewards", features = ["no-entrypoint"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

@@ -118,6 +118,9 @@ pub async fn run_cpmm_session<C: Chain>(
     inputs.env.require_hook_aware()?;
     let mut rec = Recorder::new("cpmm");
     let payer = chain.payer().pubkey();
+    let seed_amount = inputs
+        .ui_fixture
+        .map_or(CPMM_SEED_AMOUNT, |fixture| fixture.seed_amount);
     let cpmm = Cpmm {
         program_id: inputs.env.cpmm_program()?,
         fee_receiver: inputs.env.cpmm_fee_receiver_key()?,
@@ -173,19 +176,29 @@ pub async fn run_cpmm_session<C: Chain>(
     if inputs.second_hook.is_some() {
         hooked_mints.push(world.quote.pubkey());
     }
-    for mint in &hooked_mints {
-        send_step(
-            chain,
-            &mut rec,
-            "register a hooked mint with CPMM (admin instruction)",
-            vec![cpmm.create_support_mint_instruction(&admin, mint)],
-            &[],
-        )
-        .await?;
-    }
+    let pool = cpmm.pool(amm_config, world.hooked.pubkey(), world.quote.pubkey());
+    let unapproved_pool = cpmm.initialize_instruction(
+        &payer,
+        &pool,
+        &world.provider[0].pubkey(),
+        &world.provider[1].pubkey(),
+        seed_amount,
+        seed_amount,
+        0,
+        &[],
+    );
+    approve_hooked_mints(
+        chain,
+        &mut rec,
+        inputs.env,
+        crate::approval::Amm::Cpmm,
+        "register a hooked mint with CPMM (admin instruction)",
+        &hooked_mints,
+        unapproved_pool,
+    )
+    .await?;
 
     // 3. Pool.
-    let pool = cpmm.pool(amm_config, world.hooked.pubkey(), world.quote.pubkey());
     send_step(
         chain,
         &mut rec,
@@ -195,8 +208,8 @@ pub async fn run_cpmm_session<C: Chain>(
             &pool,
             &world.provider[0].pubkey(),
             &world.provider[1].pubkey(),
-            CPMM_SEED_AMOUNT,
-            CPMM_SEED_AMOUNT,
+            seed_amount,
+            seed_amount,
             0,
             &hooked_mints
                 .iter()
@@ -215,9 +228,9 @@ pub async fn run_cpmm_session<C: Chain>(
     require(
         seeded.0 > 0
             && seeded.1 > 0
-            && seeded.0 <= CPMM_SEED_AMOUNT
-            && seeded.1 <= CPMM_SEED_AMOUNT
-            && (!exact || (seeded.0 == CPMM_SEED_AMOUNT && seeded.1 == CPMM_SEED_AMOUNT)),
+            && seeded.0 <= seed_amount
+            && seeded.1 <= seed_amount
+            && (!exact || (seeded.0 == seed_amount && seeded.1 == seed_amount)),
         format!("the pool vaults must hold the seeded liquidity, found {seeded:?}"),
     )?;
     // CPMM opens a new pool one second after creation.
@@ -242,6 +255,24 @@ pub async fn run_cpmm_session<C: Chain>(
             "second hooked mint"
         };
         enable_hook(chain, &mut rec, entry.hook, &entry.ctx, role).await?;
+    }
+    if let Some(fixture) = inputs.ui_fixture {
+        fund_ui_wallet(chain, &mut rec, &fixture, &world).await?;
+        let mut session = build_session("cpmm", &world, &kit);
+        session.pool = Some(pool.pool_state.to_string());
+        rec.push(
+            "summary",
+            None,
+            format!(
+                "program {} pool {} hooked mint {} quote mint {} wallet {}",
+                cpmm.program_id,
+                pool.pool_state,
+                world.hooked.pubkey(),
+                world.quote.pubkey(),
+                fixture.wallet
+            ),
+        );
+        return Ok((rec.evidence, session));
     }
     let builder = CpmmSwaps {
         kit: &kit,
@@ -277,7 +308,8 @@ pub async fn run_cpmm_session<C: Chain>(
             world.quote.pubkey()
         ),
     );
-    let session = build_session("cpmm", &world, &kit);
+    let mut session = build_session("cpmm", &world, &kit);
+    session.pool = Some(pool.pool_state.to_string());
     Ok((rec.evidence, session))
 }
 
@@ -286,4 +318,67 @@ pub async fn run_cpmm<C: Chain>(chain: &mut C, inputs: &FlowInputs<'_>) -> Resul
     run_cpmm_session(chain, inputs)
         .await
         .map(|(evidence, _)| evidence)
+}
+
+/// The wallet's associated Token-2022 account for `mint`, created idempotently by the payer.
+fn associated_account_instruction(
+    payer: &solana_sdk::pubkey::Pubkey,
+    owner: &solana_sdk::pubkey::Pubkey,
+    mint: &solana_sdk::pubkey::Pubkey,
+) -> (solana_sdk::pubkey::Pubkey, Instruction) {
+    use solana_sdk::instruction::AccountMeta;
+
+    let address = Cpmm::associated_token_2022(owner, mint);
+    let instruction = Instruction {
+        program_id: raydium_adapters::cpmm::ASSOCIATED_TOKEN_PROGRAM_ID,
+        accounts: vec![
+            AccountMeta::new(*payer, true),
+            AccountMeta::new(address, false),
+            AccountMeta::new_readonly(*owner, false),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+            AccountMeta::new_readonly(spl_token_2022::id(), false),
+        ],
+        // CreateIdempotent
+        data: vec![1],
+    };
+    (address, instruction)
+}
+
+/// Give the browser test's wallet SOL and funded associated token accounts for both mints.
+async fn fund_ui_wallet<C: Chain>(
+    chain: &mut C,
+    rec: &mut Recorder,
+    fixture: &super::UiFixture,
+    world: &World,
+) -> Result<()> {
+    let payer = chain.payer().pubkey();
+    let (hooked_account, create_hooked) =
+        associated_account_instruction(&payer, &fixture.wallet, &world.hooked.pubkey());
+    let (quote_account, create_quote) =
+        associated_account_instruction(&payer, &fixture.wallet, &world.quote.pubkey());
+    send_step(
+        chain,
+        rec,
+        "create the wallet's token accounts and fund it",
+        vec![
+            solana_sdk::system_instruction::transfer(&payer, &fixture.wallet, fixture.wallet_lamports),
+            create_hooked,
+            create_quote,
+            token::mint_to_instruction(
+                &world.hooked.pubkey(),
+                &hooked_account,
+                &payer,
+                fixture.wallet_amount,
+            ),
+            token::mint_to_instruction(
+                &world.quote.pubkey(),
+                &quote_account,
+                &payer,
+                fixture.wallet_amount,
+            ),
+        ],
+        &[],
+    )
+    .await
 }
