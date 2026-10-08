@@ -16,7 +16,7 @@ use {
         state::{Account as TokenAccount, Mint},
     },
     transfer_hook_starter::{
-        config_address, initialize_hook_instruction, process_instruction, AuthorityMode, HookError,
+        config_address, initialize_hook_instruction, process_instruction, HookError,
         InitializeHookArgs,
     },
 };
@@ -123,7 +123,7 @@ async fn token_2022_transfer_executes_hook_and_rejection_rolls_back_balances() {
         mint.pubkey(),
         context.payer.pubkey(),
         context.payer.pubkey(),
-        &InitializeHookArgs::max_transfer(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
+        &InitializeHookArgs::max_transfer(50),
     ));
     setup_instructions.push(
         token_instruction::mint_to(

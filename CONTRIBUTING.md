@@ -4,7 +4,7 @@ This repository **curates** templates. A working piece of Rust is not enough; a 
 understandable, tested, and honest about what it cannot do. Small fixes (docs, tests, plumbing bugs)
 are welcome as ordinary pull requests with a test.
 
-Before anything else: `scripts/test.sh` must pass, and `cargo fmt --all -- --check` and
+Before anything else: `cargo test --workspace` (and `cargo test` in `starter/`) must pass, and `cargo fmt --all -- --check` and
 `cargo clippy --all-targets -- -D warnings` must be clean.
 
 ## Adding a template

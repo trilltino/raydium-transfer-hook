@@ -18,12 +18,11 @@ use spl_token_2022::{
     state::Mint,
 };
 
-use crate::{constants::*, error::HookError, rule};
+use crate::error::HookError;
 
 pub(crate) struct MintHookInfo {
     pub(crate) hook_program: Option<Pubkey>,
     pub(crate) extension_authority: Option<Pubkey>,
-    pub(crate) mint_authority: Option<Pubkey>,
 }
 
 /// Mint must be Token-2022 owned and carry a TransferHook extension.
@@ -39,7 +38,6 @@ pub(crate) fn read_mint(mint: &AccountInfo) -> Result<MintHookInfo, ProgramError
     Ok(MintHookInfo {
         hook_program: get_program_id(&state),
         extension_authority: Option::<Pubkey>::from(extension.authority),
-        mint_authority: Option::<Pubkey>::from(state.base.mint_authority),
     })
 }
 
@@ -132,26 +130,4 @@ pub(crate) fn create_pda_account<'a>(
             &[signer_seeds],
         )
     }
-}
-
-/// Validate template, version, params and flags. Returns the hash-relevant params unchanged.
-pub(crate) fn validate_template(
-    template_id: &[u8; 32],
-    template_version: u32,
-    flags: u64,
-    params: &[u8],
-) -> Result<(), HookError> {
-    if params.len() > MAX_PARAMS_LEN {
-        return Err(HookError::ParamsTooLarge);
-    }
-    if *template_id != TEMPLATE_MAX_TRANSFER_V1 {
-        return Err(HookError::UnknownTemplate);
-    }
-    if template_version != MAX_TRANSFER_TEMPLATE_VERSION {
-        return Err(HookError::UnsupportedVersion);
-    }
-    if flags & !KNOWN_FLAGS_MASK != 0 {
-        return Err(HookError::InvalidParams);
-    }
-    rule::validate_params(params)
 }

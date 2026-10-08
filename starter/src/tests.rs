@@ -66,25 +66,15 @@ fn canonical_list_has_the_hand_validated_layout() {
 }
 
 fn sample_config() -> HookConfig {
-    HookConfig::new(
-        254,
-        253,
-        AuthorityMode::Explicit,
-        TEMPLATE_MAX_TRANSFER_V1,
-        1,
-        Pubkey::new_unique(),
-        Pubkey::new_unique(),
-        0,
-        &max_transfer_params(1_000),
-    )
-    .unwrap()
+    HookConfig::new(254, 253, Pubkey::new_unique(), &max_transfer_params(1_000)).unwrap()
 }
 
 #[test]
-fn config_round_trips_and_is_264_bytes() {
+fn config_round_trips_and_is_53_bytes() {
     let config = sample_config();
     let bytes = config.encode();
-    assert_eq!(bytes.len(), 264);
+    assert_eq!(bytes.len(), CONFIG_HEADER_LEN + 8);
+    assert_eq!(bytes.len(), 53);
     assert_eq!(HookConfig::decode(&bytes).unwrap(), config);
     assert_eq!(config.max_transfer_limit().unwrap(), 1_000);
 }
@@ -93,7 +83,7 @@ fn config_round_trips_and_is_264_bytes() {
 fn config_decode_is_strict() {
     let bytes = sample_config().encode();
     let err = |data: &[u8]| HookConfig::decode(data).unwrap_err();
-    assert_eq!(err(&bytes[..100]), HookError::InvalidConfigData);
+    assert_eq!(err(&bytes[..20]), HookError::InvalidConfigData);
     let mut bad = bytes.clone();
     bad[0] = b'X';
     assert_eq!(err(&bad), HookError::InvalidConfigData);
@@ -104,25 +94,9 @@ fn config_decode_is_strict() {
     bad.push(0);
     assert_eq!(err(&bad), HookError::InvalidConfigData);
     let mut bad = bytes.clone();
-    bad[200] = 1;
-    assert_eq!(err(&bad), HookError::InvalidConfigData);
-    let mut bad = bytes.clone();
-    bad[11] = 4;
-    assert_eq!(err(&bad), HookError::UnsupportedMode);
-    let mut bad = bytes.clone();
-    bad[48] = 1;
-    assert_eq!(err(&bad), HookError::InvalidConfigData);
-    let mut bad = bytes.clone();
-    bad[CONFIG_HEADER_LEN] ^= 1;
-    assert_eq!(err(&bad), HookError::HashMismatch);
-    let mut bad = bytes.clone();
-    bad[192] = 0xff;
-    bad[193] = 0xff;
+    bad[11] = 0xff;
+    bad[12] = 0xff;
     assert_eq!(err(&bad), HookError::ParamsTooLarge);
-    // Non-explicit modes must not carry a config authority.
-    let mut bad = bytes.clone();
-    bad[11] = 0;
-    assert_eq!(err(&bad), HookError::InvalidConfigData);
 }
 
 #[test]
@@ -147,7 +121,7 @@ fn config_address_uses_the_stored_bump() {
 
 #[test]
 fn initialize_hook_args_round_trip() {
-    let args = InitializeHookArgs::max_transfer(AuthorityMode::Explicit, 77, Pubkey::new_unique());
+    let args = InitializeHookArgs::max_transfer(77);
     assert_eq!(InitializeHookArgs::unpack(&args.pack()).unwrap(), args);
-    assert!(InitializeHookArgs::unpack(&args.pack()[..20]).is_err());
+    assert!(InitializeHookArgs::unpack(&args.pack()[..5]).is_err());
 }

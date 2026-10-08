@@ -20,7 +20,7 @@ UNDERSTAND  ->  CREATE  ->  TEST  ->  DEPLOY  ->  CONTRIBUTE
   holder rewards), each with the list of what it cannot do.
 * [`hook-kit/`](hook-kit): the shared plumbing the templates use (Execute checks, mint and token
   reads, PDA creation, in-process test helpers).
-* [`scripts/`](scripts): `build.sh`, `test.sh`, `deploy.sh`.
+* [`scripts/deploy.sh`](scripts/deploy.sh): build, deploy and prove a hook on a cluster in one command.
 * [`AGENTS.md`](AGENTS.md): the contract for AI coding agents working in this repository.
 * [`DESIGN.md`](DESIGN.md): the few technical facts about hooks that decide whether a design works.
 
@@ -61,8 +61,7 @@ git clone https://github.com/trilltino/raydium-transfer-hook && cd raydium-trans
 cp -r starter my-hook                 # 1. copy the starter (renaming the crate is optional, see starter/README.md)
 $EDITOR my-hook/src/rule.rs           # 2. change the rule (find "YOUR BUSINESS LOGIC HERE")
 (cd my-hook && cargo test)            # 3. test it: allowed, boundary, rejected, config, authority
-scripts/build.sh my-hook              # 4. build it for Solana (SBF)
-scripts/deploy.sh my-hook             # 5. deploy to devnet and configure a mint (below)
+scripts/deploy.sh my-hook             # 4. build for Solana, deploy to devnet, configure a mint (below)
 ```
 
 The rule is this, in [`starter/src/rule.rs`](starter/src/rule.rs):
@@ -84,8 +83,8 @@ test rule::tests::a_transfer_below_the_limit_is_allowed ... ok
 test rule::tests::a_transfer_exactly_at_the_limit_is_allowed ... ok
 test rule::tests::a_transfer_one_over_the_limit_is_rejected ... ok
 test rule::tests::a_zero_limit_or_malformed_params_are_not_a_valid_configuration ... ok
-test initialize_enforces_the_authority_required_by_each_mode ... ok
-test update_config_requires_current_seq_and_the_mode_authority ... ok
+test only_the_live_hook_authority_can_initialize ... ok
+test second_initialize_fails_with_already_initialized_and_changes_nothing ... ok
 ```
 
 ### What `scripts/deploy.sh` does

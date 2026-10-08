@@ -11,7 +11,6 @@
 # Token-2022 mint with the Transfer Hook extension, initialises the hook for that mint, and runs
 # one transfer that must pass and one that must be refused.
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"
 
 dir="${1:?usage: scripts/deploy.sh HOOK_DIR [--cluster devnet|localnet|mainnet-beta|URL] [--keypair FILE] [--limit N]}"
 shift
@@ -65,8 +64,11 @@ if awk "BEGIN{exit !($balance < 2)}"; then
 fi
 
 # 4. build
-"$here/build.sh" "$dir"
+[ -f "$dir/Cargo.toml" ] || { echo "error: $dir/Cargo.toml not found" >&2; exit 1; }
+cargo build-sbf --manifest-path "$dir/Cargo.toml" --sbf-out-dir "$dir/target/deploy"
 so="$(ls "$dir"/target/deploy/*.so)"
+[ "$(echo "$so" | wc -l)" -eq 1 ] || { echo "error: expected one .so in $dir/target/deploy" >&2; exit 1; }
+echo "built $so ($(wc -c <"$so" | tr -d " ") bytes)"
 program_keypair="${so%.so}-keypair.json"
 program_id="$(solana address --keypair "$program_keypair")"
 

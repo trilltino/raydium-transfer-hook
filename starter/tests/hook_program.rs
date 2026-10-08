@@ -30,9 +30,8 @@ use {
     spl_transfer_hook_interface::instruction::ExecuteInstruction,
     transfer_hook_starter::{
         config_address, config_extra_account_meta, initialize_hook_instruction,
-        process_instruction, set_config_authority_instruction, update_config_instruction,
-        validation_list_address, AuthorityMode, HookConfig, HookError, InitializeHookArgs,
-        MAX_PARAMS_LEN, TEMPLATE_MAX_TRANSFER_V1, VALIDATION_LIST_LEN,
+        process_instruction, validation_list_address, HookConfig, HookError, InitializeHookArgs,
+        CONFIG_HEADER_LEN, MAX_PARAMS_LEN, VALIDATION_LIST_LEN,
     },
 };
 
@@ -243,8 +242,8 @@ async fn init_hook(
     send(ctx, &[instruction], &[authority]).await
 }
 
-fn max_args(mode: AuthorityMode, limit: u64, config_authority: Pubkey) -> InitializeHookArgs {
-    InitializeHookArgs::max_transfer(mode, limit, config_authority)
+fn max_args(limit: u64) -> InitializeHookArgs {
+    InitializeHookArgs::max_transfer(limit)
 }
 
 fn hooked_transfer(
@@ -326,7 +325,7 @@ async fn initialize_rejects_mints_that_are_not_valid_token_2022_hook_mints() {
     no_program.hook_program = None;
     let no_program = add_mint(&mut test, &no_program);
     let mut ctx = test.start_with_context().await;
-    let args = max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default());
+    let args = max_args(50);
 
     for (mint, expected) in [
         (fake_owner, HookError::MintOwnerNotToken2022),
@@ -347,191 +346,62 @@ async fn initialize_rejects_mints_that_are_not_valid_token_2022_hook_mints() {
 }
 
 // ------------------------------------------------------------------------------------------
-// InitializeHook: authority modes (F3)
+// InitializeHook: who may set the hook up
 // ------------------------------------------------------------------------------------------
 
 #[tokio::test]
-async fn initialize_enforces_the_authority_required_by_each_mode() {
+async fn only_the_live_hook_authority_can_initialize() {
     let ext = Keypair::new();
-    let mint_auth = Keypair::new();
     let stranger = Keypair::new();
-    let explicit = Keypair::new();
     let mut test = new_test();
-    let good = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(mint_auth.pubkey())),
-    );
-    let no_ext = add_mint(&mut test, &MintSpec::hooked(None, Some(mint_auth.pubkey())));
-    let no_mint_auth = add_mint(&mut test, &MintSpec::hooked(Some(ext.pubkey()), None));
-    let ok = [
-        (
-            AuthorityMode::ExtensionAuthority,
-            add_mint(
-                &mut test,
-                &MintSpec::hooked(Some(ext.pubkey()), Some(mint_auth.pubkey())),
-            ),
-        ),
-        (
-            AuthorityMode::MintAuthority,
-            add_mint(
-                &mut test,
-                &MintSpec::hooked(Some(ext.pubkey()), Some(mint_auth.pubkey())),
-            ),
-        ),
-        (
-            AuthorityMode::Explicit,
-            add_mint(
-                &mut test,
-                &MintSpec::hooked(Some(ext.pubkey()), Some(mint_auth.pubkey())),
-            ),
-        ),
-        (
-            AuthorityMode::Immutable,
-            add_mint(
-                &mut test,
-                &MintSpec::hooked(Some(ext.pubkey()), Some(mint_auth.pubkey())),
-            ),
-        ),
-    ];
+    let good = add_mint(&mut test, &MintSpec::hooked(Some(ext.pubkey()), None));
+    let revoked = add_mint(&mut test, &MintSpec::hooked(None, Some(ext.pubkey())));
     let mut ctx = test.start_with_context().await;
-    let zero = Pubkey::default();
+    let args = max_args(50);
 
-    // Mode 0: live extension authority.
-    let args = max_args(AuthorityMode::ExtensionAuthority, 50, zero);
+    // A stranger, and the mint authority (which is a different power), are refused.
     expect_hook_error(
         init_hook(&mut ctx, good, &stranger, &args).await,
         HookError::AuthorityMismatch,
     );
+    let mint_authority = Keypair::new();
     expect_hook_error(
-        init_hook(&mut ctx, good, &mint_auth, &args).await,
+        init_hook(&mut ctx, good, &mint_authority, &args).await,
         HookError::AuthorityMismatch,
     );
+    // A revoked extension authority means nobody can initialise.
     expect_hook_error(
-        init_hook(&mut ctx, no_ext, &ext, &args).await,
+        init_hook(&mut ctx, revoked, &ext, &args).await,
         HookError::AuthorityUnavailable,
     );
-    // Mode 1: live mint authority; the extension authority is not enough.
-    let args = max_args(AuthorityMode::MintAuthority, 50, zero);
-    expect_hook_error(
-        init_hook(&mut ctx, good, &ext, &args).await,
-        HookError::AuthorityMismatch,
-    );
-    expect_hook_error(
-        init_hook(&mut ctx, no_mint_auth, &ext, &args).await,
-        HookError::AuthorityUnavailable,
-    );
-    // Mode 2: extension authority consents, an explicit non-zero config authority is stored.
-    let args = max_args(AuthorityMode::Explicit, 50, explicit.pubkey());
-    expect_hook_error(
-        init_hook(&mut ctx, good, &stranger, &args).await,
-        HookError::AuthorityMismatch,
-    );
-    expect_hook_error(
-        init_hook(&mut ctx, no_ext, &ext, &args).await,
-        HookError::AuthorityUnavailable,
-    );
-    expect_hook_error(
-        init_hook(
-            &mut ctx,
-            good,
-            &ext,
-            &max_args(AuthorityMode::Explicit, 50, zero),
-        )
-        .await,
-        HookError::AuthorityUnavailable,
-    );
-    // Mode 3: needs the extension authority to consent.
-    expect_hook_error(
-        init_hook(
-            &mut ctx,
-            no_ext,
-            &ext,
-            &max_args(AuthorityMode::Immutable, 50, zero),
-        )
-        .await,
-        HookError::AuthorityUnavailable,
-    );
-    // A stored config authority is only meaningful in mode 2.
-    for mode in [
-        AuthorityMode::ExtensionAuthority,
-        AuthorityMode::MintAuthority,
-        AuthorityMode::Immutable,
-    ] {
-        let signer = if mode == AuthorityMode::MintAuthority {
-            &mint_auth
-        } else {
-            &ext
-        };
-        expect_hook_error(
-            init_hook(
-                &mut ctx,
-                good,
-                signer,
-                &max_args(mode, 50, explicit.pubkey()),
-            )
-            .await,
-            HookError::InvalidParams,
-        );
-    }
-    // Mode 4 (PlatformControlled) is reserved; anything above is unknown.
-    for mode in [4u8, 5, 255] {
-        let mut args = max_args(AuthorityMode::ExtensionAuthority, 50, zero);
-        args.authority_mode = mode;
-        expect_hook_error(
-            init_hook(&mut ctx, good, &ext, &args).await,
-            HookError::UnsupportedMode,
-        );
-    }
     // The authority must actually sign.
-    let mut unsigned = initialize_hook_instruction(
-        HOOK,
-        good,
-        ext.pubkey(),
-        ctx.payer.pubkey(),
-        &max_args(AuthorityMode::ExtensionAuthority, 50, zero),
-    );
+    let mut unsigned =
+        initialize_hook_instruction(HOOK, good, ext.pubkey(), ctx.payer.pubkey(), &args);
     unsigned.accounts[3].is_signer = false;
     expect_instruction_error(
         send(&mut ctx, &[unsigned], &[]).await,
         InstructionError::MissingRequiredSignature,
     );
+    // Nothing was created by the failed attempts.
+    assert!(fetch(&mut ctx, config_address(&good, &HOOK).0)
+        .await
+        .is_none());
 
-    // Success path for every mode, then check the stored state.
-    for (mode, mint) in ok {
-        let signer = if mode == AuthorityMode::MintAuthority {
-            &mint_auth
-        } else {
-            &ext
-        };
-        let config_authority = if mode == AuthorityMode::Explicit {
-            explicit.pubkey()
-        } else {
-            zero
-        };
-        init_hook(
-            &mut ctx,
-            mint,
-            signer,
-            &max_args(mode, 1234, config_authority),
-        )
+    // The live authority succeeds, and the stored state is exactly what was asked for.
+    init_hook(&mut ctx, good, &ext, &max_args(1234))
         .await
         .unwrap();
-        let config = fetch_config(&mut ctx, mint).await;
-        assert_eq!(config.authority_mode, mode);
-        assert_eq!(config.config_authority, config_authority);
-        assert_eq!(config.mint, mint);
-        assert_eq!(config.config_seq, 0);
-        assert_eq!(config.template_id, TEMPLATE_MAX_TRANSFER_V1);
-        assert_eq!(config.max_transfer_limit().unwrap(), 1234);
-        let (address, bump) = config_address(&mint, &HOOK);
-        assert_eq!(config.bump, bump);
-        config.verify_address(&HOOK, &mint, &address).unwrap();
-        assert_eq!(config.list_bump, validation_list_address(&mint, &HOOK).1);
-    }
+    let config = fetch_config(&mut ctx, good).await;
+    assert_eq!(config.mint, good);
+    assert_eq!(config.max_transfer_limit().unwrap(), 1234);
+    let (address, bump) = config_address(&good, &HOOK);
+    assert_eq!(config.bump, bump);
+    config.verify_address(&HOOK, &good, &address).unwrap();
+    assert_eq!(config.list_bump, validation_list_address(&good, &HOOK).1);
 }
 
 #[tokio::test]
-async fn initialize_rejects_invalid_template_params_and_accounts() {
+async fn initialize_rejects_invalid_params_and_accounts() {
     let ext = Keypair::new();
     let mut test = new_test();
     let mint = add_mint(
@@ -539,7 +409,7 @@ async fn initialize_rejects_invalid_template_params_and_accounts() {
         &MintSpec::hooked(Some(ext.pubkey()), Some(ext.pubkey())),
     );
     let mut ctx = test.start_with_context().await;
-    let base = max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default());
+    let base = max_args(50);
 
     let mut args = base.clone();
     args.params = 0u64.to_le_bytes().to_vec();
@@ -558,24 +428,6 @@ async fn initialize_rejects_invalid_template_params_and_accounts() {
     expect_hook_error(
         init_hook(&mut ctx, mint, &ext, &args).await,
         HookError::ParamsTooLarge,
-    );
-    let mut args = base.clone();
-    args.template_id = [9; 32];
-    expect_hook_error(
-        init_hook(&mut ctx, mint, &ext, &args).await,
-        HookError::UnknownTemplate,
-    );
-    let mut args = base.clone();
-    args.template_version = 2;
-    expect_hook_error(
-        init_hook(&mut ctx, mint, &ext, &args).await,
-        HookError::UnsupportedVersion,
-    );
-    let mut args = base.clone();
-    args.flags = 1;
-    expect_hook_error(
-        init_hook(&mut ctx, mint, &ext, &args).await,
-        HookError::InvalidParams,
     );
 
     // Substituted PDAs and a wrong system program.
@@ -614,7 +466,7 @@ async fn initialize_rejects_invalid_template_params_and_accounts() {
     );
     // Truncated instruction data.
     let mut instruction = build(&ctx);
-    instruction.data.truncate(40);
+    instruction.data.truncate(12);
     expect_instruction_error(
         send(&mut ctx, &[instruction], &[&ext]).await,
         InstructionError::InvalidInstructionData,
@@ -634,22 +486,13 @@ async fn second_initialize_fails_with_already_initialized_and_changes_nothing() 
         &MintSpec::hooked(Some(ext.pubkey()), Some(ext.pubkey())),
     );
     let mut ctx = test.start_with_context().await;
-    init_hook(
-        &mut ctx,
-        mint,
-        &ext,
-        &max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
+    init_hook(&mut ctx, mint, &ext, &max_args(50))
+        .await
+        .unwrap();
     let before = fetch(&mut ctx, config_address(&mint, &HOOK).0)
         .await
         .unwrap();
-    for args in [
-        max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-        max_args(AuthorityMode::ExtensionAuthority, 9_999, Pubkey::default()),
-        max_args(AuthorityMode::Immutable, 9_999, Pubkey::default()),
-    ] {
+    for args in [max_args(50), max_args(9_999)] {
         expect_hook_error(
             init_hook(&mut ctx, mint, &ext, &args).await,
             HookError::AlreadyInitialized,
@@ -675,9 +518,8 @@ async fn initialize_survives_prefunded_pdas() {
         .collect();
     let mut ctx = test.start_with_context().await;
     let rent = ctx.banks_client.get_rent().await.unwrap();
-    let config_rent = rent.minimum_balance(264);
+    let config_rent = rent.minimum_balance(CONFIG_HEADER_LEN + 8);
     let list_rent = rent.minimum_balance(VALIDATION_LIST_LEN);
-    assert_eq!(config_rent, 2_728_320);
 
     // (config pre-fund, list pre-fund). The runtime refuses to create a rent-paying account, so
     // the cheapest grief is the zero-data rent-exempt minimum; also exact rent and over-funded.
@@ -706,20 +548,15 @@ async fn initialize_survives_prefunded_pdas() {
             config_funds
         );
 
-        init_hook(
-            &mut ctx,
-            mint,
-            &ext,
-            &max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-        )
-        .await
-        .expect("pre-funded PDAs must not block initialization");
+        init_hook(&mut ctx, mint, &ext, &max_args(50))
+            .await
+            .expect("pre-funded PDAs must not block initialization");
 
         let config = fetch(&mut ctx, config_key).await.unwrap();
         let list = fetch(&mut ctx, list_key).await.unwrap();
         assert_eq!(config.owner, HOOK);
         assert_eq!(list.owner, HOOK);
-        assert_eq!(config.data.len(), 264);
+        assert_eq!(config.data.len(), CONFIG_HEADER_LEN + 8);
         assert_eq!(list.data.len(), VALIDATION_LIST_LEN);
         assert!(config.lamports >= config_rent.max(config_funds));
         assert!(list.lamports >= list_rent.max(list_funds));
@@ -742,18 +579,9 @@ async fn validation_list_is_identical_for_every_mint_and_is_seeds_based() {
     let mut ctx = test.start_with_context().await;
     let mut lists = Vec::new();
     for (index, mint) in mints.iter().enumerate() {
-        init_hook(
-            &mut ctx,
-            *mint,
-            &ext,
-            &max_args(
-                AuthorityMode::ExtensionAuthority,
-                10 + index as u64,
-                Pubkey::default(),
-            ),
-        )
-        .await
-        .unwrap();
+        init_hook(&mut ctx, *mint, &ext, &max_args(10 + index as u64))
+            .await
+            .unwrap();
         lists.push(
             fetch(&mut ctx, validation_list_address(mint, &HOOK).0)
                 .await
@@ -786,12 +614,7 @@ fn good_config(mint: Pubkey) -> HookConfig {
     HookConfig::new(
         config_address(&mint, &HOOK).1,
         validation_list_address(&mint, &HOOK).1,
-        AuthorityMode::ExtensionAuthority,
-        TEMPLATE_MAX_TRANSFER_V1,
-        1,
         mint,
-        Pubkey::default(),
-        0,
         &50u64.to_le_bytes(),
     )
     .unwrap()
@@ -836,14 +659,9 @@ async fn direct_execute_requires_the_transferring_flag_on_both_accounts() {
     let plain_b = add_token(&mut test, mint, &owner, 0, false);
     let foreign_flagged = add_token(&mut test, other_mint, &owner, 0, true);
     let mut ctx = test.start_with_context().await;
-    init_hook(
-        &mut ctx,
-        mint,
-        &ext,
-        &max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
+    init_hook(&mut ctx, mint, &ext, &max_args(50))
+        .await
+        .unwrap();
     let config = config_address(&mint, &HOOK).0;
     let list = validation_list_address(&mint, &HOOK).0;
     let payer = ctx.payer.pubkey();
@@ -908,14 +726,9 @@ async fn execute_rejects_substituted_config_and_list_from_another_mint() {
     let dst_a = add_token(&mut test, mint_a, &owner, 0, true);
     let mut ctx = test.start_with_context().await;
     for (mint, limit) in [(mint_a, 50), (mint_b, 7)] {
-        init_hook(
-            &mut ctx,
-            mint,
-            &ext,
-            &max_args(AuthorityMode::ExtensionAuthority, limit, Pubkey::default()),
-        )
-        .await
-        .unwrap();
+        init_hook(&mut ctx, mint, &ext, &max_args(limit))
+            .await
+            .unwrap();
     }
     let payer = ctx.payer.pubkey();
     let (config_a, config_b) = (
@@ -996,7 +809,7 @@ async fn execute_rejects_corrupt_config_and_list_without_panicking() {
     );
     case!(
         HookError::InvalidConfigData,
-        |m| Some((HOOK, template(m).encode()[..100].to_vec())),
+        |m| Some((HOOK, template(m).encode()[..20].to_vec())),
         no_list
     );
     case!(
@@ -1027,28 +840,10 @@ async fn execute_rejects_corrupt_config_and_list_without_panicking() {
         no_list
     );
     case!(
-        HookError::HashMismatch,
+        HookError::ParamsTooLarge,
         |m| {
             let mut data = template(m).encode();
-            data[256] ^= 1;
-            Some((HOOK, data))
-        },
-        no_list
-    );
-    case!(
-        HookError::InvalidConfigData,
-        |m| {
-            let mut data = template(m).encode();
-            data[200] = 1; // reserved bytes must be zero
-            Some((HOOK, data))
-        },
-        no_list
-    );
-    case!(
-        HookError::UnsupportedMode,
-        |m| {
-            let mut data = template(m).encode();
-            data[11] = 4;
+            data[11..13].copy_from_slice(&u16::MAX.to_le_bytes());
             Some((HOOK, data))
         },
         no_list
@@ -1160,14 +955,9 @@ async fn execute_requires_exactly_six_readonly_accounts() {
     let source = add_token(&mut test, mint, &owner, 100, true);
     let destination = add_token(&mut test, mint, &owner, 0, true);
     let mut ctx = test.start_with_context().await;
-    init_hook(
-        &mut ctx,
-        mint,
-        &ext,
-        &max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
+    init_hook(&mut ctx, mint, &ext, &max_args(50))
+        .await
+        .unwrap();
     let config = config_address(&mint, &HOOK).0;
     let list = validation_list_address(&mint, &HOOK).0;
     let payer = ctx.payer.pubkey();
@@ -1278,14 +1068,9 @@ async fn transfer_amount_boundaries_through_token_2022() {
     let unlimited_dst = add_token(&mut test, unlimited, &owner.pubkey(), 0, false);
     let mut ctx = test.start_with_context().await;
     for (mint, limit) in [(limited, 50), (unlimited, u64::MAX)] {
-        init_hook(
-            &mut ctx,
-            mint,
-            &ext,
-            &max_args(AuthorityMode::ExtensionAuthority, limit, Pubkey::default()),
-        )
-        .await
-        .unwrap();
+        init_hook(&mut ctx, mint, &ext, &max_args(limit))
+            .await
+            .unwrap();
     }
     let transfer = |source, mint, destination, amount| {
         hooked_transfer(source, mint, destination, &owner.pubkey(), amount)
@@ -1354,14 +1139,9 @@ async fn two_mints_under_one_program_enforce_their_own_limits() {
     let large_dst = add_token(&mut test, large, &owner.pubkey(), 0, false);
     let mut ctx = test.start_with_context().await;
     for (mint, limit) in [(small, 10), (large, 100)] {
-        init_hook(
-            &mut ctx,
-            mint,
-            &ext,
-            &max_args(AuthorityMode::ExtensionAuthority, limit, Pubkey::default()),
-        )
-        .await
-        .unwrap();
+        init_hook(&mut ctx, mint, &ext, &max_args(limit))
+            .await
+            .unwrap();
     }
     assert_eq!(
         fetch_config(&mut ctx, small)
@@ -1423,452 +1203,4 @@ async fn two_mints_under_one_program_enforce_their_own_limits() {
     let mut wrong = hooked_transfer(small_src, small, small_dst, &owner.pubkey(), 50);
     wrong.accounts[4].pubkey = config_address(&large, &HOOK).0;
     assert!(send(&mut ctx, &[wrong], &[&owner]).await.is_err());
-}
-
-#[tokio::test]
-async fn execute_compute_units_are_reported() {
-    let ext = Keypair::new();
-    let owner = Keypair::new();
-    let mut test = new_test();
-    let mint = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(ext.pubkey())),
-    );
-    let source = add_token(&mut test, mint, &owner.pubkey(), 100, false);
-    let destination = add_token(&mut test, mint, &owner.pubkey(), 0, false);
-    let mut ctx = test.start_with_context().await;
-    init_hook(
-        &mut ctx,
-        mint,
-        &ext,
-        &max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
-    let blockhash = ctx.get_new_latest_blockhash().await.unwrap();
-    let tx = Transaction::new_signed_with_payer(
-        &[hooked_transfer(
-            source,
-            mint,
-            destination,
-            &owner.pubkey(),
-            10,
-        )],
-        Some(&ctx.payer.pubkey()),
-        &[&ctx.payer, &owner],
-        blockhash,
-    );
-    let outcome = ctx.banks_client.simulate_transaction(tx).await.unwrap();
-    outcome.result.unwrap().unwrap();
-    let logs = outcome.simulation_details.unwrap().logs;
-    let invoke = format!("Program {HOOK} invoke [");
-    let consumed = format!("Program {HOOK} consumed ");
-    let units = logs
-        .iter()
-        .find_map(|l| l.strip_prefix(&consumed))
-        .and_then(|rest| rest.split(' ').next())
-        .and_then(|n| n.parse::<u64>().ok());
-    // Only the SBF build (SBF_OUT_DIR set) has a meaningful compute figure and one log line per
-    // invocation; the native builtin processor duplicates invoke logs and reports no usage.
-    if std::env::var_os("SBF_OUT_DIR").is_some() {
-        assert_eq!(
-            logs.iter().filter(|l| l.starts_with(&invoke)).count(),
-            1,
-            "{logs:#?}"
-        );
-        let units = units.expect("hook consumed-units log line");
-        println!("HOOK_EXECUTE_COMPUTE_UNITS={units}");
-        assert!(units < 25_000, "Execute used {units} CU");
-    } else {
-        assert!(logs.iter().any(|l| l.starts_with(&invoke)), "{logs:#?}");
-    }
-    assert!(
-        logs.iter().all(|l| !l.contains("Transfer Hook Execute")),
-        "Execute must not log"
-    );
-}
-
-// ------------------------------------------------------------------------------------------
-// UpdateConfig and SetConfigAuthority
-// ------------------------------------------------------------------------------------------
-
-#[tokio::test]
-async fn update_config_requires_current_seq_and_the_mode_authority() {
-    let ext = Keypair::new();
-    let mint_auth = Keypair::new();
-    let stranger = Keypair::new();
-    let owner = Keypair::new();
-    let mut test = new_test();
-    let mint = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(mint_auth.pubkey())),
-    );
-    let source = add_token(&mut test, mint, &owner.pubkey(), 1_000, false);
-    let destination = add_token(&mut test, mint, &owner.pubkey(), 0, false);
-    let mut ctx = test.start_with_context().await;
-    init_hook(
-        &mut ctx,
-        mint,
-        &ext,
-        &max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
-    let update = |authority: &Keypair, seq: u64, limit: u64| {
-        update_config_instruction(
-            HOOK,
-            mint,
-            authority.pubkey(),
-            seq,
-            1,
-            0,
-            &limit.to_le_bytes(),
-        )
-    };
-
-    expect_hook_error(
-        send(&mut ctx, &[update(&stranger, 0, 500)], &[&stranger]).await,
-        HookError::AuthorityMismatch,
-    );
-    // Mode 0 follows the extension authority, not the mint authority.
-    expect_hook_error(
-        send(&mut ctx, &[update(&mint_auth, 0, 500)], &[&mint_auth]).await,
-        HookError::AuthorityMismatch,
-    );
-    let mut unsigned = update(&ext, 0, 500);
-    unsigned.accounts[2].is_signer = false;
-    expect_instruction_error(
-        send(&mut ctx, &[unsigned], &[]).await,
-        InstructionError::MissingRequiredSignature,
-    );
-    expect_hook_error(
-        send(&mut ctx, &[update(&ext, 1, 500)], &[&ext]).await,
-        HookError::StaleConfigSeq,
-    );
-    expect_hook_error(
-        send(&mut ctx, &[update(&ext, 0, 0)], &[&ext]).await,
-        HookError::InvalidParams,
-    );
-    let mut bad_version = update(&ext, 0, 500);
-    bad_version.data[16..20].copy_from_slice(&2u32.to_le_bytes());
-    expect_hook_error(
-        send(&mut ctx, &[bad_version], &[&ext]).await,
-        HookError::UnsupportedVersion,
-    );
-    let mut bad_flags = update(&ext, 0, 500);
-    bad_flags.data[20..28].copy_from_slice(&1u64.to_le_bytes());
-    expect_hook_error(
-        send(&mut ctx, &[bad_flags], &[&ext]).await,
-        HookError::InvalidParams,
-    );
-    // The config of another mint cannot be substituted.
-    let mut substituted = update(&ext, 0, 500);
-    substituted.accounts[0].pubkey = config_address(&Pubkey::new_unique(), &HOOK).0;
-    expect_instruction_error(
-        send(&mut ctx, &[substituted], &[&ext]).await,
-        InstructionError::Custom(HookError::InvalidConfigOwner.code()),
-    );
-    // Nothing changed so far.
-    let config = fetch_config(&mut ctx, mint).await;
-    assert_eq!(
-        (config.config_seq, config.max_transfer_limit().unwrap()),
-        (0, 50)
-    );
-
-    // Rejected at limit 50 before the update, accepted after it.
-    expect_hook_error(
-        send(
-            &mut ctx,
-            &[hooked_transfer(
-                source,
-                mint,
-                destination,
-                &owner.pubkey(),
-                200,
-            )],
-            &[&owner],
-        )
-        .await,
-        HookError::TransferExceedsLimit,
-    );
-    send(&mut ctx, &[update(&ext, 0, 500)], &[&ext])
-        .await
-        .unwrap();
-    let config = fetch_config(&mut ctx, mint).await;
-    assert_eq!(
-        (config.config_seq, config.max_transfer_limit().unwrap()),
-        (1, 500)
-    );
-    assert_eq!(
-        config.config_hash,
-        transfer_hook_starter::compute_config_hash(
-            &TEMPLATE_MAX_TRANSFER_V1,
-            1,
-            &500u64.to_le_bytes()
-        )
-    );
-    send(
-        &mut ctx,
-        &[hooked_transfer(
-            source,
-            mint,
-            destination,
-            &owner.pubkey(),
-            200,
-        )],
-        &[&owner],
-    )
-    .await
-    .unwrap();
-    // The old sequence number is now stale.
-    expect_hook_error(
-        send(&mut ctx, &[update(&ext, 0, 600)], &[&ext]).await,
-        HookError::StaleConfigSeq,
-    );
-    send(&mut ctx, &[update(&ext, 1, 600)], &[&ext])
-        .await
-        .unwrap();
-    assert_eq!(fetch_config(&mut ctx, mint).await.config_seq, 2);
-}
-
-#[tokio::test]
-async fn update_authority_follows_the_live_mint_state_in_modes_0_and_1() {
-    let ext = Keypair::new();
-    let new_ext = Keypair::new();
-    let mint_auth = Keypair::new();
-    let mut test = new_test();
-    let mode0 = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(mint_auth.pubkey())),
-    );
-    let mode1 = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(mint_auth.pubkey())),
-    );
-    let mut ctx = test.start_with_context().await;
-    init_hook(
-        &mut ctx,
-        mode0,
-        &ext,
-        &max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
-    init_hook(
-        &mut ctx,
-        mode1,
-        &mint_auth,
-        &max_args(AuthorityMode::MintAuthority, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
-    let update = |mint, authority: &Keypair, seq| {
-        update_config_instruction(
-            HOOK,
-            mint,
-            authority.pubkey(),
-            seq,
-            1,
-            0,
-            &70u64.to_le_bytes(),
-        )
-    };
-
-    // Mode 1: only the mint authority.
-    expect_hook_error(
-        send(&mut ctx, &[update(mode1, &ext, 0)], &[&ext]).await,
-        HookError::AuthorityMismatch,
-    );
-    send(&mut ctx, &[update(mode1, &mint_auth, 0)], &[&mint_auth])
-        .await
-        .unwrap();
-
-    // The extension authority rotates: mode 0 follows the new key.
-    let mut spec = MintSpec::hooked(Some(new_ext.pubkey()), Some(mint_auth.pubkey()));
-    ctx.set_account(&mode0, &AccountSharedData::from(spec.account()));
-    expect_hook_error(
-        send(&mut ctx, &[update(mode0, &ext, 0)], &[&ext]).await,
-        HookError::AuthorityMismatch,
-    );
-    send(&mut ctx, &[update(mode0, &new_ext, 0)], &[&new_ext])
-        .await
-        .unwrap();
-    // The extension authority is revoked: nobody can update (the config stays usable).
-    spec.ext_authority = None;
-    ctx.set_account(&mode0, &AccountSharedData::from(spec.account()));
-    expect_hook_error(
-        send(&mut ctx, &[update(mode0, &new_ext, 1)], &[&new_ext]).await,
-        HookError::AuthorityUnavailable,
-    );
-    // The mint moves to another hook program: updates are refused.
-    spec.ext_authority = Some(new_ext.pubkey());
-    spec.hook_program = Some(OTHER_PROGRAM);
-    ctx.set_account(&mode0, &AccountSharedData::from(spec.account()));
-    expect_hook_error(
-        send(&mut ctx, &[update(mode0, &new_ext, 1)], &[&new_ext]).await,
-        HookError::MintHookProgramMismatch,
-    );
-    // The mint is no longer a Token-2022 mint at all.
-    spec.hook_program = Some(HOOK);
-    spec.owner = OTHER_PROGRAM;
-    ctx.set_account(&mode0, &AccountSharedData::from(spec.account()));
-    expect_hook_error(
-        send(&mut ctx, &[update(mode0, &new_ext, 1)], &[&new_ext]).await,
-        HookError::MintOwnerNotToken2022,
-    );
-}
-
-#[tokio::test]
-async fn explicit_authority_can_be_rotated_and_frozen_one_way() {
-    let ext = Keypair::new();
-    let explicit = Keypair::new();
-    let next = Keypair::new();
-    let mut test = new_test();
-    let mint = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(ext.pubkey())),
-    );
-    let mode0 = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(ext.pubkey())),
-    );
-    let immutable = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(ext.pubkey())),
-    );
-    let mut ctx = test.start_with_context().await;
-    init_hook(
-        &mut ctx,
-        mint,
-        &ext,
-        &max_args(AuthorityMode::Explicit, 50, explicit.pubkey()),
-    )
-    .await
-    .unwrap();
-    init_hook(
-        &mut ctx,
-        mode0,
-        &ext,
-        &max_args(AuthorityMode::ExtensionAuthority, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
-    init_hook(
-        &mut ctx,
-        immutable,
-        &ext,
-        &max_args(AuthorityMode::Immutable, 50, Pubkey::default()),
-    )
-    .await
-    .unwrap();
-    let update = |mint, authority: &Keypair, seq| {
-        update_config_instruction(
-            HOOK,
-            mint,
-            authority.pubkey(),
-            seq,
-            1,
-            0,
-            &70u64.to_le_bytes(),
-        )
-    };
-    let set = |mint, authority: &Keypair, new| {
-        set_config_authority_instruction(HOOK, mint, authority.pubkey(), new)
-    };
-
-    // Mode 2: the stored authority updates; the extension authority (who consented) cannot.
-    expect_hook_error(
-        send(&mut ctx, &[update(mint, &ext, 0)], &[&ext]).await,
-        HookError::AuthorityMismatch,
-    );
-    send(&mut ctx, &[update(mint, &explicit, 0)], &[&explicit])
-        .await
-        .unwrap();
-    // Rotate the authority.
-    expect_hook_error(
-        send(&mut ctx, &[set(mint, &ext, next.pubkey())], &[&ext]).await,
-        HookError::AuthorityMismatch,
-    );
-    send(
-        &mut ctx,
-        &[set(mint, &explicit, next.pubkey())],
-        &[&explicit],
-    )
-    .await
-    .unwrap();
-    let config = fetch_config(&mut ctx, mint).await;
-    assert_eq!(config.config_authority, next.pubkey());
-    assert_eq!(config.authority_mode, AuthorityMode::Explicit);
-    assert_eq!(config.config_seq, 2);
-    expect_hook_error(
-        send(&mut ctx, &[update(mint, &explicit, 2)], &[&explicit]).await,
-        HookError::AuthorityMismatch,
-    );
-    send(&mut ctx, &[update(mint, &next, 2)], &[&next])
-        .await
-        .unwrap();
-    // A zero authority is the one-way transition to Immutable.
-    send(&mut ctx, &[set(mint, &next, Pubkey::default())], &[&next])
-        .await
-        .unwrap();
-    let config = fetch_config(&mut ctx, mint).await;
-    assert_eq!(config.authority_mode, AuthorityMode::Immutable);
-    assert_eq!(config.config_authority, Pubkey::default());
-    assert_eq!(config.config_seq, 4);
-    for signer in [&next, &ext, &explicit] {
-        expect_hook_error(
-            send(&mut ctx, &[update(mint, signer, 4)], &[signer]).await,
-            HookError::ConfigImmutable,
-        );
-        expect_hook_error(
-            send(&mut ctx, &[set(mint, signer, signer.pubkey())], &[signer]).await,
-            HookError::ConfigImmutable,
-        );
-    }
-
-    // Immutable from the start: update and set both fail.
-    expect_hook_error(
-        send(&mut ctx, &[update(immutable, &ext, 0)], &[&ext]).await,
-        HookError::ConfigImmutable,
-    );
-    expect_hook_error(
-        send(&mut ctx, &[set(immutable, &ext, next.pubkey())], &[&ext]).await,
-        HookError::ConfigImmutable,
-    );
-    // SetConfigAuthority is only for mode 2.
-    expect_hook_error(
-        send(&mut ctx, &[set(mode0, &ext, next.pubkey())], &[&ext]).await,
-        HookError::UnsupportedMode,
-    );
-    assert_eq!(fetch_config(&mut ctx, mode0).await.config_seq, 0);
-}
-
-#[tokio::test]
-async fn config_seq_overflow_is_an_error_not_a_wrap() {
-    let ext = Keypair::new();
-    let mut test = new_test();
-    let mint = add_mint(
-        &mut test,
-        &MintSpec::hooked(Some(ext.pubkey()), Some(ext.pubkey())),
-    );
-    let mut config = good_config(mint);
-    config.config_seq = u64::MAX;
-    test.add_account(
-        config_address(&mint, &HOOK).0,
-        program_account(HOOK, config.encode()),
-    );
-    let mut ctx = test.start_with_context().await;
-    let instruction = update_config_instruction(
-        HOOK,
-        mint,
-        ext.pubkey(),
-        u64::MAX,
-        1,
-        0,
-        &70u64.to_le_bytes(),
-    );
-    expect_instruction_error(
-        send(&mut ctx, &[instruction], &[&ext]).await,
-        InstructionError::ArithmeticOverflow,
-    );
 }

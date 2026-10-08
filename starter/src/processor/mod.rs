@@ -3,7 +3,6 @@
 mod common;
 mod execute;
 mod initialize;
-mod mutate;
 
 #[cfg(test)]
 pub(crate) use execute::validate_list_layout;
@@ -28,10 +27,6 @@ pub fn process_instruction(
         execute::process_execute(program_id, accounts, instruction_data)
     } else if discriminator == INITIALIZE_HOOK_DISCRIMINATOR {
         initialize::process_initialize_hook(program_id, accounts, instruction_data)
-    } else if discriminator == UPDATE_CONFIG_DISCRIMINATOR {
-        mutate::process_update_config(program_id, accounts, instruction_data)
-    } else if discriminator == SET_CONFIG_AUTHORITY_DISCRIMINATOR {
-        mutate::process_set_config_authority(program_id, accounts, instruction_data)
     } else if discriminator == SPL_INITIALIZE_LIST_DISCRIMINATOR
         || discriminator == SPL_UPDATE_LIST_DISCRIMINATOR
     {

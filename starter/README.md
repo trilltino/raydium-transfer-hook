@@ -17,8 +17,8 @@ way, because nothing in Token-2022 checks where a hook came from.
   transfer (the `transferring` flag, on both token accounts).
 * The canonical validation list (`ExtraAccountMetaList`), created atomically with the per-mint config
   by one `InitializeHook` instruction.
-* A per-mint config account (`["hook-config", mint]`), versioned, with four authority modes
-  (extension authority, mint authority, explicit, immutable), `UpdateConfig` and `SetConfigAuthority`.
+* A per-mint config account (`["hook-config", mint]`), versioned, written once by the mint's Transfer
+  Hook authority. It cannot be changed afterwards (see below if your rule needs that).
 * Typed error codes (`HookError`, from `0x7001`) so callers can tell your hook caused a refusal.
 * Tests that run against the real Token-2022 processor.
 * `examples/devnet.rs`: creates a hooked mint, initialises the hook and proves allow/reject on a
@@ -38,12 +38,20 @@ From the repository root (Git Bash on Windows):
    the ones that exercise it when you change the rule; keep the plumbing tests (direct-call
    rejection, authority, config layout). Against the real SBF build:
    `cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test`.
-4. **Build.** `scripts/build.sh my-hook` writes `my-hook/target/deploy/<name>.so` and, the first
-   time, `<name>-keypair.json`: your program id.
-5. **Deploy and prove it.** `scripts/deploy.sh my-hook --cluster devnet`. If you changed the rule's
-   parameters, update the `InitializeHookArgs` in `examples/devnet.rs` to match.
-6. **Decide who holds the upgrade authority.** It can replace your rule for every token that uses
+4. **Deploy and prove it.** `scripts/deploy.sh my-hook --cluster devnet` builds with `cargo build-sbf`
+   (writing `my-hook/target/deploy/<name>.so` and, the first time, `<name>-keypair.json`: your program
+   id), deploys, then runs `examples/devnet.rs`. If you changed the rule's parameters, update the
+   `InitializeHookArgs` in that example to match.
+5. **Decide who holds the upgrade authority.** It can replace your rule for every token that uses
    it. Say so publicly, or revoke it: `solana program set-upgrade-authority <ID> --final`.
+
+## If the settings must be changeable
+
+The starter sets its config once and never changes it, like the templates. If your rule needs
+mutable settings or other authority models, add an `UpdateConfig` instruction that checks the signer
+against an authority you choose and a sequence number against replays. A worked version with four
+authority modes is in git history (tag `pre-community-hook-kit`, `templates/transfer-hook-starter`).
+Add the matching tests: unauthorized update refused, stale sequence refused.
 
 ## Things your rule must respect
 

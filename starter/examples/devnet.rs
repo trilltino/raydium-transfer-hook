@@ -28,7 +28,7 @@ use spl_token_2022::{
     state::{Account as TokenAccount, Mint},
 };
 use transfer_hook_starter::{
-    config_address, initialize_hook_instruction, validation_list_address, AuthorityMode, HookError,
+    config_address, initialize_hook_instruction, validation_list_address, HookError,
     InitializeHookArgs,
 };
 
@@ -132,11 +132,7 @@ async fn main() {
             mint.pubkey(),
             payer.pubkey(),
             payer.pubkey(),
-            &InitializeHookArgs::max_transfer(
-                AuthorityMode::ExtensionAuthority,
-                args.limit,
-                Pubkey::default(),
-            ),
+            &InitializeHookArgs::max_transfer(args.limit),
         ),
     ];
     send(&rpc, &payer, &setup, &[&mint]).await;

@@ -16,7 +16,7 @@ resurrect it.
 | `starter/` | Standalone copy-me hook. Default rule: max transfer. | **Copy it, then edit `src/rule.rs` in the copy.** Edit the original only to improve the starter itself. |
 | `templates/<name>/` | Curated hooks: `README.md`, `src/rule.rs`, `tests/`. | Only when contributing or fixing that template. |
 | `hook-kit/` | Shared plumbing used by the templates. | Rarely. A bug here affects every template; add a test with the fix. |
-| `scripts/` | `build.sh`, `test.sh`, `deploy.sh`. | Only to fix them. |
+| `scripts/deploy.sh` | Build, deploy and prove a hook on a cluster. | Only to fix it. |
 
 ## Where business logic belongs
 
@@ -27,13 +27,13 @@ resurrect it.
   `context` carries amount, source, destination, mint and authority.
 
 Everything else is plumbing: the `Execute` entrypoint, the `transferring`-flag check that rejects
-direct calls, PDA and validation-list checks, config encoding and authority modes. In the normal
+direct calls, PDA and validation-list checks, config encoding and the check that only the mint's hook authority can initialise. In the normal
 case you modify `rule.rs`, the error enum (add rule-specific variants, never renumber existing
 ones), the config/params helpers if the rule needs new settings, `README.md`, the example in
 `examples/devnet.rs` if the setup changes, and the tests.
 
 **Do not casually modify** the `Execute` account checks, the `transferring` check, the
-validation-list layout, the config layout, the authority-mode logic, `hook-kit/`, or anything that
+validation-list layout, the config layout, the initialise-authority check, `hook-kit/`, or anything that
 widens what accounts a hook accepts. If a rule seems to need that, stop and explain why to the
 human before changing it. These are the parts that make a hook safe.
 
@@ -74,20 +74,22 @@ Every rule has tests for each of these (name them so the intent is visible in `c
 * rejected transfer fails with the hook's **exact error code**, and balances are unchanged
 * **exact boundary** (`amount == limit` and `limit + 1`; the last second of a window; ...)
 * malformed config / params are refused (`validate_params`, `Config::decode`)
-* unauthorized config update is refused
+* unauthorized setup or config change is refused (a non-authority `Initialize`, a second `Initialize`;
+  and an unauthorized update if your rule has an update instruction)
 * irrelevant transfer path is not affected (a transfer the rule is not about, if the rule has one)
 * state update correctness, where the rule keeps state (exact values, not "changed")
 * a direct `Execute` call (not from Token-2022) is refused
 
 The starter and every template already contain examples of each. Copy the pattern. Do not delete
-the plumbing tests (direct-call rejection, authority, config layout) when you change a rule.
+the plumbing tests (direct-call rejection, initialise authority, config layout) when you change a rule.
 
 Commands:
 
 ```sh
 cargo test                       # inside the hook's directory; runs against real Token-2022
-scripts/test.sh                  # everything in the repository
-scripts/test.sh --sbf            # also against the compiled SBF binaries
+cargo test --workspace           # from the repo root: hook-kit and every template
+(cd starter && cargo test)       # the starter is standalone
+cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test   # against the compiled binary
 cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings
 ```
 

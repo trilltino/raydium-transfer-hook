@@ -26,4 +26,4 @@ config control, upgradeability, bypasses, rejection behaviour, contention, compu
 
 ## Evidence
 
-<!-- `scripts/test.sh` result; deploy output (cluster, program id, mint) -->
+<!-- `cargo test` result; deploy output (cluster, program id, mint) -->

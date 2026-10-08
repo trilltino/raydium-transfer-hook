@@ -108,17 +108,12 @@ pub(super) fn process_execute(
         .map_err(|_| HookError::AccountOrderMismatch)?;
     }
 
-    match state.version {
-        1 => {
-            let context = TransferContext {
-                amount,
-                source: *source.key,
-                destination: *destination.key,
-                mint: *mint.key,
-                authority: *owner.key,
-            };
-            rule::check_transfer(&state, &context).map_err(Into::into)
-        }
-        _ => Err(HookError::UnsupportedVersion.into()),
-    }
+    let context = TransferContext {
+        amount,
+        source: *source.key,
+        destination: *destination.key,
+        mint: *mint.key,
+        authority: *owner.key,
+    };
+    rule::check_transfer(&state, &context).map_err(Into::into)
 }

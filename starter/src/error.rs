@@ -19,7 +19,7 @@ pub enum HookError {
     InvalidConfigPda = 0x7005,
     /// The config account is not owned by this program.
     InvalidConfigOwner = 0x7006,
-    /// The config bytes are malformed (length, discriminator, reserved bytes, field values).
+    /// The config bytes are malformed (length, discriminator, field values).
     InvalidConfigData = 0x7007,
     /// The config version is not supported (fail closed).
     UnsupportedVersion = 0x7008,
@@ -27,36 +27,26 @@ pub enum HookError {
     InvalidValidationList = 0x7009,
     /// The resolved extra accounts do not match the validation list.
     AccountOrderMismatch = 0x700a,
-    /// The transfer amount is above the configured limit.
+    /// The transfer amount is above the configured limit. This is the default rule's refusal.
     TransferExceedsLimit = 0x700b,
-    /// The signer is not the authority required by the config's authority mode.
+    /// The signer is not the mint's Transfer Hook extension authority.
     AuthorityMismatch = 0x700c,
-    /// The authority required by the mode is `None` on the mint.
+    /// The mint's Transfer Hook extension authority has been revoked, so nobody can initialise.
     AuthorityUnavailable = 0x700d,
     /// The config or validation list already exists.
     AlreadyInitialized = 0x700e,
-    /// The authority mode is reserved or unknown, or not valid for this instruction.
-    UnsupportedMode = 0x700f,
     /// `params_len` is above 256.
-    ParamsTooLarge = 0x7010,
-    /// `config_hash` does not match the stored template and params.
-    HashMismatch = 0x7011,
-    /// `expected_seq` is not the current `config_seq`.
-    StaleConfigSeq = 0x7012,
+    ParamsTooLarge = 0x700f,
     /// Execute was invoked with a number of accounts other than six.
-    WrongAccountCount = 0x7013,
-    /// The config is in Immutable mode and cannot be changed.
-    ConfigImmutable = 0x7014,
-    /// Template params or flags are invalid for the template.
-    InvalidParams = 0x7015,
-    /// The template id is not known to this program.
-    UnknownTemplate = 0x7016,
+    WrongAccountCount = 0x7010,
+    /// The rule's params are invalid.
+    InvalidParams = 0x7011,
     /// SPL InitializeExtraAccountMetaList / UpdateExtraAccountMetaList are not accepted.
-    SplInterfaceUnsupported = 0x7017,
+    SplInterfaceUnsupported = 0x7012,
 }
 
 impl HookError {
-    pub const ALL: [HookError; 23] = [
+    pub const ALL: [HookError; 18] = [
         HookError::NotDirectInvocation,
         HookError::MintOwnerNotToken2022,
         HookError::MintHookProgramMismatch,
@@ -71,14 +61,9 @@ impl HookError {
         HookError::AuthorityMismatch,
         HookError::AuthorityUnavailable,
         HookError::AlreadyInitialized,
-        HookError::UnsupportedMode,
         HookError::ParamsTooLarge,
-        HookError::HashMismatch,
-        HookError::StaleConfigSeq,
         HookError::WrongAccountCount,
-        HookError::ConfigImmutable,
         HookError::InvalidParams,
-        HookError::UnknownTemplate,
         HookError::SplInterfaceUnsupported,
     ];
 
@@ -107,14 +92,9 @@ impl HookError {
             HookError::AuthorityMismatch => "AuthorityMismatch",
             HookError::AuthorityUnavailable => "AuthorityUnavailable",
             HookError::AlreadyInitialized => "AlreadyInitialized",
-            HookError::UnsupportedMode => "UnsupportedMode",
             HookError::ParamsTooLarge => "ParamsTooLarge",
-            HookError::HashMismatch => "HashMismatch",
-            HookError::StaleConfigSeq => "StaleConfigSeq",
             HookError::WrongAccountCount => "WrongAccountCount",
-            HookError::ConfigImmutable => "ConfigImmutable",
             HookError::InvalidParams => "InvalidParams",
-            HookError::UnknownTemplate => "UnknownTemplate",
             HookError::SplInterfaceUnsupported => "SplInterfaceUnsupported",
         }
     }

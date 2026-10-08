@@ -67,6 +67,11 @@ jobs:
           fi
           echo "$HOME/solana/solana-release/bin" >> "$GITHUB_PATH"
       - name: build every hook for SBF and run its tests against the real binary
-        run: scripts/test.sh --sbf
+        run: |
+          for dir in templates/fair-launch templates/creator-commitment templates/holder-rewards starter; do
+            cargo build-sbf --manifest-path "$dir/Cargo.toml" --sbf-out-dir "$PWD/$dir/target/deploy"
+            # ProgramTest prefers a .so found in SBF_OUT_DIR over the native program.
+            (cd "$dir" && SBF_OUT_DIR="$PWD/target/deploy" cargo test)
+          done
       - name: git status is clean (nothing generated is tracked)
         run: test -z "$(git status --porcelain)"

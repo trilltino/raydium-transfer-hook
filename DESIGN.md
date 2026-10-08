@@ -112,7 +112,7 @@ Three different powers; never show them as one "owner":
 |---|---|---|
 | Program upgrade authority | replace the rule's code for **every** mint using the program | `solana program show <ID>`; revoke with `set-upgrade-authority --final` |
 | Mint's TransferHook authority | re-point the mint at a different hook program | the mint's TransferHook extension (`None` once revoked) |
-| Hook config authority | change one mint's parameters | the hook's config account; the starter has four modes (extension authority, mint authority, explicit, immutable) |
+| Hook config authority | change one mint's parameters | the hook's config account. The starter's is set once by the extension authority and cannot change; the templates are the same |
 
 Every template README must say who holds each, and what a holder can do with it.
 

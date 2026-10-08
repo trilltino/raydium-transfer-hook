@@ -9,8 +9,8 @@ use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 
 use super::common::*;
 use crate::{
-    authority::AuthorityMode, config::HookConfig, constants::*, error::HookError,
-    instruction::InitializeHookArgs, pda::*,
+    config::HookConfig, constants::*, error::HookError, instruction::InitializeHookArgs, pda::*,
+    rule,
 };
 
 pub(super) fn process_initialize_hook(
@@ -29,39 +29,20 @@ pub(super) fn process_initialize_hook(
     require_writable(config)?;
     require_writable(validation_list)?;
 
-    let mode = AuthorityMode::from_u8(args.authority_mode)?;
     let mint_info = read_mint(mint)?;
     require_hook_program(&mint_info, program_id)?;
 
-    // The identity authority that may initialize the hook for this mint.
-    let required_authority = match mode {
-        AuthorityMode::MintAuthority => mint_info.mint_authority,
-        AuthorityMode::ExtensionAuthority | AuthorityMode::Explicit | AuthorityMode::Immutable => {
-            mint_info.extension_authority
-        }
-    }
-    .ok_or(HookError::AuthorityUnavailable)?;
+    // Only the mint's live Transfer Hook authority may set the hook up, and only once.
+    let required_authority = mint_info
+        .extension_authority
+        .ok_or(HookError::AuthorityUnavailable)?;
     if required_authority != *authority.key {
         return Err(HookError::AuthorityMismatch.into());
     }
-    match mode {
-        AuthorityMode::Explicit => {
-            if args.config_authority == Pubkey::default() {
-                return Err(HookError::AuthorityUnavailable.into());
-            }
-        }
-        _ => {
-            if args.config_authority != Pubkey::default() {
-                return Err(HookError::InvalidParams.into());
-            }
-        }
+    if args.params.len() > MAX_PARAMS_LEN {
+        return Err(HookError::ParamsTooLarge.into());
     }
-    validate_template(
-        &args.template_id,
-        args.template_version,
-        args.flags,
-        &args.params,
-    )?;
+    rule::validate_params(&args.params)?;
 
     let (expected_config, bump) = config_address(mint.key, program_id);
     if config.key != &expected_config {
@@ -78,17 +59,7 @@ pub(super) fn process_initialize_hook(
         HookError::InvalidValidationList,
     )?;
 
-    let state = HookConfig::new(
-        bump,
-        list_bump,
-        mode,
-        args.template_id,
-        args.template_version,
-        *mint.key,
-        args.config_authority,
-        args.flags,
-        &args.params,
-    )?;
+    let state = HookConfig::new(bump, list_bump, *mint.key, &args.params)?;
     let list_meta = config_extra_account_meta()?;
     let list_len = ExtraAccountMetaList::size_of(1)?;
     if list_len != VALIDATION_LIST_LEN {
