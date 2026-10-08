@@ -8,7 +8,7 @@ private key (`cargo xtask localnet build | validator | e2e`, and the in-process 
 | File | Is |
 |---|---|
 | `admin.json` | The admin baked into the `localnet` builds of the hook-support forks (passed at build time as `CPSWAP_LOCALNET_ADMIN` / `CLMM_LOCALNET_ADMIN`), the faucet of the local validator, and the payer of every flow |
-| `reference-hook.json`, `arbitrary-hook.json`, `creator-commitment.json`, `fair-launch.json`, `anti-bundle.json`, `loyalty-rewards.json`, `parent-spin-off.json` | Program ids of the hooks on localnet (`environments/localnet.json`) |
+| `reference-hook.json`, `arbitrary-hook.json`, `creator-commitment.json`, `fair-launch.json`, `holder-rewards.json` | Program ids of the hooks on localnet (`environments/localnet.json`) |
 
 The Raydium programs keep upstream's program ids on localnet, and the CPMM pool-creation fee
 receiver (upstream's address, whose key nobody here holds) is seeded at genesis as an empty

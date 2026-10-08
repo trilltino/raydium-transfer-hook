@@ -2,8 +2,9 @@
 //!
 //! **This file is the whole idea of the template.** Everything else in the crate is plumbing.
 //!
-//! During a launch window, every **buy** (a transfer out of the pool's vault) must pass four
-//! checks. Outside the window, and for every transfer that is not a buy, nothing is checked.
+//! During a launch window, every **buy** (a transfer out of one of the launch's pool vaults, its
+//! *venues*) must pass four checks. Outside the window, and for every transfer that is not a buy,
+//! nothing is checked.
 //!
 //! | Check | Stops | Error |
 //! |---|---|---|
@@ -11,6 +12,18 @@
 //! | the buyer's balance afterwards is at most `max_wallet` | one token account accumulating a large share | [`FairLaunchError::MaxWalletExceeded`] |
 //! | at most `max_buys_per_slot` buys land in the same slot | bundles: many buys packed into one block | [`FairLaunchError::TooManyBuysInSlot`] |
 //! | the transaction's priority fee is at most `max_priority_micro_lamports` | winning the block by outbidding everyone | [`FairLaunchError::PriorityFeeTooHigh`] |
+//!
+//! ## Configurations
+//!
+//! A limit of `0` switches that check off (at least one must be on), so the same program is:
+//!
+//! * a full **fair launch**: all four limits set;
+//! * an **anti-bundle** budget: only `max_buys_per_slot` set and a window that never ends, so a bundle
+//!   of many buys packed into one block is refused as a whole;
+//! * an **anti-snipe** guard: `max_buy` and `max_wallet` for the first minutes, with or without the
+//!   fee cap.
+//!
+//! Up to four venues can be named, and they all draw on the same per-slot budget.
 //!
 //! ## What each check really guarantees
 //!
@@ -42,8 +55,11 @@ pub struct Params {
     pub window_start: i64,
     /// The rule stops applying at this time.
     pub window_end: i64,
+    /// `0` switches the per-buy cap off.
     pub max_buy: u64,
+    /// `0` switches the per-account cap off.
     pub max_wallet: u64,
+    /// `0` switches the per-slot budget off.
     pub max_buys_per_slot: u32,
     /// `0` switches the priority-fee check off.
     pub max_priority_micro_lamports: u64,
@@ -51,11 +67,11 @@ pub struct Params {
 
 impl Params {
     pub fn validate(&self) -> Result<(), FairLaunchError> {
-        if self.window_end <= self.window_start
-            || self.max_buy == 0
-            || self.max_wallet == 0
-            || self.max_buys_per_slot == 0
-        {
+        let nothing_limited = self.max_buy == 0
+            && self.max_wallet == 0
+            && self.max_buys_per_slot == 0
+            && self.max_priority_micro_lamports == 0;
+        if self.window_end <= self.window_start || nothing_limited {
             return Err(FairLaunchError::InvalidParams);
         }
         Ok(())
@@ -80,13 +96,13 @@ pub struct Buy {
 
 /// The decision for one buy inside the window.
 pub fn check_buy(params: &Params, buy: &Buy) -> Result<(), FairLaunchError> {
-    if buy.amount > params.max_buy {
+    if params.max_buy > 0 && buy.amount > params.max_buy {
         return Err(FairLaunchError::PerBuyCapExceeded);
     }
-    if buy.wallet_balance_after > params.max_wallet {
+    if params.max_wallet > 0 && buy.wallet_balance_after > params.max_wallet {
         return Err(FairLaunchError::MaxWalletExceeded);
     }
-    if buy.buys_in_slot > params.max_buys_per_slot {
+    if params.max_buys_per_slot > 0 && buy.buys_in_slot > params.max_buys_per_slot {
         return Err(FairLaunchError::TooManyBuysInSlot);
     }
     if params.max_priority_micro_lamports > 0
@@ -95,6 +111,11 @@ pub fn check_buy(params: &Params, buy: &Buy) -> Result<(), FairLaunchError> {
         return Err(FairLaunchError::PriorityFeeTooHigh);
     }
     Ok(())
+}
+
+/// Whether a transfer out of `source` is a buy: `source` is one of the launch's venues.
+pub fn is_buy<K: PartialEq>(source: &K, venues: &[K]) -> bool {
+    venues.contains(source)
 }
 
 /// The buy count for `slot` once one more buy lands, given the last recorded `(slot, count)`.
@@ -230,22 +251,95 @@ mod tests {
         assert_eq!(priority_price(&[]), None);
     }
 
+    const NO_LIMITS: Params = Params {
+        max_buy: 0,
+        max_wallet: 0,
+        max_buys_per_slot: 0,
+        max_priority_micro_lamports: 0,
+        ..P
+    };
+
     #[test]
-    fn validation_rejects_empty_windows_and_zero_limits() {
+    fn validation_rejects_empty_windows_and_a_launch_with_no_limit() {
         assert_eq!(P.validate(), Ok(()));
         for bad in [
             Params {
                 window_end: 100,
                 ..P
             },
-            Params { max_buy: 0, ..P },
-            Params { max_wallet: 0, ..P },
-            Params {
-                max_buys_per_slot: 0,
-                ..P
-            },
+            NO_LIMITS,
         ] {
             assert_eq!(bad.validate(), Err(FairLaunchError::InvalidParams));
         }
+        // Any one limit alone is a valid launch: anti-bundle is just the per-slot one.
+        for one in [
+            Params {
+                max_buy: 50,
+                ..NO_LIMITS
+            },
+            Params {
+                max_wallet: 120,
+                ..NO_LIMITS
+            },
+            Params {
+                max_buys_per_slot: 2,
+                ..NO_LIMITS
+            },
+            Params {
+                max_priority_micro_lamports: 1_000,
+                ..NO_LIMITS
+            },
+        ] {
+            assert_eq!(one.validate(), Ok(()));
+        }
+    }
+
+    #[test]
+    fn a_zero_limit_switches_that_check_off() {
+        let huge = Buy {
+            amount: u64::MAX,
+            wallet_balance_after: u64::MAX,
+            buys_in_slot: 2,
+            priority_micro_lamports: Some(u64::MAX),
+        };
+        // Only the per-slot budget on: size, balance and fee are not looked at, the budget is.
+        let per_slot_only = Params {
+            max_buys_per_slot: 2,
+            ..NO_LIMITS
+        };
+        assert_eq!(check_buy(&per_slot_only, &huge), Ok(()));
+        assert_eq!(
+            check_buy(
+                &per_slot_only,
+                &Buy {
+                    buys_in_slot: 3,
+                    ..huge
+                }
+            ),
+            Err(FairLaunchError::TooManyBuysInSlot)
+        );
+        // Without a slot budget, any number of buys in a slot passes the other checks.
+        let no_budget = Params {
+            max_buys_per_slot: 0,
+            ..P
+        };
+        assert_eq!(
+            check_buy(
+                &no_budget,
+                &Buy {
+                    buys_in_slot: u32::MAX,
+                    ..buy()
+                }
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_venue_is_any_of_the_named_vaults() {
+        let venues = [1u8, 2, 3];
+        assert!(is_buy(&2, &venues));
+        assert!(!is_buy(&9, &venues));
+        assert!(!is_buy(&1, &[]));
     }
 }

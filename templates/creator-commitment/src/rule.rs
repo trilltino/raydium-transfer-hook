@@ -23,13 +23,15 @@
 //!
 //! The floor belongs to the **token account**, not to a wallet. Locked tokens cannot leave that
 //! account at all, so there is nothing to move. Handing the account to another owner keeps the
-//! floor in place. Only the part above the floor is ever transferable, and that part carries no
-//! history: it is ordinary, fungible tokens.
+//! floor in place, and so does letting a delegate spend it (both are tested in
+//! `tests/creator_commitment.rs`). Only the part above the floor is ever transferable, and that
+//! part carries no history: it is ordinary, fungible tokens.
 //!
 //! ## What this does not stop
 //!
 //! * Burning is not a transfer, so the hook never sees it. A creator can burn their own locked
-//!   tokens; that only hurts the creator.
+//!   tokens (tested); that only hurts the creator, whose balance is then below the floor until the
+//!   schedule ends.
 //! * The program's upgrade authority can replace this rule. Disclose it or revoke it.
 //!
 //! ## One fact about Token-2022 this relies on

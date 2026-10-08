@@ -76,11 +76,33 @@ Through Raydium (the trader's hooked-token account plays the creator): see
 would breach the floor is refused with `0xA005` and rolls back, and the same sale succeeds once the
 schedule has ended.
 
+## Ways around the floor, each run for real
+
+These are tested in `tests/creator_commitment.rs` against the real Token-2022 program, so this table
+states what happens, not what we hope happens.
+
+| Attempt | Result |
+|---|---|
+| Hand the whole account to a new wallet (`SetAuthority` on the account owner) | **The floor holds.** The new owner can move what is above the floor and not one token more (`0xA005`); the old owner has no say. The floor belongs to the account. |
+| Approve a delegate for the whole balance and let it transfer | **The floor holds.** A delegate's transfer still goes through the hook, so it is bound exactly like the owner. |
+| Burn locked tokens | **Not stopped.** Burn is not a transfer, so Token-2022 never calls the hook. But it only hurts the creator: the balance is then below the floor, so nothing can leave until the schedule has unlocked, and nobody else gains. |
+| Put the allocation in a different account | **Not covered, and not detectable by the hook.** The commitment binds one dedicated account. `Initialize` refuses a commitment whose account holds less than `locked_total`, but nothing proves the creator holds no other tokens. See "Disclosed" below. |
+| A mint with a permanent delegate | **Not tested here.** Token-2022 invokes the hook for a permanent delegate's transfer like any other, so the floor should apply, but the test world does not build such a mint. |
+
+### "Disclosed"
+
+The commitment is on chain and readable: the schedule is in the config PDA
+(`["config", mint]`) and the locked account is the one whose balance it names, so anyone can check
+the account's balance against the schedule. What the hook cannot establish is that this account holds
+the creator's *whole* allocation. That is a fact about how the supply was distributed at launch, and
+the honest way to prove it is to show the distribution, not the hook.
+
 ## Honest limits
 
 * **The floor belongs to the token account, not the person.** Moving to another wallet does not
-  help: locked tokens cannot leave the account. Handing the account to someone else keeps the floor.
-* **Burning is invisible to a hook.** A creator can burn locked tokens; that only hurts them.
+  help (tested above): locked tokens cannot leave the account.
+* **Burning is invisible to a hook.** A creator can burn locked tokens (tested above); that only
+  hurts them.
 * **One creator account per mint.** A team with several wallets needs one commitment per account
   (or a different hook).
 * **The program's upgrade authority can replace this rule.** Disclose it or revoke it.

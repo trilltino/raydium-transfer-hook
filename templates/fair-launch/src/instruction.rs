@@ -55,28 +55,29 @@ impl FairLaunchInstruction {
 
 /// Build the `Initialize` instruction.
 ///
-/// `authority` must be the mint's live TransferHook extension authority and sign. `pool_vault` is
-/// the pool's token account of the hooked mint.
+/// `authority` must be the mint's live TransferHook extension authority and sign. `venues` are the
+/// pool vaults of the hooked mint (one to four) whose outgoing transfers count as buys.
 pub fn initialize(
     program_id: &Pubkey,
     payer: &Pubkey,
     authority: &Pubkey,
     mint: &Pubkey,
-    pool_vault: &Pubkey,
+    venues: &[Pubkey],
     params: Params,
 ) -> Instruction {
+    let mut accounts = vec![
+        AccountMeta::new(*payer, true),
+        AccountMeta::new_readonly(*authority, true),
+        AccountMeta::new_readonly(*mint, false),
+        AccountMeta::new(config_address(mint, program_id).0, false),
+        AccountMeta::new(counter_address(mint, program_id).0, false),
+        AccountMeta::new(hook_kit::validation_list_address(mint, program_id).0, false),
+        AccountMeta::new_readonly(system_program::id(), false),
+    ];
+    accounts.extend(venues.iter().map(|v| AccountMeta::new_readonly(*v, false)));
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*payer, true),
-            AccountMeta::new_readonly(*authority, true),
-            AccountMeta::new_readonly(*mint, false),
-            AccountMeta::new_readonly(*pool_vault, false),
-            AccountMeta::new(config_address(mint, program_id).0, false),
-            AccountMeta::new(counter_address(mint, program_id).0, false),
-            AccountMeta::new(hook_kit::validation_list_address(mint, program_id).0, false),
-            AccountMeta::new_readonly(system_program::id(), false),
-        ],
+        accounts,
         data: FairLaunchInstruction::Initialize(params).pack(),
     }
 }

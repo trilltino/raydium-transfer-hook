@@ -10,8 +10,7 @@
 use program_test_flows::{arbitrary, reference, run, run_full, run_with, setup, template_id};
 use raydium_hook_driver::HookSetup;
 use raydium_hook_driver::{
-    AntiBundleHook, ArbitraryHook, CreatorCommitmentHook, FairLaunchHook, LoyaltyRewardsHook,
-    ParentSpinOffHook, ReferenceHook,
+    ArbitraryHook, CreatorCommitmentHook, FairLaunchHook, HolderRewardsHook, ReferenceHook,
 };
 
 /// One `#[tokio::test]` per (AMM, hook), each building its hook from the `Setup`.
@@ -56,23 +55,23 @@ flows! {
     clmm_with_the_fair_launch_template: "clmm", |_s| {
         FairLaunchHook::new(template_id("fair_launch"), 150)
     };
-    cpmm_with_the_loyalty_rewards_template: "cpmm", |_s| {
-        LoyaltyRewardsHook::new(template_id("loyalty_rewards"), 100)
+    cpmm_with_the_fair_launch_per_slot_setting: "cpmm", |_s| {
+        FairLaunchHook::per_slot_only(template_id("fair_launch"))
     };
-    clmm_with_the_loyalty_rewards_template: "clmm", |_s| {
-        LoyaltyRewardsHook::new(template_id("loyalty_rewards"), 100)
+    clmm_with_the_fair_launch_per_slot_setting: "clmm", |_s| {
+        FairLaunchHook::per_slot_only(template_id("fair_launch"))
     };
-    cpmm_with_the_anti_bundle_template: "cpmm", |_s| {
-        AntiBundleHook::new(template_id("anti_bundle"))
+    cpmm_with_the_holder_rewards_template: "cpmm", |_s| {
+        HolderRewardsHook::new(template_id("holder_rewards"), 100)
     };
-    clmm_with_the_anti_bundle_template: "clmm", |_s| {
-        AntiBundleHook::new(template_id("anti_bundle"))
+    clmm_with_the_holder_rewards_template: "clmm", |_s| {
+        HolderRewardsHook::new(template_id("holder_rewards"), 100)
     };
-    cpmm_with_the_parent_spin_off_template: "cpmm", |_s| {
-        ParentSpinOffHook::new(template_id("parent_spin_off"), 100)
+    cpmm_with_the_holder_rewards_one_time_mode: "cpmm", |_s| {
+        HolderRewardsHook::one_time(template_id("holder_rewards"), 100)
     };
-    clmm_with_the_parent_spin_off_template: "clmm", |_s| {
-        ParentSpinOffHook::new(template_id("parent_spin_off"), 100)
+    clmm_with_the_holder_rewards_one_time_mode: "clmm", |_s| {
+        HolderRewardsHook::one_time(template_id("holder_rewards"), 100)
     };
 }
 

@@ -14,18 +14,24 @@ use solana_program::{
 use crate::{
     config::{config_address, counter_address, Config, Counter},
     error::FairLaunchError,
-    rule::{buys_in_slot_after, check_buy, priority_price, Buy},
+    rule::{buys_in_slot_after, check_buy, is_buy, priority_price, Buy},
 };
 
-/// The hook declares three extra accounts: the config, the slot counter, the instructions sysvar.
-const EXTRA_ACCOUNTS: usize = 3;
+/// Accounts of `Execute` before the extras: source, mint, destination, owner, validation list.
+const FIXED_ACCOUNTS: usize = 5;
 
 const COMPUTE_BUDGET_PROGRAM: Pubkey = pubkey!("ComputeBudget111111111111111111111111111111");
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    let ctx = execute_prelude(program_id, accounts, data, EXTRA_ACCOUNTS)?;
-    let [config_account, counter_account, instructions_sysvar] = ctx.extras else {
-        return Err(FairLaunchError::InvalidConfig.into());
+    // The hook declares two extra accounts, the config and the slot counter, and a third, the
+    // instructions sysvar, only when the priority-fee check is on (`Initialize` builds the list from
+    // the same parameters). A launch without the fee check does not pay for the account.
+    let extras = accounts.len().saturating_sub(FIXED_ACCOUNTS);
+    let ctx = execute_prelude(program_id, accounts, data, extras)?;
+    let (config_account, counter_account, instructions_sysvar) = match ctx.extras {
+        [config, counter] => (config, counter, None),
+        [config, counter, sysvar] => (config, counter, Some(sysvar)),
+        _ => return Err(FairLaunchError::InvalidConfig.into()),
     };
 
     if config_account.owner != program_id
@@ -37,7 +43,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
 
     let clock = Clock::get()?;
     // Outside the window, and for anything that is not a buy, there is nothing to check.
-    if !config.params.in_window(clock.unix_timestamp) || ctx.source.key != &config.pool_vault {
+    if !config.params.in_window(clock.unix_timestamp) || !is_buy(ctx.source.key, config.venues()) {
         return Ok(());
     }
 
@@ -55,7 +61,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
     };
 
     let priority_micro_lamports = if config.params.max_priority_micro_lamports > 0 {
-        declared_priority_price(instructions_sysvar)?
+        let sysvar = instructions_sysvar.ok_or(FairLaunchError::InvalidSysvar)?;
+        declared_priority_price(sysvar)?
     } else {
         None
     };

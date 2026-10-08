@@ -1,0 +1,24 @@
+{
+  "program_id": "HHTEVaETWsabcpHK7zcS7xzqqGhWKKTcfLd93boP4HjN",
+  "mint": "29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2",
+  "venues": ["3EKkiwNLWqoUbzFkPrmKbtUB4EweE6f4STzevYUmezeL", "3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3"],
+  "config_address": "EXcRuKQKA22yjzEkGxQTVAeL8fC7Bqw3bkGKHgRWEhkj",
+  "counter_address": "CEokNAbwX9msYgNpdC8wcLafFowe6vsQRKqeHx6pmPS4",
+  "config_hex": "464c434f4e464947fe111111111111111111111111111111111111111111111111111111111111111102212121212121212121212121212121212121212121212121212121212121212122222222222222222222222222222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f153650000000010ff536500000000102700000000000050c300000000000003000000e803000000000000",
+  "counter_hex": "464c434f554e5452ff327906000000000002000000",
+  "params": {"window_start": 1700000000, "window_end": 1700003600, "max_buy": 10000, "max_wallet": 50000, "max_buys_per_slot": 3, "max_priority_micro_lamports": 1000},
+  "counter": {"slot": 424242, "buys": 2},
+  "errors": [
+    {"name": "InvalidParams", "code": 45057},
+    {"name": "PoolVaultMismatch", "code": 45058},
+    {"name": "PerBuyCapExceeded", "code": 45059},
+    {"name": "MaxWalletExceeded", "code": 45060},
+    {"name": "TooManyBuysInSlot", "code": 45061},
+    {"name": "PriorityFeeTooHigh", "code": 45062},
+    {"name": "InvalidConfig", "code": 45063},
+    {"name": "InvalidInstruction", "code": 45064},
+    {"name": "InvalidCounter", "code": 45065},
+    {"name": "InvalidSysvar", "code": 45066},
+    {"name": "InvalidVenues", "code": 45067}
+  ]
+}

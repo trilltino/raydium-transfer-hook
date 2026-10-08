@@ -24,11 +24,12 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], params: Params) ->
     let payer = next_account_info(accounts_iter)?;
     let authority = next_account_info(accounts_iter)?;
     let mint = next_account_info(accounts_iter)?;
-    let pool_vault = next_account_info(accounts_iter)?;
     let config_account = next_account_info(accounts_iter)?;
     let counter_account = next_account_info(accounts_iter)?;
     let validation_list = next_account_info(accounts_iter)?;
     let system_program = next_account_info(accounts_iter)?;
+    // Everything after the fixed accounts is a venue: a pool vault of the hooked mint.
+    let venue_accounts: Vec<&AccountInfo> = accounts_iter.collect();
 
     if !payer.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
@@ -43,8 +44,11 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], params: Params) ->
     require_hook_program(&hook_mint, program_id)?;
     require_extension_authority(&hook_mint, authority)?;
 
-    if read_token_account(pool_vault)?.mint != *mint.key {
-        return Err(FairLaunchError::PoolVaultMismatch.into());
+    let venues: Vec<Pubkey> = venue_accounts.iter().map(|venue| *venue.key).collect();
+    for venue in &venue_accounts {
+        if read_token_account(venue)?.mint != *mint.key {
+            return Err(FairLaunchError::PoolVaultMismatch.into());
+        }
     }
 
     let (expected_config, config_bump) = config_address(mint.key, program_id);
@@ -60,13 +64,8 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], params: Params) ->
         CONFIG_LEN,
         &[b"config", mint.key.as_ref(), &[config_bump]],
     )?;
-    Config {
-        bump: config_bump,
-        mint: *mint.key,
-        pool_vault: *pool_vault.key,
-        params,
-    }
-    .encode_into(&mut config_account.try_borrow_mut_data()?)?;
+    Config::new(config_bump, *mint.key, &venues, params)?
+        .encode_into(&mut config_account.try_borrow_mut_data()?)?;
     create_pda(
         payer,
         counter_account,
@@ -82,9 +81,10 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], params: Params) ->
     }
     .encode_into(&mut counter_account.try_borrow_mut_data()?)?;
 
-    // The extra accounts every transfer carries, in this order (account 1 is the mint):
-    // the config, the writable slot counter, and the instructions sysvar (to read the fee).
-    let metas = [
+    // The extra accounts every transfer carries, in this order (account 1 is the mint): the config,
+    // the writable slot counter, and, only if the priority-fee check is on, the instructions sysvar
+    // (to read the fee).
+    let mut metas = vec![
         ExtraAccountMeta::new_with_seeds(
             &[
                 Seed::Literal {
@@ -105,8 +105,14 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], params: Params) ->
             false,
             true,
         )?,
-        ExtraAccountMeta::new_with_pubkey(&sysvar::instructions::id(), false, false)?,
     ];
+    if params.max_priority_micro_lamports > 0 {
+        metas.push(ExtraAccountMeta::new_with_pubkey(
+            &sysvar::instructions::id(),
+            false,
+            false,
+        )?);
+    }
     create_validation_list(
         payer,
         validation_list,

@@ -5,9 +5,9 @@ use solana_program::program_error::ProgramError;
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FairLaunchError {
-    /// An empty window or a zero limit.
+    /// An empty window, or a launch with no limit switched on.
     InvalidParams = 0xB001,
-    /// The pool vault is not a token account of the hooked mint.
+    /// A venue is not a token account of the hooked mint.
     PoolVaultMismatch = 0xB002,
     /// The buy is larger than the per-buy cap.
     PerBuyCapExceeded = 0xB003,
@@ -25,6 +25,8 @@ pub enum FairLaunchError {
     InvalidCounter = 0xB009,
     /// The instructions sysvar account is missing or wrong.
     InvalidSysvar = 0xB00A,
+    /// No venue, more than four, or the same venue twice.
+    InvalidVenues = 0xB00B,
 }
 
 impl FairLaunchError {

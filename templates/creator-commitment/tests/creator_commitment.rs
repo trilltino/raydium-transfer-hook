@@ -263,3 +263,140 @@ async fn a_direct_execute_call_is_refused() {
         KitError::NotDirectInvocation.code(),
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Ways around the floor that the rule's documentation talks about. Each is run for real so the
+// documentation states what happens, not what we hope happens.
+// ---------------------------------------------------------------------------------------------
+
+use solana_sdk::instruction::Instruction;
+use spl_token_2022::instruction::{self as token_instruction, AuthorityType};
+
+fn copy_of(keypair: &Keypair) -> Keypair {
+    Keypair::from_bytes(&keypair.to_bytes()).expect("keypair bytes")
+}
+
+/// A transfer out of `from` signed by `authority` (an owner or a delegate) instead of the account's
+/// owner. The hook's accounts are resolved as for the owner; the hook does not depend on who signs.
+async fn transfer_signed_by(
+    world: &mut World,
+    from: usize,
+    to: usize,
+    amount: u64,
+    authority: &Keypair,
+) -> Result<(), solana_program_test::BanksClientError> {
+    let mut ix: Instruction = world.transfer_ix(from, to, amount, &[]).await;
+    // transfer_checked: source, mint, destination, authority (signer), then the hook's accounts.
+    ix.accounts[3] = AccountMeta::new_readonly(authority.pubkey(), true);
+    world.send(&[ix], &[authority]).await
+}
+
+#[tokio::test]
+async fn handing_the_account_to_a_new_owner_keeps_the_floor() {
+    let mut world = committed(SCHEDULE).await;
+    world.set_unix_time(1_500).await;
+
+    // The creator hands the whole account, locked tokens included, to a new wallet.
+    let old_owner = copy_of(&world.owners[CREATOR]);
+    let new_owner = Keypair::new();
+    let hand_over = token_instruction::set_authority(
+        &spl_token_2022::id(),
+        &world.account(CREATOR),
+        Some(&new_owner.pubkey()),
+        AuthorityType::AccountOwner,
+        &old_owner.pubkey(),
+        &[],
+    )
+    .unwrap();
+    world
+        .send(&[hand_over], &[&old_owner])
+        .await
+        .expect("the owner of a plain token account can be changed");
+
+    // The floor belongs to the account, so the new owner is bound by it exactly as the old one was:
+    // 400 above the floor may leave, one more may not.
+    assert_custom_error(
+        transfer_signed_by(&mut world, CREATOR, HOLDER, 401, &new_owner).await,
+        CommitmentError::VestingFloorBreached.code(),
+    );
+    transfer_signed_by(&mut world, CREATOR, HOLDER, 400, &new_owner)
+        .await
+        .expect("the part above the floor is free");
+    assert_eq!(world.balance(CREATOR).await, 600);
+    // And the previous owner has no say any more.
+    assert!(
+        transfer_signed_by(&mut world, CREATOR, HOLDER, 1, &old_owner)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn a_delegate_cannot_move_the_locked_tokens_either() {
+    let mut world = committed(SCHEDULE).await;
+    world.set_unix_time(1_500).await;
+
+    // The creator lets another key spend the whole account.
+    let owner = copy_of(&world.owners[CREATOR]);
+    let delegate = Keypair::new();
+    let approve = token_instruction::approve(
+        &spl_token_2022::id(),
+        &world.account(CREATOR),
+        &delegate.pubkey(),
+        &owner.pubkey(),
+        &[],
+        1_000,
+    )
+    .unwrap();
+    world
+        .send(&[approve], &[&owner])
+        .await
+        .expect("approve a delegate");
+
+    // A delegate's transfer still goes through the hook, so the floor holds for it too.
+    assert_custom_error(
+        transfer_signed_by(&mut world, CREATOR, HOLDER, 401, &delegate).await,
+        CommitmentError::VestingFloorBreached.code(),
+    );
+    transfer_signed_by(&mut world, CREATOR, HOLDER, 400, &delegate)
+        .await
+        .expect("a delegate may move what is above the floor");
+    assert_eq!(world.balance(CREATOR).await, 600);
+}
+
+#[tokio::test]
+async fn burning_locked_tokens_is_not_stopped_and_strands_the_creator_until_the_end() {
+    let mut world = committed(SCHEDULE).await;
+    world.set_unix_time(1_500).await;
+
+    // Burn is not a transfer, so Token-2022 never calls the hook for it: the creator can destroy
+    // locked tokens. (This is the documented gap; the point of this test is to show its extent.)
+    let owner = copy_of(&world.owners[CREATOR]);
+    let burn = token_instruction::burn(
+        &spl_token_2022::id(),
+        &world.account(CREATOR),
+        &world.mint.pubkey(),
+        &owner.pubkey(),
+        &[],
+        600,
+    )
+    .unwrap();
+    world
+        .send(&[burn], &[&owner])
+        .await
+        .expect("burn is not blocked");
+    assert_eq!(world.balance(CREATOR).await, 400);
+
+    // But it only hurts the creator: the balance is now below the floor, so nothing can leave
+    // until the schedule has unlocked...
+    assert_custom_error(
+        world.transfer(CREATOR, HOLDER, 1, &[]).await,
+        CommitmentError::VestingFloorBreached.code(),
+    );
+    // ...and burning does not release anything to anyone else. After the end the rest is free.
+    world.set_unix_time(11_000).await;
+    world
+        .transfer(CREATOR, HOLDER, 400, &[])
+        .await
+        .expect("fully unlocked");
+}

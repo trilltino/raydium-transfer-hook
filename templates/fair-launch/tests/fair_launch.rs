@@ -67,7 +67,7 @@ async fn launched(params: Params) -> World {
         &world.payer(),
         &world.payer(),
         &world.mint.pubkey(),
-        &world.account(VAULT),
+        &[world.account(VAULT)],
         params,
     );
     world.send(&[ix], &[]).await.expect("initialize");
@@ -128,7 +128,7 @@ async fn initialize_records_the_launch_and_validates_its_inputs() {
             &world.payer(),
             authority,
             &mint,
-            &world.account(0),
+            &[world.account(0)],
             params,
         )
     };
@@ -137,7 +137,7 @@ async fn initialize_records_the_launch_and_validates_its_inputs() {
         &world,
         &world.payer(),
         Params {
-            max_buy: 0,
+            window_end: START,
             ..PARAMS
         },
     );
@@ -145,6 +145,30 @@ async fn initialize_records_the_launch_and_validates_its_inputs() {
         world.send(&[ix], &[]).await,
         FairLaunchError::InvalidParams.code(),
     );
+    // A launch with no limit switched on is refused; any one limit alone is a launch.
+    let ix = init(
+        &world,
+        &world.payer(),
+        Params {
+            max_buy: 0,
+            max_wallet: 0,
+            max_buys_per_slot: 0,
+            max_priority_micro_lamports: 0,
+            ..PARAMS
+        },
+    );
+    assert_custom_error(
+        world.send(&[ix], &[]).await,
+        FairLaunchError::InvalidParams.code(),
+    );
+    // No venue, and the same venue twice, are refused.
+    for venues in [vec![], vec![world.account(0), world.account(0)]] {
+        let ix = initialize(&id, &world.payer(), &world.payer(), &mint, &venues, PARAMS);
+        assert_custom_error(
+            world.send(&[ix], &[]).await,
+            FairLaunchError::InvalidVenues.code(),
+        );
+    }
     let impostor = Keypair::new();
     let ix = init(&world, &impostor.pubkey(), PARAMS);
     assert_custom_error(
@@ -157,7 +181,7 @@ async fn initialize_records_the_launch_and_validates_its_inputs() {
     let (config, _) = config_address(&mint, &id);
     let stored = Config::decode(&world.data(config).await).unwrap();
     assert_eq!(stored.params, PARAMS);
-    assert_eq!(stored.pool_vault, world.account(0));
+    assert_eq!(stored.venues(), [world.account(0)].as_slice());
     let stored_counter = Counter::decode(&world.data(counter_address(&mint, &id).0).await).unwrap();
     assert_eq!(stored_counter.buys, 0);
 
@@ -341,5 +365,93 @@ async fn a_direct_execute_call_is_refused() {
     assert_custom_error(
         world.send(&[ix], &[]).await,
         KitError::NotDirectInvocation.code(),
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Configurations: the same program as an anti-bundle budget, and with several venues.
+// ---------------------------------------------------------------------------------------------
+
+/// Only the per-slot budget on, for the whole of time: the anti-bundle configuration.
+const PER_SLOT_ONLY: Params = Params {
+    window_start: 0,
+    window_end: i64::MAX,
+    max_buy: 0,
+    max_wallet: 0,
+    max_buys_per_slot: 3,
+    max_priority_micro_lamports: 0,
+};
+
+#[tokio::test]
+async fn the_per_slot_budget_alone_is_an_anti_bundle_guard() {
+    let mut world = launched(PER_SLOT_ONLY).await;
+
+    // No size or balance cap: three huge buys fit the budget...
+    bundle(&mut world, vec![], 3, 3_000_000)
+        .await
+        .expect("three buys fit a budget of three");
+    // ...and one more in the same slot refuses the whole bundle, rolling every buy back.
+    new_slot(&mut world).await;
+    let before = (world.balance(VAULT).await, world.balance(BUYER).await);
+    assert_custom_error(
+        bundle(&mut world, vec![], 4, 1).await,
+        FairLaunchError::TooManyBuysInSlot.code(),
+    );
+    assert_eq!(
+        (world.balance(VAULT).await, world.balance(BUYER).await),
+        before,
+        "a refused bundle must roll back completely"
+    );
+    // The budget starts over in the next slot.
+    new_slot(&mut world).await;
+    buy(&mut world, BUYER, 1).await.expect("a fresh slot");
+}
+
+#[tokio::test]
+async fn every_named_venue_draws_on_the_same_budget() {
+    let id = program_id();
+    let test = ProgramTest::new("fair_launch_hook", id, processor!(process_instruction));
+    let mut world = World::start(
+        test,
+        id,
+        vec![
+            AccountSpec::owned_by(Keypair::new(), 10_000),
+            AccountSpec::owned_by(Keypair::new(), 0),
+            AccountSpec::owned_by(Keypair::new(), 10_000),
+        ],
+    )
+    .await;
+    // Accounts 0 and 2 are two pools' vaults of the same token.
+    let ix = initialize(
+        &id,
+        &world.payer(),
+        &world.payer(),
+        &world.mint.pubkey(),
+        &[world.account(0), world.account(2)],
+        Params {
+            max_buys_per_slot: 2,
+            ..PER_SLOT_ONLY
+        },
+    );
+    world.send(&[ix], &[]).await.expect("initialize");
+    world.set_unix_time(IN_WINDOW).await;
+
+    let counter = counter(&world);
+    world
+        .transfer(0, BUYER, 1, &[counter])
+        .await
+        .expect("a buy from the first venue");
+    world
+        .transfer(2, BUYER, 1, &[counter])
+        .await
+        .expect("a buy from the second venue");
+    // The third buy of the slot, from either venue, is over the shared budget.
+    assert_custom_error(
+        world.transfer(0, BUYER, 1, &[counter]).await,
+        FairLaunchError::TooManyBuysInSlot.code(),
+    );
+    assert_custom_error(
+        world.transfer(2, BUYER, 1, &[counter]).await,
+        FairLaunchError::TooManyBuysInSlot.code(),
     );
 }

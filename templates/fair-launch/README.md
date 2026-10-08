@@ -6,8 +6,21 @@ many buys can land in one slot, and how high a priority fee a buy transaction ma
 **The rule is in [`src/rule.rs`](src/rule.rs). It is pure: no accounts, no Solana types.**
 Everything else in this folder is plumbing you can leave alone.
 
-A **buy** is a transfer out of the pool's vault of the hooked token. Outside the window, and for
-every transfer that is not a buy (sells, wallet-to-wallet moves), nothing is checked.
+A **buy** is a transfer out of one of the launch's pool vaults of the hooked token (its *venues*, up to
+four). Outside the window, and for every transfer that is not a buy (sells, wallet-to-wallet moves),
+nothing is checked.
+
+## One program, several settings
+
+A limit of `0` switches that check off (at least one must be on). So the same program is:
+
+| Setting | Set | What it is |
+|---|---|---|
+| **Fair launch** | all four limits | the full table below |
+| **Anti-bundle** | only `max_buys_per_slot`, window `0..i64::MAX` | a per-slot budget so that a bundle of many buys packed into one block is refused as a whole. This used to be a separate `anti-bundle` template; it is this setting now. The CLI runs it as `fair-launch-per-slot` |
+| **Anti-snipe** | `max_buy` and `max_wallet`, a short window | no single wallet takes the pool in the first minutes |
+
+Every named venue draws on the same per-slot budget.
 
 | Check | Stops | Error |
 |---|---|---|
@@ -21,9 +34,9 @@ every transfer that is not a buy (sells, wallet-to-wallet moves), nothing is che
 ```rust
 // src/rule.rs
 pub fn check_buy(params: &Params, buy: &Buy) -> Result<(), FairLaunchError> {
-    if buy.amount > params.max_buy { return Err(FairLaunchError::PerBuyCapExceeded); }
-    if buy.wallet_balance_after > params.max_wallet { return Err(FairLaunchError::MaxWalletExceeded); }
-    if buy.buys_in_slot > params.max_buys_per_slot { return Err(FairLaunchError::TooManyBuysInSlot); }
+    if params.max_buy > 0 && buy.amount > params.max_buy { return Err(FairLaunchError::PerBuyCapExceeded); }
+    if params.max_wallet > 0 && buy.wallet_balance_after > params.max_wallet { return Err(FairLaunchError::MaxWalletExceeded); }
+    if params.max_buys_per_slot > 0 && buy.buys_in_slot > params.max_buys_per_slot { return Err(FairLaunchError::TooManyBuysInSlot); }
     if params.max_priority_micro_lamports > 0
         && buy.priority_micro_lamports.unwrap_or(0) > params.max_priority_micro_lamports
     { return Err(FairLaunchError::PriorityFeeTooHigh); }
@@ -36,7 +49,7 @@ pub fn check_buy(params: &Params, buy: &Buy) -> Result<(), FairLaunchError> {
 | Path | Role |
 |---|---|
 | `src/rule.rs` | **The rule**: `Params`, `check_buy`, the slot counter and fee parsing. Unit-tested alone. |
-| `src/config.rs` | The per-mint config (window, limits, pool vault) and the slot counter. |
+| `src/config.rs` | The per-mint config (window, limits, one to four venues) and the slot counter. |
 | `src/instruction.rs` | The one setup instruction, `Initialize`. |
 | `src/processor/` | `Initialize` and `Execute`, built on [`hook-kit`](../../crates/hook-kit). |
 | `src/error.rs` | Error codes from `0xB001`. |
@@ -44,10 +57,15 @@ pub fn check_buy(params: &Params, buy: &Buy) -> Result<(), FairLaunchError> {
 
 ## Accounts
 
-Three extra accounts per transfer, so a swap leg is 5 accounts: the config PDA (read-only), the
-slot counter PDA (**writable**), the instructions sysvar (read-only), then the hook program and the
-validation list. An integrator must name the counter as an allowed writable account
-(`PrivilegePolicy::allowing_writable`), or the SDK refuses the leg.
+Two extra accounts per transfer, or three when the priority-fee check is on, so a swap leg is 4 or 5
+accounts: the config PDA (read-only), the slot counter PDA (**writable**), the instructions sysvar
+(read-only, only if `max_priority_micro_lamports` is set), then the hook program and the validation
+list. A launch without the fee check does not pay for the sysvar account. An integrator must name the
+counter as an allowed writable account (`PrivilegePolicy::allowing_writable`), or the SDK refuses the
+leg.
+
+`Initialize` takes the venues as the accounts after the fixed ones: each must be a token account of
+the hooked mint, with no repeats.
 
 ## Run it
 
@@ -57,8 +75,9 @@ cargo build-sbf --manifest-path templates/fair-launch/Cargo.toml --sbf-out-dir t
 SBF_OUT_DIR=target/integration-sbf cargo test -p fair-launch-hook   # the real SBF binary
 ```
 
-Through Raydium: `cpmm_with_the_fair_launch_template` and `clmm_with_the_fair_launch_template` in
-`tests/program-test/tests/local_flows.rs`. They check that ordinary swaps pass; that a buy
+Through Raydium: `cpmm_with_the_fair_launch_template` and `clmm_with_the_fair_launch_template`, and
+`cpmm_with_the_fair_launch_per_slot_setting` and `clmm_with_the_fair_launch_per_slot_setting` for the
+anti-bundle setting, in `tests/program-test/tests/local_flows.rs`. They check that ordinary swaps pass; that a buy
 over the cap, three buys in one transaction, and a buy declaring a high priority fee are each
 refused with the hook's own code and roll back; and that the oversized buy succeeds after the
 window closes.
@@ -82,6 +101,8 @@ window closes.
 * **Contention.** The counter is a writable account in every transfer of the mint, buys or not, so
   transfers of this mint in the same block serialise on it. Fine for a launch window; a reason to
   keep the window short.
-* **One pool vault.** A buy is a transfer out of the configured vault. A second pool needs another
-  commitment (or a different hook).
+* **At most four venues.** A buy is a transfer out of one of the configured vaults. More pools need a
+  different hook, or another mint.
+* **The window of the per-slot setting never ends.** Set a real `window_end` if the budget should
+  stop applying.
 * **The program's upgrade authority can replace this rule.** Disclose it or revoke it.

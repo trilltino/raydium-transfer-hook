@@ -62,9 +62,7 @@ pub fn clone(keypair: &Keypair) -> Keypair {
 pub const TEMPLATES: &[(&str, &str, [u8; 32])] = &[
     ("creator_commitment", "creator_commitment_hook", [0xC0; 32]),
     ("fair_launch", "fair_launch_hook", [0xF1; 32]),
-    ("loyalty_rewards", "loyalty_rewards_hook", [0xC5; 32]),
-    ("anti_bundle", "anti_bundle_hook", [0xAB; 32]),
-    ("parent_spin_off", "parent_spin_off_hook", [0xE5; 32]),
+    ("holder_rewards", "holder_rewards_hook", [0xC5; 32]),
 ];
 
 /// The program id of a template hook in the active profile.
@@ -97,7 +95,7 @@ pub fn setup() -> Setup {
     let required = [
         "raydium_cp_swap.so".to_string(),
         "raydium_clmm.so".to_string(),
-        "reference_hook_onchain.so".to_string(),
+        "transfer_hook_starter.so".to_string(),
         "arbitrary_test_hook.so".to_string(),
     ]
     .into_iter()
@@ -177,7 +175,7 @@ pub async fn context_with(
     test.add_program("raydium_cp_swap", setup.env.cpmm_program().unwrap(), None);
     test.add_program("raydium_clmm", setup.env.clmm_program().unwrap(), None);
     test.add_program(
-        "reference_hook_onchain",
+        "transfer_hook_starter",
         setup.env.reference_hook_program().unwrap(),
         None,
     );
