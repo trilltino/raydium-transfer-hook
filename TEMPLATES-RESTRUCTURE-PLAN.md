@@ -1,6 +1,6 @@
 # Plan: a lean reference repo, with one complete starter and three examples
 
-Status: proposed. Part of Phase 1 is already done on `main`; everything else is not started.
+Status: **implemented and verified** (see "Outcome" below). Everything the plan asked for is done except the items listed there as deviations or not done.
 
 | Done on `main` | Commit |
 |---|---|
@@ -10,6 +10,32 @@ Status: proposed. Part of Phase 1 is already done on `main`; everything else is 
 
 Phase 1 is complete: the `xtask` devnet tooling is kept (D6 reversed, see the table). The workspace is at
 18 members today (the plan's target is 15, plus the starter, which the merges below reach).
+
+## Outcome
+
+Verified on this machine and on CI unless stated.
+
+| Phase | Result |
+|---|---|
+| 1 Prune | Done (`20c2a2b`, `730c6ff`, `335f0e4`). `xtask`'s devnet tooling was **kept** (D6 reversed). |
+| 2 Starter, reference hook folded in | Done. `programs/reference-hook-onchain` is deleted; the starter is the reference hook (driver, tests, `xtask`, devnet all use its binary). The starter's optional modules 1 to 5 and 7 are described in its README and `hook-kit` but were **not extracted** into separate code modules: the examples share `hook-kit`, and the starter keeps its single rule. |
+| 3 Fair launch absorbs anti-bundle | Done: up to four venues, a `0` limit is off, per-slot-only is the anti-bundle setting (`fair-launch-per-slot` in the CLI). Layout is 214 bytes; error `InvalidVenues` is `0xB00B`. |
+| 4 Creator commitment gaps | Done: new-owner, delegate and burn behaviour are tested and documented. |
+| 5 Holder rewards | Done: renamed from loyalty-rewards, one-time mode is the spin-off (`AlreadyFunded` is `0xC00E`). |
+| 6 Old names | Done: `anti-bundle` and `parent-spin-off` removed from the workspace; their devnet entries stay as history, marked superseded (D1). |
+| 7 Docs | Done: `docs/commercial-and-limits.md`, trimmed docs, README. |
+| 8 Verify, then devnet | Clippy `-D warnings`, `cargo test --workspace`, the real-binary flows and `cargo xtask localnet e2e` pass. **D2 deviated:** the merged programs were **upgraded in place** under their existing devnet ids (fair-launch, holder-rewards, and the reference hook, which now runs the starter binary) instead of getting new ids; the upgrade authority is the deployer. All 14 flows (seven hooks through CPMM and CLMM) pass on devnet and are recorded in `environments/devnet.json` and `docs/devnet.md`. The CPMM liquidity and creator-fee flow also passes on devnet. |
+| 9 Cleanup and numbers | Old devnet entries are marked superseded. The "workspace has 15 members" target was **not** re-measured as a line count. |
+| A Mint approval | Done: `raydium-hook mint approve` / `mint approval`, a TypeScript script, the `xtask` approval check (it failed on a clean CI checkout once because it relied on a leftover directory; fixed), and `docs/forking.md`. |
+
+Found along the way: the first CI run after the UI commit had an invalid workflow (an unquoted colon in a step
+name) and the approval check depended on a `keys/` directory a previous local run had left behind; both were
+fixed. Devnet runs against the public RPC occasionally drop a connection; a flow that hit that was re-run.
+
+Not done, with reasons: CLMM liquidity and fee collection (the fork rejects hooked mints there; new fork code
+would be needed), v1 transactions (the pinned `solana-sdk` cannot build them), contention on a real cluster
+(only a local single-node measurement exists, see `benches/contention`), and a different pool-admission policy
+(D9: admin only, the repository owner's decision).
 
 ## Goal
 

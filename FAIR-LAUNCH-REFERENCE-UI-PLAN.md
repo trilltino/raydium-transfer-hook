@@ -1,6 +1,6 @@
 # Raydium Transfer Hooks: Fair Launch Reference UI Plan
 
-**Status:** implementation plan  
+**Status:** implemented; see "Outcome" at the end  
 **Repository:** `trilltino/raydium-transfer-hook`  
 **Reviewed main:** `c94c7853a062214074c60a078f042ca210b78fa8`  
 **Reference UI:** `trilltino/raydium_debugger` + current Raydium swap UI  
@@ -1327,3 +1327,24 @@ watch the hook allow or refuse it
 ```
 
 That is enough to demonstrate the complete developer story.
+
+---
+
+## Outcome
+
+Implemented, with these deviations and findings. Everything listed as passing was run.
+
+| Plan item | Result |
+|---|---|
+| UI-0 contracts | Fixed against the restructured `fair-launch` (214-byte config, venues, `0xB003` to `0xB00B` errors). |
+| UI-1 client | `packages/transfer-hook-client`, 46 tests. **Deviation:** instead of a second copy of the CPMM/CLMM bytes under `tests/fixtures/typescript/`, the client is checked against the Rust crate's existing golden files (`crates/transfer-hook-sdk/tests/golden`), which Rust already regenerates and guards. Only `fair-launch.json` (config bytes, PDAs, error codes) is a new Rust-written fixture, in `tests/fixtures/typescript/`. |
+| UI-2 Raydium SDK | Pinned `0.2.73-alpha`; used for pool/config reads and quote math only. **Finding:** the SDK's `computeSwapAmount` ignores the swap direction when deciding where the creator fee is taken; the program's rule (`is_creator_fee_on_input`) does not, so the app decides that and uses the SDK only for the curve. The SDK lists the CLMM bitmap extension before the tick arrays; the fork expects it after, so the CLMM adapter reorders. |
+| UI-3, UI-4 | Trading UI and the Fair Launch policy layer, with pre-sign warnings and readable hook errors. The warnings are advisory; the button stays enabled so the simulation, which runs the real hook, decides. The priority-fee limit is shown but the UI never declares a fee, so that rule is only exercised through the error mapping. |
+| UI-5 | Raydium-style tokens as specified; desktop and phone screenshots in `docs/images/`. |
+| UI-6 | 51 app tests, a production build, and a 9-test browser suite (a passing buy, a hook-refused buy, a sell, for both a CPMM and a CLMM pool, plus a phone layout check). It passes against a local validator and against integration devnet. The `frontend` CI job is green; the browser test runs in the `runtime` CI job (see the commit history for its result). **Note:** `solana-test-validator` has no Windows build, so `cargo xtask localnet validator` falls back to a Docker container there (it needs `seccomp=unconfined` for io_uring). |
+| UI-7 CLMM | Done: the adapter is chosen from the pool's owner program; the same page handles both. |
+| UI-8 docs | `docs/frontend.md`, README quick start, screenshots. No "known demo pool list": pools come from `?pool=`. |
+
+Not built, by the plan's own scope: mainnet, an official-Raydium mode, LaunchLab, a pool indexer, a backend.
+Not covered: Creator Commitment and Holder Rewards panels (the shell is built to take them; only the Fair Launch
+panel exists), exact-output swaps and liquidity in the UI, wrapped SOL.
