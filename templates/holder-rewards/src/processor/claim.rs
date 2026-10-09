@@ -45,7 +45,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     if record_account.owner != program_id {
         return Err(HolderRewardsError::NotRegistered.into());
     }
-    let mut record = load_record(program_id, token_account.key, record_account)?;
+    let mut record = load_record(program_id, token_account.key, &global.mint, record_account)?;
 
     // The payout goes to an account of the reward mint that the owner controls.
     if owner_reward_account.owner != token_program.key {

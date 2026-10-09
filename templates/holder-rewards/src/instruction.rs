@@ -7,6 +7,7 @@
 //! | `Register` | anyone (pays the record's rent) | start counting a token account in the stream |
 //! | `Fund` | anyone | add reward tokens to be paid out over a period |
 //! | `Claim` | the token account's owner | pay out what the account has earned |
+//! | `Reconcile` | anyone | correct a record whose balance fell without a transfer (a burn, or a closed account), so it stops diluting the stream |
 
 use solana_program::{
     instruction::{AccountMeta, Instruction},
@@ -31,6 +32,8 @@ pub enum HolderRewardsInstruction {
         duration: u32,
     },
     Claim,
+    /// Correct a stale record after a burn or a closed token account. Permissionless.
+    Reconcile,
 }
 
 const INVALID: HolderRewardsError = HolderRewardsError::InvalidInstruction;
@@ -51,6 +54,7 @@ impl HolderRewardsInstruction {
                 })
             }
             Some((3, [])) => Ok(Self::Claim),
+            Some((4, [])) => Ok(Self::Reconcile),
             _ => Err(HolderRewardsError::InvalidInstruction),
         }
     }
@@ -67,6 +71,7 @@ impl HolderRewardsInstruction {
                 data
             }
             Self::Claim => vec![3],
+            Self::Reconcile => vec![4],
         }
     }
 }
@@ -219,6 +224,21 @@ pub fn claim(
     }
 }
 
+/// Build `Reconcile` for `token_account` of `mint`. Anyone may send it; it only ever lowers a stale
+/// count (the token account may be closed).
+#[must_use]
+pub fn reconcile(program_id: &Pubkey, mint: &Pubkey, token_account: &Pubkey) -> Instruction {
+    Instruction {
+        program_id: *program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(*token_account, false),
+            AccountMeta::new(record_address(token_account, program_id).0, false),
+            AccountMeta::new(global_address(mint, program_id).0, false),
+        ],
+        data: HolderRewardsInstruction::Reconcile.pack(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,6 +254,7 @@ mod tests {
                 duration: 7,
             },
             HolderRewardsInstruction::Claim,
+            HolderRewardsInstruction::Reconcile,
         ] {
             assert_eq!(
                 HolderRewardsInstruction::unpack(&instruction.pack()),

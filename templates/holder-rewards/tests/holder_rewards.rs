@@ -7,7 +7,7 @@
 
 use holder_rewards_hook::{
     error::HolderRewardsError,
-    instruction::{claim, fund, initialize, register},
+    instruction::{claim, fund, initialize, reconcile, register},
     process_instruction,
     state::{global_address, record_address, reward_vault_address, Global, Record},
 };
@@ -29,6 +29,7 @@ use spl_token_2022::{
         transfer_hook::TransferHook, BaseStateWithExtensionsMut, ExtensionType,
         StateWithExtensionsMut,
     },
+    instruction as token_instruction,
     state::{Account as TokenAccount, Mint},
 };
 
@@ -581,4 +582,198 @@ async fn a_stranger_cannot_stretch_a_running_stream_with_a_token_top_up() {
         .await
         .expect("a top-up that keeps the rate");
     assert_eq!(global(&mut world).await.stream.rate, 5_000);
+}
+
+// ---- token-account lifecycle: burns, closing and owner changes never reach the hook ----------
+
+fn token_ix_signed_by_owner(world: &World, holder: usize) -> (Pubkey, Keypair) {
+    (world.account(holder), clone(&world.owners[holder]))
+}
+
+async fn burn(world: &mut World, holder: usize, amount: u64) {
+    let (account, owner) = token_ix_signed_by_owner(world, holder);
+    let ix = token_instruction::burn(
+        &spl_token_2022::id(),
+        &account,
+        &world.mint.pubkey(),
+        &owner.pubkey(),
+        &[],
+        amount,
+    )
+    .unwrap();
+    world
+        .send(&[ix], &[&owner])
+        .await
+        .expect("burn is not a transfer: never refused");
+}
+
+async fn close(world: &mut World, holder: usize) {
+    let (account, owner) = token_ix_signed_by_owner(world, holder);
+    let ix = token_instruction::close_account(
+        &spl_token_2022::id(),
+        &account,
+        &owner.pubkey(),
+        &owner.pubkey(),
+        &[],
+    )
+    .unwrap();
+    world
+        .send(&[ix], &[&owner])
+        .await
+        .expect("close an empty account");
+}
+
+#[tokio::test]
+async fn burning_and_closing_leaves_the_balance_counted_until_anyone_reconciles() {
+    let (mut world, reward) = running().await;
+    assert_eq!(global(&mut world).await.stream.eligible_supply, 1_000);
+    world.set_unix_time(T0 + 10).await;
+    burn(&mut world, A, 1_000).await;
+    close(&mut world, A).await;
+    // Neither burn nor close invoked the hook: A's 1,000 is still counted, and A's token account
+    // no longer exists to settle through.
+    assert_eq!(global(&mut world).await.stream.eligible_supply, 1_000);
+    assert_eq!(record(&mut world, A).await.holder.checkpoint, 1_000);
+
+    // B buys 1,000 from the pool at t + 20 and is diluted by the 1,000 that no longer exists.
+    world.set_unix_time(T0 + 20).await;
+    transfer(&mut world, POOL, B, 1_000).await.expect("buy");
+    assert_eq!(global(&mut world).await.stream.eligible_supply, 2_000);
+
+    // Anyone (here the payer, a stranger to A) reconciles A's closed account at t + 30.
+    world.set_unix_time(T0 + 30).await;
+    reconcile_holder(&mut world, A)
+        .await
+        .expect("reconcile a closed account");
+    assert_eq!(global(&mut world).await.stream.eligible_supply, 1_000);
+    let a = record(&mut world, A).await.holder;
+    // A held 1,000 from t to t + 10 but the hook cannot know when the tokens vanished: unsettled
+    // accrual on them is forfeited (it stays in the vault), never paid.
+    assert_eq!((a.checkpoint, a.earned), (0, 0));
+    assert_custom_error(
+        reconcile_holder(&mut world, A).await,
+        HolderRewardsError::NothingToReconcile.code(),
+    );
+
+    // From now on B, the only counted balance, earns the whole 100/s: exactly 1,000 in 10 s.
+    claim_rewards(&mut world, &reward, B)
+        .await
+        .expect("claim at t + 30");
+    let before = reward_balance(&mut world, reward.holder_accounts[B - 1]).await;
+    world.set_unix_time(T0 + 40).await;
+    claim_rewards(&mut world, &reward, B)
+        .await
+        .expect("claim at t + 40");
+    let after = reward_balance(&mut world, reward.holder_accounts[B - 1]).await;
+    assert_eq!(after - before, 1_000);
+}
+
+async fn reconcile_holder(world: &mut World, holder: usize) -> Result<(), BanksClientError> {
+    let ix = reconcile(&program_id(), &world.mint.pubkey(), &world.account(holder));
+    world.send(&[ix], &[]).await
+}
+
+#[tokio::test]
+async fn reconcile_corrects_a_partial_burn_and_keeps_the_holders_earnings() {
+    let (mut world, _reward) = running().await;
+    // A (1,000, the only counted balance) burns 400 at t + 10, then anyone reconciles.
+    world.set_unix_time(T0 + 10).await;
+    burn(&mut world, A, 400).await;
+    reconcile_holder(&mut world, A).await.expect("reconcile");
+    assert_eq!(global(&mut world).await.stream.eligible_supply, 600);
+    let a = record(&mut world, A).await.holder;
+    // Settled on the 600 that remain: 10 s x 100/s x 600/1,000.
+    assert_eq!((a.checkpoint, a.earned), (600, 600));
+}
+
+#[tokio::test]
+async fn reconcile_refuses_healthy_unregistered_and_mismatched_accounts() {
+    let (mut world, _reward) = running().await;
+    world.set_unix_time(T0 + 10).await;
+    assert_custom_error(
+        reconcile_holder(&mut world, A).await,
+        HolderRewardsError::NothingToReconcile.code(),
+    );
+    assert_custom_error(
+        reconcile_holder(&mut world, C).await,
+        HolderRewardsError::NotRegistered.code(),
+    );
+    // A record must be reconciled against its own mint's global.
+    let mut ix = reconcile(&program_id(), &world.mint.pubkey(), &world.account(A));
+    ix.accounts[2].pubkey = Pubkey::new_unique();
+    assert_custom_error(
+        world.send(&[ix], &[]).await,
+        HolderRewardsError::InvalidGlobal.code(),
+    );
+    // Or against another token account than its own.
+    let mut ix = reconcile(&program_id(), &world.mint.pubkey(), &world.account(A));
+    ix.accounts[0].pubkey = world.account(B);
+    assert_custom_error(
+        world.send(&[ix], &[]).await,
+        HolderRewardsError::InvalidRecord.code(),
+    );
+}
+
+#[tokio::test]
+async fn earnings_left_in_a_closed_account_cannot_be_claimed() {
+    let (mut world, reward) = running().await;
+    // A sells everything at t + 10 (to an unregistered account): 1,000 earned, nothing held.
+    world.set_unix_time(T0 + 10).await;
+    transfer(&mut world, A, C, 1_000).await.expect("sell");
+    let stranded = record(&mut world, A).await.holder;
+    assert_eq!((stranded.checkpoint, stranded.earned), (0, 1_000));
+    // Closing the empty account is allowed and never reaches the hook. Claim needs a live token
+    // account owned by the signer, so the earnings stay in the vault.
+    close(&mut world, A).await;
+    assert!(claim_rewards(&mut world, &reward, A).await.is_err());
+    assert_eq!(record(&mut world, A).await.holder.earned, 1_000);
+    // Nothing is counted for it any more, so there is nothing for Reconcile to release either:
+    // claim before closing.
+    assert_custom_error(
+        reconcile_holder(&mut world, A).await,
+        HolderRewardsError::NothingToReconcile.code(),
+    );
+}
+
+#[tokio::test]
+async fn changing_the_account_owner_hands_its_unclaimed_history_to_the_new_owner() {
+    let (mut world, reward) = running().await;
+    world.set_unix_time(T0 + 10).await;
+    // A hands the token account itself to C's wallet (SetAuthority, not a transfer).
+    let (account, owner) = token_ix_signed_by_owner(&world, A);
+    let new_owner = world.owner(C);
+    let ix = token_instruction::set_authority(
+        &spl_token_2022::id(),
+        &account,
+        Some(&new_owner),
+        token_instruction::AuthorityType::AccountOwner,
+        &owner.pubkey(),
+        &[],
+    )
+    .unwrap();
+    world.send(&[ix], &[&owner]).await.expect("owner change");
+    // The old owner can no longer claim; the new owner claims everything the account earned,
+    // including the time before it owned it. Rewards belong to the token account.
+    assert_custom_error(
+        claim_rewards(&mut world, &reward, A).await,
+        HolderRewardsError::WrongOwner.code(),
+    );
+    let ix = claim(
+        &program_id(),
+        &new_owner,
+        &world.mint.pubkey(),
+        &account,
+        &reward.holder_accounts[C - 1],
+        &reward.mint.pubkey(),
+        &reward.token_program,
+    );
+    let signer = clone(&world.owners[C]);
+    world
+        .send(&[ix], &[&signer])
+        .await
+        .expect("new owner claims");
+    assert_eq!(
+        reward_balance(&mut world, reward.holder_accounts[C - 1]).await,
+        1_000
+    );
 }

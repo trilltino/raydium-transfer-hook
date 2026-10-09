@@ -11,7 +11,7 @@
 //! |---|---|
 //! | [`rule`] | the reward accounting (pure, unit-tested) |
 //! | [`state`] | the global account (the stream) and one record per registered token account |
-//! | [`instruction`] | `Initialize`, `Register`, `Fund`, `Claim` |
+//! | [`instruction`] | `Initialize`, `Register`, `Fund`, `Claim`, `Reconcile` |
 //! | `processor` | the instructions and `Execute`, built on [`hook_kit`] |
 //! | [`error`] | error codes from `0xC001` |
 

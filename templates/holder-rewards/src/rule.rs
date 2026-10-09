@@ -16,8 +16,9 @@
 //! be quietly extended, diluted or topped up. Everything else, including how history and the future
 //! follow a transfer, is the same.
 //!
-//! * **History stays with the historical holder.** What a holder earned up to the moment they sell
-//!   is theirs to claim, whoever holds the token afterwards.
+//! * **History stays with the historical token account.** What an account earned up to the moment
+//!   it sells is its to claim, whoever holds the token afterwards. Rewards belong to the token
+//!   account, not a wallet: whoever owns the account when it claims gets them.
 //! * **The future follows the balance.** From that moment the buyer, if registered, accrues on the
 //!   balance they now hold.
 //! * **Only registered accounts earn,** and the pool's vault can never register.
@@ -51,9 +52,11 @@
 //!
 //! ## What this does not stop
 //!
-//! * Burning a token is not a transfer, so the hook never sees it. A holder's earnings are capped
-//!   by their *actual* balance when they settle, and the eligible supply is corrected at their next
-//!   transfer, but until then burned tokens still dilute everyone else a little.
+//! * Burning a token, or closing a token account, is not a transfer, so the hook never sees it. A
+//!   holder's earnings are capped by their *actual* balance when they settle, and the eligible supply
+//!   is corrected at their next transfer or claim, or by anyone calling `Reconcile` (which also
+//!   works once the account is closed, through [`Holder::reconcile`]). Until then burned tokens dilute
+//!   everyone else.
 //! * While `eligible_supply` is zero, the stream's rewards for that time are not paid to anyone;
 //!   they stay in the vault.
 //!
@@ -237,6 +240,26 @@ impl Holder {
         stream.set_eligible(self.checkpoint, balance_now)?;
         self.checkpoint = balance_now;
         Ok(std::mem::take(&mut self.earned))
+    }
+
+    /// Bring a record back in line with a balance that fell **without a transfer** (a burn, or
+    /// the token account being closed: `balance_now` is then `0`). Burns and closes never invoke
+    /// the hook, so until this runs the stale checkpoint keeps diluting every other holder.
+    /// `stream` must already be advanced to now.
+    ///
+    /// The holder is settled on the smaller balance, so accrual since their last settlement on
+    /// tokens that are gone is forfeited (the hook cannot know when they went); what they had
+    /// already earned is kept. Errors with `NothingToReconcile` unless the balance is below the
+    /// checkpoint.
+    pub fn reconcile(
+        &mut self,
+        stream: &mut Stream,
+        balance_now: u64,
+    ) -> Result<(), HolderRewardsError> {
+        if balance_now >= self.checkpoint {
+            return Err(HolderRewardsError::NothingToReconcile);
+        }
+        self.on_balance_change(stream, balance_now, balance_now)
     }
 }
 
@@ -545,5 +568,55 @@ mod tests {
             holder.settle(&stream, 10),
             Err(HolderRewardsError::MathOverflow)
         );
+    }
+
+    #[test]
+    fn reconciling_a_burn_releases_the_supply_and_keeps_what_was_earned() {
+        // A (600) and B (400) share 10/s. At t = 50 each has settled nothing yet.
+        let mut stream = funded();
+        let mut a = Holder::register(&mut stream, 600).unwrap();
+        let _b = Holder::register(&mut stream, 400).unwrap();
+        stream.advance(50).unwrap();
+        a.settle(&stream, 600).unwrap();
+        assert_eq!(a.earned, 300);
+        // A burns 200 at t = 50 (no hook ran). Nothing changed yet: 1,000 still counted.
+        assert_eq!(stream.eligible_supply, 1_000);
+        a.reconcile(&mut stream, 400).unwrap();
+        assert_eq!(stream.eligible_supply, 800);
+        assert_eq!((a.checkpoint, a.earned), (400, 300));
+        // Reconciling again finds nothing to correct.
+        assert_eq!(
+            a.reconcile(&mut stream, 400),
+            Err(HolderRewardsError::NothingToReconcile)
+        );
+    }
+
+    #[test]
+    fn reconciling_a_closed_account_forfeits_only_unsettled_accrual_on_vanished_tokens() {
+        let mut stream = funded();
+        let mut a = Holder::register(&mut stream, 500).unwrap();
+        let mut b = Holder::register(&mut stream, 500).unwrap();
+        stream.advance(20).unwrap();
+        // A's account was burned to zero and closed somewhere in the last 20 s: the hook cannot
+        // know when, so A's 100 of unsettled accrual stays in the vault rather than being paid.
+        a.reconcile(&mut stream, 0).unwrap();
+        assert_eq!((a.checkpoint, a.earned), (0, 0));
+        assert_eq!(stream.eligible_supply, 500);
+        // From now on B, the only counted balance, earns the whole 10/s.
+        stream.advance(30).unwrap();
+        assert_eq!(b.claim(&mut stream, 500), Ok(100 + 100));
+    }
+
+    #[test]
+    fn a_balance_at_or_above_the_checkpoint_has_nothing_to_reconcile() {
+        let mut stream = funded();
+        let mut a = Holder::register(&mut stream, 500).unwrap();
+        for balance in [500, 501, u64::MAX] {
+            assert_eq!(
+                a.reconcile(&mut stream, balance),
+                Err(HolderRewardsError::NothingToReconcile)
+            );
+        }
+        assert_eq!(stream.eligible_supply, 500);
     }
 }

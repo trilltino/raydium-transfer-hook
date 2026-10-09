@@ -47,18 +47,19 @@ pub(super) fn load_global(
     Ok(global)
 }
 
-/// A record account that exists: owned by this program and recording `token_account` (see
-/// [`load_global`] for why no address is derived).
+/// A record account that exists: owned by this program and recording `token_account` of `mint`
+/// (see [`load_global`] for why no address is derived).
 pub(super) fn load_record(
     program_id: &Pubkey,
     token_account: &Pubkey,
+    mint: &Pubkey,
     account: &AccountInfo,
 ) -> Result<Record, ProgramError> {
     if account.owner != program_id {
         return Err(HolderRewardsError::InvalidRecord.into());
     }
     let record = Record::decode(&account.try_borrow_data()?)?;
-    if record.token_account != *token_account {
+    if record.token_account != *token_account || record.mint != *mint {
         return Err(HolderRewardsError::InvalidRecord.into());
     }
     Ok(record)
@@ -69,12 +70,13 @@ pub(super) fn load_record(
 pub(super) fn load_optional_record(
     program_id: &Pubkey,
     token_account: &Pubkey,
+    mint: &Pubkey,
     account: &AccountInfo,
 ) -> Result<Option<Record>, ProgramError> {
     if account.owner == &solana_program::system_program::id() {
         return Ok(None);
     }
-    load_record(program_id, token_account, account).map(Some)
+    load_record(program_id, token_account, mint, account).map(Some)
 }
 
 /// The reward mint's token program must be one of the two SPL token programs, and own the mint.

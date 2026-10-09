@@ -60,6 +60,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     Record {
         bump,
         token_account: *token_account.key,
+        mint: *mint.key,
         holder,
     }
     .encode_into(&mut record_account.try_borrow_mut_data()?)?;

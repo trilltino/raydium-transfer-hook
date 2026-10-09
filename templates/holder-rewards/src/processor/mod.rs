@@ -5,6 +5,7 @@ mod common;
 mod execute;
 mod fund;
 mod initialize;
+mod reconcile;
 mod register;
 
 use hook_kit::EXECUTE_DISCRIMINATOR;
@@ -29,5 +30,6 @@ pub fn process_instruction(
             fund::process(program_id, accounts, amount, duration)
         }
         HolderRewardsInstruction::Claim => claim::process(program_id, accounts),
+        HolderRewardsInstruction::Reconcile => reconcile::process(program_id, accounts),
     }
 }

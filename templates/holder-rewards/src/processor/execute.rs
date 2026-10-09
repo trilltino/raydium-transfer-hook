@@ -30,8 +30,13 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
     }
 
     // A record exists once the account has registered; an unregistered account is not counted.
-    let source = load_optional_record(program_id, ctx.source.key, source_record)?;
-    let destination = load_optional_record(program_id, ctx.destination.key, destination_record)?;
+    let source = load_optional_record(program_id, ctx.source.key, ctx.mint.key, source_record)?;
+    let destination = load_optional_record(
+        program_id,
+        ctx.destination.key,
+        ctx.mint.key,
+        destination_record,
+    )?;
     if source.is_none() && destination.is_none() {
         return Ok(());
     }

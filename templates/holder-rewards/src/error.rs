@@ -37,6 +37,8 @@ pub enum HolderRewardsError {
     FundingLowersRate = 0xC00F,
     /// A mint carries a Token-2022 extension this rule cannot account for safely.
     UnsupportedMintExtension = 0xC010,
+    /// `Reconcile` found nothing to correct: the token account still holds its counted balance.
+    NothingToReconcile = 0xC011,
 }
 
 impl HolderRewardsError {

@@ -45,8 +45,9 @@ A transfer between unregistered accounts changes nothing, but it still carries t
 record addresses as **writable** accounts (the validation list declares them so), so it still takes
 the write lock on the global; see STATE / COST.
 
-* **History stays with the historical holder.** What a holder earned up to the moment they sell is
-  theirs to claim, whoever holds the token afterwards.
+* **History stays with the historical token account** (for ordinary transfers). What an account
+  earned up to the moment it sells is its to claim, whoever holds the token afterwards. Rewards
+  belong to the token account, not a wallet; see LIMITATIONS for owner changes and closing.
 * **The future follows the balance.** From then on the buyer, if registered, accrues on what they
   now hold.
 * **Only registered accounts earn.** The pool's vault can never register.
@@ -81,6 +82,9 @@ A claims 450 whenever they like, even though they sold half their balance at t =
   about ten years).
 * `Claim` (the token account's owner): pays what the account has earned to an account of the reward
   mint.
+* `Reconcile` (anyone): corrects a record whose balance fell without a transfer, a burn or a closed
+  token account, so it stops diluting everyone else. It only ever lowers a stale count; accrual on
+  the vanished tokens since their last settlement is forfeited (it stays in the vault).
 * Rounding goes down: the vault never owes more than it was funded with.
 
 | Code | Name | When |
@@ -101,6 +105,7 @@ A claims 450 whenever they like, even though they sold half their balance at t =
 | `0xC00E` | `AlreadyFunded` | a one-time allocation was already funded |
 | `0xC00F` | `FundingLowersRate` | an ongoing top-up would slow a running stream |
 | `0xC010` | `UnsupportedMintExtension` | a mint extension breaks accounting or vault safety |
+| `0xC011` | `NothingToReconcile` | the token account still holds what its record counts |
 | `0x8001..` | `hook_kit::KitError` | shared checks: wrong authority, mint authority not revoked, direct `Execute`, already initialised, ... |
 
 ## LIMITATIONS
@@ -109,15 +114,23 @@ A claims 450 whenever they like, even though they sold half their balance at t =
   or not anyone is registered, so all transfers of this mint, in every pool and wallet, contend for
   one account within a block. This is the main throughput cost of the template.
 * **Registration is explicit.** An account earns nothing until someone calls `Register` (about
-  0.001 SOL of rent for its record at the time of writing). A wallet would add `Register` to a
+  0.0012 SOL of rent for its record at the time of writing). A wallet would add `Register` to a
   buyer's first transaction. Lazy creation inside the transfer was not built: it needs a funded
   rent vault and the system program on every transfer, and a policy for when the vault runs dry.
 * **Only the configured pool vault is excluded.** A second pool's vault, or any program-owned
   account, can register and collect rewards that belong to holders.
-* **Burning is invisible to a hook.** A holder's earnings are capped by their real balance when they
-  settle, and the eligible supply is corrected at their next transfer or claim, but until then burned
-  tokens dilute everyone else a little. That is why the mint authority must be revoked: minting is
-  invisible too. The rule assumes a fixed supply.
+* **Burns and closed accounts are invisible to a hook.** A holder's earnings are capped by their real
+  balance when they settle, and the eligible supply is corrected at their next transfer or claim, or
+  when **anyone** calls `Reconcile`, which also works after the token account was closed. Until then
+  the burned balance dilutes everyone else, so integrators should reconcile accounts they see burn
+  or close. Minting is invisible too, which is why the mint authority must be revoked: the rule
+  assumes a fixed supply.
+* **Claim before closing.** `Claim` needs a live token account whose owner signs. Earnings left in a
+  record when its token account is closed cannot be claimed (they stay in the vault); there is
+  nothing for `Reconcile` to release either if the balance was already zero.
+* **Rewards follow the token account, not the wallet.** Changing the account's owner
+  (`SetAuthority`) does not invoke the hook: the new owner can claim everything the account earned,
+  including before they owned it. Claim before handing an account over.
 * **Time with nobody registered pays nobody.** While the eligible supply is zero, that time's
   rewards stay in the vault.
 * **A one-time allocation's window is chosen by whoever funds it first.** Fund it from an account
@@ -156,8 +169,9 @@ per token account, so they only contend between transfers touching the same acco
 mind for a busy mint: the global is a throughput ceiling that spreading trades over several pools
 does not remove.
 
-Each registered account costs a 73-byte record; the global is 186 bytes; setup also creates the
-reward vault (165 bytes) and the 121-byte validation list (about 0.001 SOL per record and about
+Each registered account costs a 105-byte record (it stores its mint so `Reconcile` works after the
+token account is closed); the global is 186 bytes; setup also creates the
+reward vault (165 bytes) and the 121-byte validation list (about 0.0012 SOL per record and about
 0.0044 SOL of setup rent at the time of writing; `solana rent <bytes>` gives current figures).
 Callers (and tests) must allow the three writable accounts explicitly, or a careful integrator will
 refuse the transfer. `Execute` also re-derives the global and both record addresses on every
@@ -179,7 +193,7 @@ payouts.
 | malformed state | `global_and_record_round_trip_and_reject_bad_shapes`, `instructions_round_trip` |
 | unauthorized | `only_the_mints_hook_authority_can_initialize`, `claims_are_guarded` (`WrongOwner`) |
 | irrelevant path | `an_unregistered_account_earns_nothing`, `nothing_is_paid_to_a_holder_who_never_registered_or_to_the_pool`, `registering_counts_a_balance_once_and_never_the_pool` |
-| burn | `a_burned_balance_stops_earning_at_the_next_settlement` |
+| burn, close, owner change | `a_burned_balance_stops_earning_at_the_next_settlement`, `reconciling_a_burn_releases_the_supply_and_keeps_what_was_earned`, `reconciling_a_closed_account_forfeits_only_unsettled_accrual_on_vanished_tokens` (rule); `burning_and_closing_leaves_the_balance_counted_until_anyone_reconciles`, `reconcile_corrects_a_partial_burn_and_keeps_the_holders_earnings`, `reconcile_refuses_healthy_unregistered_and_mismatched_accounts`, `earnings_left_in_a_closed_account_cannot_be_claimed`, `changing_the_account_owner_hands_its_unclaimed_history_to_the_new_owner` (runtime) |
 | direct `Execute` call | `a_direct_execute_call_is_refused` |
 
 ```sh
@@ -191,7 +205,7 @@ cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy ca
 |---|---|
 | `src/rule.rs` | **The rule**: `Stream`, `Holder`, the index maths |
 | `src/state.rs` | the global account and one record per registered token account |
-| `src/instruction.rs`, `src/processor/` | `Initialize`, `Register`, `Fund`, `Claim` and `Execute`, on [`hook-kit`](../../hook-kit) |
+| `src/instruction.rs`, `src/processor/` | `Initialize`, `Register`, `Fund`, `Claim`, `Reconcile` and `Execute`, on [`hook-kit`](../../hook-kit) |
 | `src/error.rs` | error codes from `0xC001` |
 
 ## DEPLOY / INITIALIZE
@@ -214,7 +228,8 @@ cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy ca
 4. **What it creates.** The global (186 bytes, rate 0 until funded), the reward vault (a token
    account of the reward mint owned by the global PDA), and the validation list (121 bytes, equal to
    `state::VALIDATION_LIST`).
-5. **Then.** Holders `Register` (anyone can pay), someone `Fund`s the stream, owners `Claim`.
+5. **Then.** Holders `Register` (anyone can pay), someone `Fund`s the stream, owners `Claim`, and
+   anyone `Reconcile`s an account that burned or closed.
 6. **Verify.** Decode the global and check the mint, reward mint, vault, pool vault and mode; check
    the vault's token owner is the global PDA; check the list bytes; register two holders, fund a short
    stream, transfer between them, then claim and check each payout against the expected split.

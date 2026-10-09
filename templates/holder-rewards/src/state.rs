@@ -5,8 +5,9 @@
 //! `reward_mint [32]`, `reward_vault [32]`, `pool_vault [32]`, `rate u64`, `period_finish i64`,
 //! `last_update i64`, `index u128`, `eligible_supply u64`, `one_time u8` (0 or 1).
 //!
-//! Record layout (73 bytes): `b"LRHOLDER"`, `bump u8`, `token_account [32]`, `checkpoint u64`,
-//! `index_paid u128`, `earned u64`.
+//! Record layout (105 bytes): `b"LRHOLDER"`, `bump u8`, `token_account [32]`, `mint [32]`,
+//! `checkpoint u64`, `index_paid u128`, `earned u64`. The mint is stored so a record can still be
+//! tied to its stream after its token account is closed (see `Reconcile`).
 
 use hook_kit::{canonical_list, list_len, seeded_meta};
 use solana_program::pubkey::Pubkey;
@@ -19,7 +20,7 @@ use crate::{
 pub const GLOBAL_DISCRIMINATOR: [u8; 8] = *b"LRGLOBAL";
 pub const GLOBAL_LEN: usize = 8 + 1 + 32 * 4 + 8 + 8 + 8 + 16 + 8 + 1;
 pub const RECORD_DISCRIMINATOR: [u8; 8] = *b"LRHOLDER";
-pub const RECORD_LEN: usize = 8 + 1 + 32 + 8 + 16 + 8;
+pub const RECORD_LEN: usize = 8 + 1 + 32 + 32 + 8 + 16 + 8;
 /// Seed of the global PDA: `["rewards", mint]`. It also owns the reward vault.
 pub const REWARDS_SEED: &[u8] = b"rewards";
 /// Seed of the reward vault: `["reward-vault", mint]`.
@@ -51,9 +52,10 @@ const G_ONE_TIME: usize = 185;
 // Byte offsets of the packed record fields.
 const R_BUMP: usize = 8;
 const R_TOKEN_ACCOUNT: usize = 9;
-const R_CHECKPOINT: usize = 41;
-const R_INDEX_PAID: usize = 49;
-const R_EARNED: usize = 65;
+const R_MINT: usize = 41;
+const R_CHECKPOINT: usize = 73;
+const R_INDEX_PAID: usize = 81;
+const R_EARNED: usize = 97;
 
 /// The global PDA of `mint`.
 #[must_use]
@@ -158,6 +160,8 @@ impl Global {
 pub struct Record {
     pub bump: u8,
     pub token_account: Pubkey,
+    /// The hooked mint whose stream this record belongs to.
+    pub mint: Pubkey,
     pub holder: Holder,
 }
 
@@ -174,6 +178,7 @@ impl Record {
         Ok(Self {
             bump: data[R_BUMP],
             token_account: Pubkey::new_from_array(read(data, R_TOKEN_ACCOUNT, bad)?),
+            mint: Pubkey::new_from_array(read(data, R_MINT, bad)?),
             holder: Holder {
                 checkpoint: u64::from_le_bytes(read(data, R_CHECKPOINT, bad)?),
                 index_paid: u128::from_le_bytes(read(data, R_INDEX_PAID, bad)?),
@@ -192,7 +197,8 @@ impl Record {
         }
         out[..8].copy_from_slice(&RECORD_DISCRIMINATOR);
         out[R_BUMP] = self.bump;
-        out[R_TOKEN_ACCOUNT..R_CHECKPOINT].copy_from_slice(self.token_account.as_ref());
+        out[R_TOKEN_ACCOUNT..R_MINT].copy_from_slice(self.token_account.as_ref());
+        out[R_MINT..R_CHECKPOINT].copy_from_slice(self.mint.as_ref());
         out[R_CHECKPOINT..R_INDEX_PAID].copy_from_slice(&self.holder.checkpoint.to_le_bytes());
         out[R_INDEX_PAID..R_EARNED].copy_from_slice(&self.holder.index_paid.to_le_bytes());
         out[R_EARNED..RECORD_LEN].copy_from_slice(&self.holder.earned.to_le_bytes());
@@ -236,6 +242,7 @@ mod tests {
         let record = Record {
             bump: 9,
             token_account: Pubkey::new_unique(),
+            mint: Pubkey::new_unique(),
             holder: Holder {
                 checkpoint: 11,
                 index_paid: u128::MAX,
