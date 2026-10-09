@@ -3,8 +3,12 @@
 A minimal, AI-friendly starter kit for designing, testing and deploying Token-2022 Transfer Hooks
 that can be used with Raydium.
 
-You have an idea for token business logic. You write it in one file, `rule.rs`. You test it, deploy
-it to devnet, and, if it is good, contribute it back as a template.
+**Status:** community / reference starter kit. Not an official Raydium release, not audited. Check
+[Raydium's canonical documentation](#8-canonical-solana-and-raydium-resources) for current deployed
+Transfer Hook support.
+
+You have an idea for token business logic. You start in one file, `rule.rs`, test it, deploy it to
+devnet and, if it is good, contribute it back as a template.
 
 ```text
 UNDERSTAND  ->  CREATE  ->  TEST  ->  DEPLOY  ->  CONTRIBUTE
@@ -14,18 +18,19 @@ UNDERSTAND  ->  CREATE  ->  TEST  ->  DEPLOY  ->  CONTRIBUTE
 
 ## 1. What is this?
 
-* [`starter/`](starter): a deployable hook with all the plumbing done. Its rule is one line:
+* [`starter/`](starter): a deployable hook with the plumbing done. Its rule is one line:
   *reject a transfer above a limit*. You replace the rule.
-* [`templates/`](templates): three reviewed hooks that show richer designs (launch controls, vesting,
-  holder rewards), each with the list of what it cannot do.
+* [`templates/`](templates): three reference templates with richer designs (launch controls,
+  vesting, holder rewards), each with the list of what it cannot do.
 * [`hook-kit/`](hook-kit): the shared plumbing the templates use (Execute checks, mint and token
   reads, PDA creation, in-process test helpers).
-* [`scripts/deploy.sh`](scripts/deploy.sh): build, deploy and prove a hook on a cluster in one command.
+* [`scripts/deploy.sh`](scripts/deploy.sh): build and deploy any hook in one command, and prove it on
+  the cluster when the hook ships a setup example (the starter does).
 * [`AGENTS.md`](AGENTS.md): the contract for AI coding agents working in this repository.
 * [`DESIGN.md`](DESIGN.md): the few technical facts about hooks that decide whether a design works.
 
 It is **not** a Raydium distribution. It contains no Raydium code, no Raydium program ids and no
-Raydium forks. See [section 8](#8-canonical-solana-and-raydium-resources).
+Raydium forks.
 
 ## 2. What is a Transfer Hook?
 
@@ -34,9 +39,11 @@ hook (the SPL `Execute` instruction) **after** moving the tokens. If the hook re
 whole transaction fails and every balance rolls back. So a hook can enforce a rule on every transfer,
 whichever program started it: a wallet, a swap, a vault.
 
-A hook cannot move the tokens, cannot see burns or owner changes (they are not transfers), and
-declares the extra accounts it needs in an `ExtraAccountMetaList` that callers must forward.
-[`DESIGN.md`](DESIGN.md) has the details that matter for design.
+`Execute` receives the transfer's accounts read-only and without the transfer authority's
+signature, so a hook cannot re-spend the transferred tokens through that authority (it can still
+sign for its own PDAs). It never sees burns, mints or owner changes, because they are not
+transfers. It declares the extra accounts it needs in an `ExtraAccountMetaList` that callers must
+forward. [`DESIGN.md`](DESIGN.md) has the details that matter for design.
 
 ## 3. What can I build?
 
@@ -60,9 +67,14 @@ git clone https://github.com/trilltino/raydium-transfer-hook && cd raydium-trans
 
 cp -r starter my-hook                 # 1. copy the starter (renaming the crate is optional, see starter/README.md)
 $EDITOR my-hook/src/rule.rs           # 2. change the rule (find "YOUR BUSINESS LOGIC HERE")
-(cd my-hook && cargo test)            # 3. test it: allowed, boundary, rejected, config, authority
-scripts/deploy.sh my-hook             # 4. build for Solana, deploy to devnet, configure a mint (below)
+(cd my-hook && cargo test --locked)   # 3. test it: allowed, boundary, rejected, config, authority
+scripts/deploy.sh my-hook             # 4. build, deploy to devnet, then set up a mint and prove the rule
 ```
+
+**Start in `rule.rs`.** Simple rules that fit the existing config (one `u64` today, up to 256 bytes
+of params) may only need that file. Rules that introduce new configuration, state or extra accounts
+must also update the corresponding config/account plumbing and tests; [`starter/README.md`](starter/README.md)
+says which files.
 
 The rule is this, in [`starter/src/rule.rs`](starter/src/rule.rs):
 
@@ -89,59 +101,64 @@ test second_initialize_fails_with_already_initialized_and_changes_nothing ... ok
 
 ### What `scripts/deploy.sh` does
 
-Defaults to devnet and `~/.config/solana/id.json`; see `scripts/deploy.sh` for the options.
+Devnet and `~/.config/solana/id.json` by default; `scripts/deploy.sh --help` lists the options, and
+[`scripts/README.md`](scripts/README.md) has the details. Mainnet is refused without `--allow-mainnet`.
 
-1. Checks the Solana tools and the deployer keypair, picks the cluster, tops up from the devnet faucet.
-2. Builds the SBF program and deploys it under the program id `cargo build-sbf` generated.
-3. Runs `my-hook/examples/devnet.rs`: creates a Token-2022 mint with the Transfer Hook extension
-   pointing at your program, initialises the hook for that mint (config and validation list), then
-   sends one transfer that must pass and one that must be refused.
-4. Prints the cluster, hook program id, mint, config and validation-list addresses, and the next step.
+* **Every hook:** checks the tools and keypair, builds the SBF program and deploys it under the
+  program id `cargo build-sbf` generated.
+* **Hooks with `examples/devnet.rs` (the starter):** also creates a Token-2022 mint whose Transfer
+  Hook points at your program, initialises the hook (config and validation list), and sends one
+  transfer that must pass and one that must be refused. Example options go after `--`:
+  `scripts/deploy.sh my-hook -- --limit 1000`.
 
 ```text
 PASS  transfer of 500 (= limit) allowed
 PASS  transfer of 501 (limit + 1) refused by the hook (custom error 0x700b)
 cluster            https://api.devnet.solana.com
-hook program id    71vxfXYNTm2yUwWLGpVT6zSRhRkXuQhwPkTL2FJ9sNCp
-mint               9TV3tKWbbdChXGJyL9bJthypKabBAxjcn5vAbaKqqwGf
-hook config PDA    FsP6xViFdUjnUsKKpD7yfaFaZM6GN99bz67HgZiSWS9h
-validation list    5UwNi3pEpPokoKckfsZ47P6uYXc1ssveNLAJ9EWV1E91
+hook program id    <YOUR_PROGRAM_ID>
+mint               <NEW_MINT_ADDRESS>
+hook config PDA    <CONFIG_PDA>
+validation list    <VALIDATION_LIST_PDA>
 ```
 
-That is the output of a real run of the unmodified starter on devnet. Read it before you trust it:
-the deployer is still the program's **upgrade authority** and can replace your rule for every mint.
-Revoke it with `solana program set-upgrade-authority <PROGRAM_ID> --final`, or say publicly who holds it.
+The addresses are new on every run. Read them before you trust the hook: the deployer is still the
+program's **upgrade authority** and can replace your rule for every mint. Revoke it with
+`solana program set-upgrade-authority <PROGRAM_ID> --final`, or say publicly who holds it.
 
-`cargo build-sbf` may print `Function ... overflows the maximum allowed frame space` lines for crypto
-crates inside the dependencies. They are not in code paths the hook runs; the build still succeeds.
-
-Templates take their own setup parameters (a launch window, a vesting schedule, a reward vault). Each
-template README says what its `Initialize` instruction needs, and its tests show a working call.
+The templates have no `examples/devnet.rs`: the script deploys them and stops. Each template
+README's `DEPLOY / INITIALIZE` section says what its initialise instruction needs, and its tests
+show a working call.
 
 ## 5. Included templates
 
 | Template | One line | Rule file |
 |---|---|---|
-| [Fair Launch](templates/fair-launch) | Basic bundle and snipe resistance: caps on buy size, balance and buys per slot, and a priority-fee limit, inside a launch window | [`rule.rs`](templates/fair-launch/src/rule.rs) |
+| [Fair Launch](templates/fair-launch) | Launch participation controls (basic bundle and snipe resistance): caps on buy size, balance and buys per slot, and a priority-fee limit, inside a launch window | [`rule.rs`](templates/fair-launch/src/rule.rs) |
 | [Creator Commitment](templates/creator-commitment) | A creator account cannot fall below its current vesting floor; everything above it moves freely | [`rule.rs`](templates/creator-commitment/src/rule.rs) |
 | [Holder Rewards](templates/holder-rewards) | Holders earn a reward token by balance x time, using a global reward index (no loop over holders) | [`rule.rs`](templates/holder-rewards/src/rule.rs) |
 
 Every template README answers the same questions: what, why, trigger, example, rules, **limitations**,
-**trust**, state and cost, tests. A template that cannot say what it fails to stop is not accepted.
+**trust**, state and cost, tests, and how to deploy and initialise it. A template that cannot say
+what it fails to stop is not accepted.
 
 ## 6. Contributing
 
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md). A template pull request has a fixed checklist
-(problem statement, `rule.rs`, positive, rejection and boundary tests, bypasses, accounts, writable
-accounts, authority and upgrade assumptions, a deployment run). This repository curates templates; it
-does not accept every working piece of Rust. AI agents: read [`AGENTS.md`](AGENTS.md) first.
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md). A template pull request has a fixed checklist (problem
+statement, `rule.rs`, positive, rejection, boundary, config and authority tests, bypasses, accounts,
+writable accounts, authority and upgrade assumptions, and the evidence level reached). This
+repository curates templates; it does not accept every working piece of Rust. AI agents: read
+[`AGENTS.md`](AGENTS.md) first.
 
 ## 7. Security / disclaimer
 
-A hook is an untrusted program that can refuse any transfer. Nothing here is audited. Hooks in this
-repository are examples and teaching material, not endorsed or safe-by-construction products. Whoever
-holds a hook program's upgrade authority, or a mint's Transfer Hook authority, can change what the
-hook does. Do not deploy to mainnet without your own review.
+A hook is an untrusted program that can refuse any transfer, and a refusal aborts the whole
+transaction. Nothing here is audited. Hooks in this repository are reference implementations and
+teaching material, not endorsed or safe-by-construction products. Three separate powers can change
+what a token does: the hook program's **upgrade authority** (replaces the code for every mint), the
+mint's **Transfer Hook authority** (points the mint at another hook), and the hook's **config
+authority** (sets one mint's parameters; set once in this kit). Minting and burning are not
+transfers, so revoke the mint authority if your rule depends on supply. Do not deploy to mainnet
+without independent review.
 
 ## 8. Canonical Solana and Raydium resources
 
@@ -157,4 +174,9 @@ integration, and check them for the current state of Transfer Hook support befor
 
 History: this repository began as a prototype that ran arbitrary hooks through modified Raydium CPMM
 and CLMM programs, to show the architecture works. That prototype is preserved in git (tag
-`pre-community-hook-kit`), including the Raydium-specific adapters, SDK and TypeScript client. It is not part of this kit.
+`pre-community-hook-kit`), including the Raydium-specific adapters, SDK and TypeScript client. It is
+not part of this kit.
+
+## License
+
+[MIT](LICENSE).

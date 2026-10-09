@@ -12,7 +12,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "MIT"
-rust-version = "1.75"
+rust-version = "1.88"
 
 # Programs must not wrap silently: an overflow becomes a failed transaction, never a wrong value.
 [profile.release]

@@ -18,9 +18,10 @@ Consequences for rule authors:
 * Balances read inside a hook are **post-transfer**.
 * The `transferring` flag is the only proof the call came from Token-2022. A hook must check it on
   both accounts, or anyone can call `Execute` directly. The starter and `hook-kit` do.
-* Token-2022 builds the `Execute` call with every account read-only and the authority as a
-  non-signer. A hook cannot spend the transfer authority and cannot move the transferred tokens. It
-  can sign for its own PDAs.
+* Token-2022 builds the `Execute` call with every fixed account read-only and the authority as a
+  non-signer. The hook does not inherit the transfer authority's signer privilege, so it cannot
+  re-spend the source or destination through that authority. It can still sign for its own PDAs and
+  CPI with authorities it legitimately controls.
 * Only transfers reach a hook. **Burns, mints, owner changes and delegate changes never do.**
 
 ## One hook program per mint
@@ -52,8 +53,10 @@ N dynamic extras ...                           // from the list
 ```
 
 and the transfer instruction carries, after its own accounts, **the N extras + the hook program +
-the validation list**. The starter's list holds one seeds-based extra (its config PDA). Its bytes
-are identical for every mint.
+the validation list**. The starter's list holds one seeds-based extra (its config PDA), and its
+bytes are identical for every mint. A template may have a small finite set of canonical shapes
+instead (Fair Launch has two, with and without the fee-check sysvar); `Initialize` writes the one
+that fits the mint's config and `Execute` checks the list against it.
 
 ## Why callers must forward hook accounts
 
@@ -89,8 +92,8 @@ helper `World::transfer_ix` does this: tests must name every writable extra on p
 
 ## Compute, accounts and transaction size
 
-Measured in-process against real binaries with a hook that only declares N extras (so a real rule
-adds its own compute):
+Measured in the prototype, in-process against real binaries, with a hook that only declares N
+extras (so a real rule adds its own compute). These are measurements, not guarantees:
 
 | What | Measure |
 |---|---|
@@ -99,7 +102,7 @@ adds its own compute):
 | Practical ceiling on PDA-derived extras | about 10. The hook's 32 KiB heap ran out at 12 to 14, Token-2022's at 16+, before packet size or compute. A larger heap frame did not help |
 | A legacy transaction stops fitting | about 24 to 32 extras (1,177 bytes at 24, 1,441 at 32); two hooked legs run out of room sooner |
 | Address lookup tables | shrink the transaction (913 bytes to 298 at 16 extras) but do not lift the memory limit |
-| Program rent | about 5.1 SOL per MB, refundable; a hook of this size is about 0.7 to 1 SOL |
+| Program rent | about 5.1 SOL per MB at the time of writing (`solana rent <bytes>` gives the current figure), refundable; a hook of this size is under 1 SOL |
 
 `hook_kit::PRACTICAL_EXTRA_ACCOUNTS` (10) is a ceiling to stay well under, not a target. Literal
 addresses are cheaper than PDA-derived extras and were not measured.
@@ -112,14 +115,15 @@ Three different powers; never show them as one "owner":
 |---|---|---|
 | Program upgrade authority | replace the rule's code for **every** mint using the program | `solana program show <ID>`; revoke with `set-upgrade-authority --final` |
 | Mint's TransferHook authority | re-point the mint at a different hook program | the mint's TransferHook extension (`None` once revoked) |
-| Hook config authority | change one mint's parameters | the hook's config account. The starter's is set once by the extension authority and cannot change; the templates are the same |
+| Hook config authority | change one mint's parameters | the hook's config account. The starter's is set once by the extension authority and cannot change; so are the templates' configs. (Holder Rewards' funding is open to anyone and changes the stream, within the rules in its README.) |
 
 Every template README must say who holds each, and what a holder can do with it.
 
 ## Things a hook cannot do
 
 * Run for burns or mints, or stop them. Revoke the mint authority if the rule depends on supply.
-* Spend the transfer authority or move the transferred tokens.
+* Use the transfer authority's signature: it is not passed on, so the hook cannot re-spend the
+  transferred tokens through it. (It can still move tokens it controls through its own PDAs.)
 * See a tip paid to a block builder, or the fee of a v1-format transaction (SIMD-0385 makes the
   compute-budget instructions no-ops there; a fee check based on them is bypassable).
 * Know who a person is. Wallet and token-account rules are not person rules.

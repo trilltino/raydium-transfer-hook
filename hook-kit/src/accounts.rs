@@ -1,10 +1,15 @@
 //! Creating program-derived accounts and the canonical validation list.
 //!
-//! A hook's validation list is fixed by the rule: every mint of the same hook gets the same
-//! bytes. [`canonical_list`] builds those bytes at compile time, `Initialize` writes them with
-//! [`create_validation_list`], and [`crate::execute_prelude`] compares them byte for byte on every
-//! transfer. That is cheaper and stricter than resolving the list through the SPL crate on
-//! each `Execute`, and it cannot panic on a corrupt list.
+//! A template defines one, or a small finite set, of canonical validation-list shapes (Fair
+//! Launch has two: with and without the priority-fee sysvar). [`canonical_list`] builds each shape
+//! at compile time, `Initialize` selects the one that fits the mint's config and writes it with
+//! [`create_validation_list`], and [`crate::execute_prelude`] compares the list account with the
+//! expected shape byte for byte on every transfer. That is cheaper and stricter than resolving the
+//! list through the SPL crate on each `Execute`, and it cannot panic on a corrupt list.
+//!
+//! [`seeded_meta`] and [`pubkey_meta`] cover only the `ExtraAccountMeta` layouts this kit needs
+//! (a PDA of the hook program seeded by a literal and one instruction account, and a fixed
+//! address). They do not model every SPL resolver configuration.
 
 use solana_program::{
     account_info::AccountInfo,

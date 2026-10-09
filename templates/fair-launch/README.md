@@ -7,6 +7,8 @@ declare, all inside a launch window.
 **The rule is [`src/rule.rs`](src/rule.rs). It is pure: no accounts, no Solana types.** The rest of
 the folder is plumbing.
 
+**Status:** reference implementation, not audited. Read LIMITATIONS and TRUST before using it.
+
 ## WHAT
 
 Four independent limits on **buys**, each switched off by setting it to `0` (at least one must be on):
@@ -120,7 +122,7 @@ pub fn check_buy(params: &Params, buy: &Buy) -> Result<(), FairLaunchError> {
 Two to three extras per transfer, so four or five hook accounts in total. **Contention:** the counter
 is writable in every transfer of the mint, buys or not, so transfers of this mint serialise on it
 within a block. That is acceptable for a launch window and a reason to keep the window short. Setup
-rent is about 0.005 SOL per mint.
+rent (config, counter, validation list) is about 0.004 SOL per mint at the time of writing.
 
 ## TESTS
 
@@ -141,8 +143,8 @@ tests are in `tests/fair_launch.rs` and run inside real Token-2022 transfers.
 | unauthorized *config update* | not applicable: the config cannot be updated |
 
 ```sh
-cargo test                                     # in this directory
-cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test   # real SBF binary
+cargo test --locked                            # in this directory
+cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test --locked   # real SBF binary
 ```
 
 | Path | Role |
@@ -151,3 +153,36 @@ cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy ca
 | `src/config.rs` | per-mint config (window, limits, venues) and the slot counter |
 | `src/instruction.rs`, `src/processor/` | the one setup instruction and `Execute`, on [`hook-kit`](../../hook-kit) |
 | `src/error.rs` | error codes from `0xB001` |
+
+## DEPLOY / INITIALIZE
+
+**Evidence so far:** in-process and SBF in-process tests (CI runs both). This template ships no
+`examples/devnet.rs`, so this repository has not initialised or exercised it on devnet.
+
+1. **Build and deploy.** `scripts/deploy.sh templates/fair-launch` builds with `cargo build-sbf` and
+   deploys to devnet, then stops: it does not create a mint or initialise anything.
+2. **Create the mint and the venues.** A Token-2022 mint whose Transfer Hook extension points at the
+   program id, and the venue token accounts (the pool vaults of that mint) that must exist before
+   `Initialize`, because it checks each one. See the open question below about venues created by
+   a pool program.
+3. **Initialise.** Send `Initialize(Params)` (builder: `instruction::initialize`). Accounts, in order:
+   payer (signer, writable), the mint's Transfer Hook authority (signer), mint, config PDA
+   `["config", mint]` (writable), slot counter `["counter", mint]` (writable), validation list
+   `["extra-account-metas", mint]` (writable), system program, then one to four venue token
+   accounts. Only the mint's live Transfer Hook authority can sign it, and only once.
+4. **What it creates.** The config (214 bytes), the counter (21 bytes), and the validation list:
+   `config::VALIDATION_LIST` (86 bytes) or, with the priority-fee check on,
+   `config::VALIDATION_LIST_WITH_FEE_CHECK` (121 bytes).
+5. **Verify.** Decode the config and check the window, limits and venues; check the list bytes match
+   the variant you expect; inside the window, send a buy over `max_buy` from a venue and see it
+   refused with `0xB003`.
+
+`tests/fair_launch.rs` (`launched`) builds exactly this arrangement in-process.
+
+**Open question.** The venues must already be token accounts of the hooked mint when `Initialize`
+runs, and before `Initialize` no transfer of the mint can pass (there is no validation list yet). A
+pool program that creates its vaults and deposits into them in one instruction would need the hook
+initialised first. One ordering that avoids this: create the mint with the Transfer Hook
+extension but no program, create the pool, then point the extension at this program
+(`UpdateTransferHook`, by the extension authority) and send `Initialize` before trading opens.
+This repository has not exercised that against a real AMM; check what your venue needs.

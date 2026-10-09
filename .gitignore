@@ -6,6 +6,8 @@ Thumbs.db
 /starter/target/
 /templates/*/target/
 /my-hook/
+# build output of a hook copied anywhere else in the tree
+target/
 
 node_modules/
 
@@ -15,6 +17,8 @@ node_modules/
 .env.local
 .env.*.local
 *.keypair.json
+# what cargo build-sbf generates next to the .so: a program keypair is a private key
+*-keypair.json
 
 # Local scratch: fetched reference trees and caches (never tracked)
 /.cache/

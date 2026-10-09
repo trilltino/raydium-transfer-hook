@@ -6,6 +6,8 @@ inside the transfer, with no loop over holders.
 **The rule is [`src/rule.rs`](src/rule.rs). It is pure: no accounts, no Solana types.** The rest of
 the folder is plumbing.
 
+**Status:** reference implementation, not audited. Read LIMITATIONS and TRUST before using it.
+
 ## WHAT
 
 A reward pool is funded with an `amount` to be paid out evenly over `duration` seconds. Each
@@ -37,9 +39,11 @@ every holder (impossible on chain); the global index makes it constant time.
 
 ## TRIGGER
 
-Every transfer of the hooked mint in which either side has a registered record. The hook settles
-both sides, then moves the eligible supply by the balance change. Transfers between unregistered
-accounts only read (the records do not exist) and change nothing.
+The hook runs on **every** transfer of the hooked mint. It changes state only when either side has
+a registered record: it settles both sides, then moves the eligible supply by the balance change.
+A transfer between unregistered accounts changes nothing, but it still carries the global and both
+record addresses as **writable** accounts (the validation list declares them so), so it still takes
+the write lock on the global; see STATE / COST.
 
 * **History stays with the historical holder.** What a holder earned up to the moment they sell is
   theirs to claim, whoever holds the token afterwards.
@@ -101,10 +105,13 @@ A claims 450 whenever they like, even though they sold half their balance at t =
 
 ## LIMITATIONS
 
+* **Every transfer of the mint serialises on the global.** It is writable in every transfer, whether
+  or not anyone is registered, so all transfers of this mint, in every pool and wallet, contend for
+  one account within a block. This is the main throughput cost of the template.
 * **Registration is explicit.** An account earns nothing until someone calls `Register` (about
-  0.0015 SOL of rent). A wallet would add `Register` to a buyer's first transaction. Lazy creation
-  inside the transfer was not built: it needs a funded rent vault and the system program on every
-  transfer, and a policy for when the vault runs dry.
+  0.001 SOL of rent for its record at the time of writing). A wallet would add `Register` to a
+  buyer's first transaction. Lazy creation inside the transfer was not built: it needs a funded
+  rent vault and the system program on every transfer, and a policy for when the vault runs dry.
 * **Only the configured pool vault is excluded.** A second pool's vault, or any program-owned
   account, can register and collect rewards that belong to holders.
 * **Burning is invisible to a hook.** A holder's earnings are capped by their real balance when they
@@ -139,11 +146,22 @@ A claims 450 whenever they like, even though they sold half their balance at t =
 
 Three extra accounts per transfer, **all writable**: the global (`["rewards", mint]`), the source's
 record and the destination's record (`["holder", token_account]`); plus the hook program and the
-validation list, so a transfer leg carries 5 hook accounts. Every writable extra is a **contention
-point**: the global is written by every transfer where either side is registered, so those transfers
-serialise on it. Each registered account costs a 73-byte record (about 0.0015 SOL rent); the global
-is 186 bytes. Callers (and tests) must allow the three writable accounts explicitly, or a careful
-integrator will refuse the transfer.
+validation list, so a transfer leg carries 5 hook accounts.
+
+**Contention.** The runtime takes write locks from the transaction's account list, not from what the
+program ends up writing. The global is declared writable, so **every** transfer of the mint locks it,
+including transfers where neither side is registered and the hook writes nothing; all of them
+serialise on that one account. The source and destination records are writable too, but they are
+per token account, so they only contend between transfers touching the same account. Keep this in
+mind for a busy mint: the global is a throughput ceiling that spreading trades over several pools
+does not remove.
+
+Each registered account costs a 73-byte record; the global is 186 bytes; setup also creates the
+reward vault (165 bytes) and the 121-byte validation list (about 0.001 SOL per record and about
+0.0044 SOL of setup rent at the time of writing; `solana rent <bytes>` gives current figures).
+Callers (and tests) must allow the three writable accounts explicitly, or a careful integrator will
+refuse the transfer. `Execute` also re-derives the global and both record addresses on every
+transfer, before deciding whether anything is registered.
 
 ## TESTS
 
@@ -165,8 +183,8 @@ payouts.
 | direct `Execute` call | `a_direct_execute_call_is_refused` |
 
 ```sh
-cargo test                                     # in this directory
-cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test   # real SBF binary
+cargo test --locked                            # in this directory
+cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test --locked   # real SBF binary
 ```
 
 | Path | Role |
@@ -175,3 +193,31 @@ cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy ca
 | `src/state.rs` | the global account and one record per registered token account |
 | `src/instruction.rs`, `src/processor/` | `Initialize`, `Register`, `Fund`, `Claim` and `Execute`, on [`hook-kit`](../../hook-kit) |
 | `src/error.rs` | error codes from `0xC001` |
+
+## DEPLOY / INITIALIZE
+
+**Evidence so far:** in-process and SBF in-process tests (CI runs both). This template ships no
+`examples/devnet.rs`, so this repository has not initialised or exercised it on devnet.
+
+1. **Build and deploy.** `scripts/deploy.sh templates/holder-rewards` builds with `cargo build-sbf`
+   and deploys to devnet, then stops: it does not create a mint or initialise anything.
+2. **Create the mints and the pool vault.** A Token-2022 mint whose Transfer Hook extension points
+   at the program id, with its whole supply minted and then its **mint authority revoked**, and no
+   transfer-fee or confidential extensions. The pool vault (a token account of that mint). A reward
+   mint: classic SPL Token, or Token-2022 with descriptive extensions only.
+3. **Initialise.** Send `Initialize` (builders: `instruction::initialize` for an ongoing programme,
+   `instruction::initialize_one_time` for a spin-off). Accounts, in order: payer (signer, writable),
+   the mint's Transfer Hook authority (signer), mint, pool vault, reward mint, global
+   `["rewards", mint]` (writable), reward vault `["reward-vault", mint]` (writable), validation list
+   `["extra-account-metas", mint]` (writable), the reward mint's token program, system program. Only
+   the mint's live Transfer Hook authority can sign it, and only once.
+4. **What it creates.** The global (186 bytes, rate 0 until funded), the reward vault (a token
+   account of the reward mint owned by the global PDA), and the validation list (121 bytes, equal to
+   `state::VALIDATION_LIST`).
+5. **Then.** Holders `Register` (anyone can pay), someone `Fund`s the stream, owners `Claim`.
+6. **Verify.** Decode the global and check the mint, reward mint, vault, pool vault and mode; check
+   the vault's token owner is the global PDA; check the list bytes; register two holders, fund a short
+   stream, transfer between them, then claim and check each payout against the expected split.
+
+`tests/holder_rewards.rs` (`init`) and `tests/one_time.rs` (`init`) build exactly this arrangement
+in-process.

@@ -1,4 +1,8 @@
-//! # The rule: the one file you edit
+//! # The rule: start here
+//!
+//! Simple rules that fit the existing config may only need this file. Rules that introduce new
+//! configuration, state or extra accounts must also update the corresponding config/account
+//! plumbing and tests (`starter/README.md`, "When `rule.rs` is not enough").
 //!
 //! Everything else in this crate is Token-2022 Transfer Hook plumbing that already works:
 //! the `Execute` entrypoint, the check that rejects direct calls, the canonical validation
@@ -24,15 +28,17 @@
 //!    [`crate::MAX_PARAMS_LEN`] bytes). Update `validate_params` and the `HookConfig` helpers.
 //! 2. Write the decision in `check_transfer`. You get the decoded per-mint config and a
 //!    [`TransferContext`] (amount, source, destination, mint, authority). To look at more (a
-//!    clock, another account), add the account to the validation list in
-//!    `config_extra_account_meta` and read it in `process_execute`; every extra account adds to
-//!    the transaction size of each hooked transfer.
+//!    clock, another account), declare it in the validation list (`CANONICAL_VALIDATION_LIST`
+//!    and `VALIDATION_LIST_LEN` in `constants.rs`, `config_extra_account_meta` in `pda.rs`) and
+//!    check and read it in `process_execute`. That is security plumbing: change it deliberately,
+//!    with tests. Every extra account adds to the size and compute of each hooked transfer.
 //! 3. Keep it bounded: no loops over holders, no unbounded accounts, deterministic errors.
 //! 4. Return a [`crate::HookError`] so integrators can tell your hook caused the refusal.
 //!
 //! If your rule needs to change state (a counter, a timestamp), make that account writable in
-//! the validation list. Do not move tokens from inside the hook: Token-2022 does not give a
-//! hook authority over the transferred tokens.
+//! the validation list; every transfer of the mint then contends for it. `Execute` gets the
+//! transfer accounts read-only and without the transfer authority's signature, so the hook cannot
+//! re-spend the transferred tokens through it.
 
 use crate::{
     config::HookConfig, constants::MAX_TRANSFER_PARAMS_LEN, context::TransferContext,

@@ -1,30 +1,55 @@
 # scripts
 
-One script: `deploy.sh`, the "deploy it" step of the repository's purpose (idea -> `rule.rs` ->
-test -> **deploy** -> contribute).
+One script: `deploy.sh`, the DEPLOY step of UNDERSTAND -> CREATE -> TEST -> **DEPLOY** -> CONTRIBUTE.
 
 ```sh
-scripts/deploy.sh HOOK_DIR [--cluster devnet|localnet|mainnet-beta|URL] [--keypair FILE] [--limit N]
+scripts/deploy.sh HOOK_DIR [--cluster devnet|localnet|mainnet-beta|URL] [--keypair FILE] [--allow-mainnet] [-- EXAMPLE_ARGS...]
 
 scripts/deploy.sh starter                          # devnet, ~/.config/solana/id.json
-scripts/deploy.sh my-hook --keypair ./deployer.json --limit 1000
+scripts/deploy.sh starter -- --limit 1000          # options after -- go to the hook's example
+scripts/deploy.sh templates/fair-launch --keypair ./devnet-deployer.json
+scripts/deploy.sh --help
 ```
 
-What it does, in order:
+The script owns only the common options. Anything after `--` is passed unchanged to
+`HOOK_DIR/examples/devnet.rs`, after the `--url`, `--keypair` and `--program-id` the script supplies.
+
+## What it does
+
+**For every hook:**
 
 1. Checks `solana`, `cargo` and `cargo build-sbf` are installed and the deployer keypair exists.
-2. Picks the cluster and checks the deployer's balance (asks the faucet on devnet or localnet if low).
-3. Builds the hook for Solana (`cargo build-sbf`) into `HOOK_DIR/target/deploy`.
-4. Deploys it under the program id `cargo build-sbf` generated for it (re-running upgrades the same id).
-5. Runs `HOOK_DIR/examples/devnet.rs` if the hook has one: creates a Token-2022 mint with the Transfer
-   Hook extension, initialises the hook for that mint, then sends a transfer that must pass and one that
-   must be refused.
-6. Prints the cluster, hook program id, mint, config and validation-list addresses, and the next step.
+2. Picks the cluster. Mainnet is refused unless you pass `--allow-mainnet`, whether you name it or
+   give an RPC URL that serves it (checked by genesis hash).
+3. Checks the deployer's balance and asks the faucet on devnet or localnet if it is low.
+4. Builds the hook for Solana (`cargo build-sbf`) into `HOOK_DIR/target/deploy`.
+5. Deploys it under the program id `cargo build-sbf` generated (re-running upgrades the same id) and
+   prints the program id and its upgrade authority.
 
-Only the [`starter`](../starter) ships the example today; for a template, the script stops after
-step 4 and tells you to set the hook up as that template's README describes. Requires Rust and the
-[Solana CLI tools](https://solana.com/docs/intro/installation); on Windows run it from Git Bash.
+**Only for hooks that ship `examples/devnet.rs` (today: the [`starter`](../starter)):**
 
-**Safety.** It never defaults to mainnet. The deployer keeps the program's upgrade authority, which
-can replace your rule for every mint using it; the script prints how to revoke it. Use a throwaway
-devnet keypair unless you know what you are doing.
+6. Runs the example: creates a Token-2022 mint whose Transfer Hook points at the program,
+   initialises the hook for that mint, sends one transfer that must pass and one the hook must
+   refuse, and prints the mint, config and validation-list addresses.
+
+For the templates the script stops after step 5: the program is deployed but **no mint is created,
+nothing is initialised and the rule is not exercised on the cluster**. Each template README has a
+`DEPLOY / INITIALIZE` section for the setup, and its tests show the same accounts in-process.
+
+Requires Rust and the [Solana CLI tools](https://solana.com/docs/intro/installation); on Windows run
+it from Git Bash.
+
+## Safety
+
+* Devnet is the default. Mainnet needs `--allow-mainnet` on purpose: nothing here is audited.
+* The deployer keeps the program's **upgrade authority**, which can replace the rule for every mint
+  using it. The script prints how to revoke it (`solana program set-upgrade-authority <ID> --final`).
+* Use a throwaway devnet keypair. Never commit keypairs; the program keypair the build generates
+  lives in `HOOK_DIR/target/deploy/`.
+
+## Troubleshooting
+
+* `cargo build-sbf` may print `Function ... overflows the maximum allowed frame space` for crypto
+  crates inside the dependencies. They are not on paths the hook runs; the build still succeeds.
+* The devnet faucet is rate limited. If the airdrop fails, fund the deployer at
+  <https://faucet.solana.com> and re-run.

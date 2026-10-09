@@ -20,8 +20,8 @@ still builds when you copy it out of the repository.
 | `testing` | (feature `test-support`) a Token-2022 mint with your hook, funded accounts, transfers that resolve the hook's accounts the way a wallet does, `assert_custom_error`, a settable clock |
 
 Two facts a rule depends on, both in [`DESIGN.md`](../DESIGN.md): Token-2022 moves the tokens
-**before** it calls the hook, so balances are post-transfer; and a hook cannot spend the transfer
-authority.
+**before** it calls the hook, so balances are post-transfer; and `Execute` gets the transfer accounts
+read-only, without the transfer authority's signature, so a hook cannot re-spend them through it.
 
 ## Using it
 
@@ -42,18 +42,29 @@ template must name it.
 ## Changing it
 
 Rarely. A bug here affects every template, so a change needs a test and all templates' tests must
-pass (`cargo test --workspace` from the repository root). See [`AGENTS.md`](../AGENTS.md).
+pass (`cargo test --locked --workspace` from the repository root). The starter carries its own copy
+of this plumbing: a change to shared security behaviour here means reviewing the same behaviour in
+`starter/src/processor/` (see "Starter / hook-kit parity" in [`AGENTS.md`](../AGENTS.md)).
 
-## The validation list is a constant
+## Canonical validation lists
 
-A hook's validation list is the same bytes for every mint, so a template declares it once:
+A template defines one, or a small finite set, of canonical validation-list shapes as constants:
 
 ```rust
 pub const VALIDATION_LIST: [u8; list_len(1)] = canonical_list([seeded_meta(b"config", 1, false)]);
 ```
 
-`Initialize` writes it with `create_validation_list`, and `execute_prelude` compares the list account with
-it on every transfer. That is cheaper than resolving the list through the SPL crate each time
-(about half the compute of the starter's `Execute` came from that), and a corrupt list cannot
-panic anything. Unit tests pin `canonical_list` to what the SPL crate writes. The extra accounts
-themselves are the template's to check; Token-2022 has already resolved their addresses from the list.
+`Initialize` selects the shape that fits the mint's config and writes it with
+`create_validation_list`; `execute_prelude` compares the list account with the expected shape byte
+for byte on every transfer. Fair Launch, for example, has two shapes (`VALIDATION_LIST`, and
+`VALIDATION_LIST_WITH_FEE_CHECK` when the priority-fee check is on) and picks the expected one from
+the account count. Comparing bytes is cheaper than resolving the list through the SPL crate on each
+`Execute` (in the starter, the same change cut measured `Execute` compute from about 17k to 9k CU,
+in-process against the SBF build), and a corrupt list cannot panic anything.
+
+The builders cover the subset of `ExtraAccountMeta` layouts this kit needs: a PDA of the hook
+program with seeds `[literal, accounts[index]]` (`seeded_meta`) and a fixed address
+(`pubkey_meta`). They do not model every SPL resolver configuration (instruction-data or
+account-data seeds, external PDAs). Unit tests pin them to what the SPL crate writes. The extra
+accounts themselves are the template's to check; Token-2022 has already resolved their addresses
+from the list.

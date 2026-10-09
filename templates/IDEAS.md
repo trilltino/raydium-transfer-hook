@@ -20,4 +20,4 @@ state; extra accounts; contention; compute; authority/trust; is it better solved
 | Venue-specific policy | different rules per DEX/pool | hook can see source/destination | a new venue address; venue lists are per mint | read-only list | Fair Launch's venues already do part of this |
 | Dynamic policy from transfer context | rules vary by amount, time, size | the starter's `TransferContext` is the extension point | complexity and compute | varies | Not a template; a pattern for `rule.rs` |
 | Recipient qualification | KYC-style gating | **likely better solved elsewhere** (a permissioned token / compliance extension, off-chain attestations) | attestation freshness; who is the issuer | attestation account | Needs a trust model before any code |
-| Controlled OTC / vesting flows | escrowed bilateral transfers | **likely better solved elsewhere** (an escrow program; a hook cannot move tokens) | | | Not a hook problem |
+| Controlled OTC / vesting flows | escrowed bilateral transfers | **likely better solved elsewhere** (an escrow program; a hook does not get the transfer authority, so it cannot hold or release the transferred tokens) | | | Not a hook problem |

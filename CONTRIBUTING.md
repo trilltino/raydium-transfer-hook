@@ -1,26 +1,46 @@
 # Contributing
 
 This repository **curates** templates. A working piece of Rust is not enough; a template has to be
-understandable, tested, and honest about what it cannot do. Small fixes (docs, tests, plumbing bugs)
-are welcome as ordinary pull requests with a test.
+understandable, tested, and honest about what it cannot do.
 
-Before anything else: `cargo test --workspace` (and `cargo test` in `starter/`) must pass, and `cargo fmt --all -- --check` and
-`cargo clippy --all-targets -- -D warnings` must be clean.
+Contributions accepted into this repository are provided under its [MIT license](LICENSE).
 
-## Adding a template
+## Every pull request
+
+Run what CI runs, from the repository root:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
+(cd starter && cargo fmt -- --check && cargo clippy --locked --all-targets -- -D warnings && cargo test --locked)
+bash -n scripts/deploy.sh
+```
+
+CI also builds every hook for SBF and runs its tests against the compiled program.
+
+## A. Docs, tests and plumbing fixes
+
+Ordinary pull requests: describe the change and include a test for any behaviour you fix. If you
+change shared hook plumbing (Execute checks, authority checks, mint or token-account validation, the
+`transferring` check, validation-list handling, PDA creation, writability assumptions), review the
+equivalent code in the other copy (`starter/` vs `hook-kit/`) and say so in the PR; see "Starter /
+hook-kit parity" in [`AGENTS.md`](AGENTS.md).
+
+## B. Adding a template
 
 A template is a directory under `templates/<name>/` with:
 
 ```text
 templates/<name>/
-  README.md        the nine sections below
+  README.md        the sections below
   Cargo.toml       like the existing templates (workspace member, hook-kit dependency)
   src/rule.rs      the business logic, pure where you can: no accounts, no Solana types
   src/...          config, instruction, processor, error (codes in the next free block)
   tests/           runtime tests against the real Token-2022 program
 ```
 
-Your pull request description must tick every box. Copy the checklist from
+Your pull request description must tick every box. The checklist is in
 [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md), which is filled in
 automatically.
 
@@ -30,17 +50,33 @@ automatically.
 * [ ] Positive tests (allowed transfers)
 * [ ] Rejection tests (exact error code, balances unchanged)
 * [ ] Boundary tests (exactly at the limit, one over, first and last instant of any window)
-* [ ] Security assumptions
+* [ ] Malformed config / params tests
+* [ ] Authority tests (non-authority setup, second setup, and unauthorized update if there is one)
+* [ ] Direct `Execute` call refused
 * [ ] Known bypasses and limitations
 * [ ] Required extra accounts
 * [ ] Writable accounts identified, and the contention they cause
-* [ ] Authority model documented (who can configure, who can change)
-* [ ] Upgrade assumptions documented (program upgrade authority, mint hook authority)
-* [ ] Deployment tested: `scripts/deploy.sh` or your setup on devnet or a local validator, with the
-      rejection observed on chain
-* [ ] README and example scenario
+* [ ] Authority model documented (config authority, program upgrade authority, mint Transfer Hook
+      authority, as three separate powers)
+* [ ] Evidence level stated honestly (see below)
+* [ ] README with every section below
 
-### The nine README sections
+### Evidence levels
+
+State the highest level your template reached, and never mark one as another:
+
+| Level | How |
+|---|---|
+| in-process (native) | `cargo test` against the real Token-2022 processor |
+| SBF in-process | `cargo build-sbf` then `SBF_OUT_DIR=... cargo test` (CI does this for every hook) |
+| local validator | deployed and exercised on `solana-test-validator`, rejection observed |
+| devnet | deployed, initialised and exercised on devnet, rejection observed on-chain |
+
+Devnet evidence is welcome but not required. A template without a setup example is deployed by
+`scripts/deploy.sh` but not initialised or exercised on the cluster; say that rather than claiming
+more.
+
+### The README sections
 
 | Section | Answer |
 |---|---|
@@ -53,6 +89,7 @@ automatically.
 | **TRUST** | Who controls the config? Can the program be upgraded? Can the mint's hook selection change? |
 | **STATE / COST** | Which accounts are read and written? Contention? What grows compute or account count? |
 | **TESTS** | Which tests prove each claim above? |
+| **DEPLOY / INITIALIZE** | How to build, deploy and initialise it; who signs; what to verify afterwards. |
 
 LIMITATIONS and TRUST are not optional prose. A template that claims more than it enforces is
 rejected. For example, per-wallet rules do not establish person-level identity, and a per-slot cap

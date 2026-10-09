@@ -1,4 +1,6 @@
-# Deterministic CI from a clean checkout. No secrets, no public cluster.
+# CI from a clean checkout: no secrets, no public cluster. Dependencies are locked (--locked);
+# the Rust toolchain is the moving `stable` (plus an MSRV check) and the Solana toolchain is the
+# pinned Agave release below, downloaded at run time.
 name: CI
 
 on:
@@ -42,6 +44,26 @@ jobs:
           (cd starter && cargo clippy --locked --all-targets -- -D warnings)
       - name: tests (hook-kit, every template, the starter), in-process against real Token-2022
         run: cargo test --locked --workspace && (cd starter && cargo test --locked)
+      - name: deploy script syntax
+        run: bash -n scripts/deploy.sh
+
+  msrv:
+    name: minimum supported Rust (rust-version in Cargo.toml)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            starter
+      - name: cargo check at the declared MSRV
+        run: |
+          cargo check --locked --workspace --all-targets
+          (cd starter && cargo check --locked --all-targets)
 
   sbf:
     name: SBF build and tests against the compiled programs
@@ -71,7 +93,7 @@ jobs:
           for dir in templates/fair-launch templates/creator-commitment templates/holder-rewards starter; do
             cargo build-sbf --manifest-path "$dir/Cargo.toml" --sbf-out-dir "$PWD/$dir/target/deploy"
             # ProgramTest prefers a .so found in SBF_OUT_DIR over the native program.
-            (cd "$dir" && SBF_OUT_DIR="$PWD/target/deploy" cargo test)
+            (cd "$dir" && SBF_OUT_DIR="$PWD/target/deploy" cargo test --locked)
           done
       - name: git status is clean (nothing generated is tracked)
         run: test -z "$(git status --porcelain)"

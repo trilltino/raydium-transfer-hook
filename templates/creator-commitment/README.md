@@ -3,8 +3,10 @@
 A creator can transfer unlocked tokens but cannot reduce the committed account below its current
 vesting floor.
 
-**The rule is [`src/rule.rs`](src/rule.rs). About 100 lines, pure: no accounts, no Solana types.** The
+**The rule is [`src/rule.rs`](src/rule.rs). It is short and pure: no accounts, no Solana types.** The
 rest of the folder is plumbing.
+
+**Status:** reference implementation, not audited. Read LIMITATIONS and TRUST before using it.
 
 ```text
 locked
@@ -117,8 +119,9 @@ Also:
 
 One extra account per transfer: the config PDA `["config", mint]`, **read-only**. Nothing is written
 by the hook, so there is **no writable-account contention**. A transfer leg carries 3 hook accounts
-(config, hook program, validation list). Compute is a handful of integer operations. The config is
-105 bytes.
+(config, hook program, validation list). The rule itself is a handful of integer operations; the
+whole `Execute` measured about 8k to 16k compute units in-process against the SBF build (a
+measurement, not a guarantee). The config is 105 bytes and the validation list 51.
 
 ## TESTS
 
@@ -139,8 +142,8 @@ in `tests/creator_commitment.rs` run inside real Token-2022 transfers.
 | unauthorized *config update* | not applicable: the config cannot be updated |
 
 ```sh
-cargo test                                     # in this directory
-cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test   # real SBF binary
+cargo test --locked                            # in this directory
+cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy cargo test --locked   # real SBF binary
 ```
 
 | Path | Role |
@@ -149,3 +152,27 @@ cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy ca
 | `src/config.rs` | the per-mint config account (creator account + schedule) |
 | `src/instruction.rs`, `src/processor/` | the one setup instruction and `Execute`, on [`hook-kit`](../../hook-kit) |
 | `src/error.rs` | error codes from `0xA001` |
+
+## DEPLOY / INITIALIZE
+
+**Evidence so far:** in-process and SBF in-process tests (CI runs both). This template ships no
+`examples/devnet.rs`, so this repository has not initialised or exercised it on devnet.
+
+1. **Build and deploy.** `scripts/deploy.sh templates/creator-commitment` builds with
+   `cargo build-sbf` and deploys to devnet, then stops: it does not create a mint or initialise
+   anything.
+2. **Create the mint and the creator account.** A Token-2022 mint whose Transfer Hook extension
+   points at the program id, and the creator's token account of that mint holding at least
+   `locked_total`.
+3. **Initialise.** Send `Initialize(Schedule)` (builder: `instruction::initialize`). Accounts, in
+   order: payer (signer, writable), the mint's Transfer Hook authority (signer), mint, creator
+   account, config PDA `["config", mint]` (writable), validation list `["extra-account-metas", mint]`
+   (writable), system program. Only the mint's live Transfer Hook authority can sign it, and only once.
+4. **What it creates.** The config (105 bytes: creator account and schedule) and the validation list
+   (51 bytes, equal to `config::VALIDATION_LIST`).
+5. **Verify.** Decode the config (`Config::decode`) and check the creator account and schedule; check
+   the list bytes; then send one transfer from the creator account that breaches the floor and see
+   it refused with `0xA005`. Revoke the mint's Transfer Hook authority if the commitment must be
+   durable.
+
+`tests/creator_commitment.rs` (`committed`) builds exactly this arrangement in-process.
