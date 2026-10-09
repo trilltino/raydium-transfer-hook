@@ -223,12 +223,21 @@ async fn fetch(ctx: &mut ProgramTestContext, key: Pubkey) -> Option<Account> {
     ctx.banks_client.get_account(key).await.unwrap()
 }
 
-async fn fetch_config(ctx: &mut ProgramTestContext, mint: Pubkey) -> HookConfig {
+async fn fetch_config_data(ctx: &mut ProgramTestContext, mint: Pubkey) -> Vec<u8> {
     let account = fetch(ctx, config_address(&mint, &HOOK).0)
         .await
         .expect("config account exists");
     assert_eq!(account.owner, HOOK);
-    HookConfig::decode(&account.data).expect("config decodes strictly")
+    HookConfig::decode(&account.data).expect("config decodes strictly");
+    account.data
+}
+
+async fn fetched_limit(ctx: &mut ProgramTestContext, mint: Pubkey) -> u64 {
+    let data = fetch_config_data(ctx, mint).await;
+    HookConfig::decode(&data)
+        .unwrap()
+        .max_transfer_limit()
+        .unwrap()
 }
 
 async fn init_hook(
@@ -391,7 +400,8 @@ async fn only_the_live_hook_authority_can_initialize() {
     init_hook(&mut ctx, good, &ext, &max_args(1234))
         .await
         .unwrap();
-    let config = fetch_config(&mut ctx, good).await;
+    let config_data = fetch_config_data(&mut ctx, good).await;
+    let config = HookConfig::decode(&config_data).unwrap();
     assert_eq!(config.mint, good);
     assert_eq!(config.max_transfer_limit().unwrap(), 1234);
     let (address, bump) = config_address(&good, &HOOK);
@@ -610,12 +620,14 @@ struct CorruptCase {
     expected: HookError,
 }
 
-fn good_config(mint: Pubkey) -> HookConfig {
+const GOOD_CONFIG_PARAMS: [u8; 8] = 50u64.to_le_bytes();
+
+fn good_config(mint: Pubkey) -> HookConfig<'static> {
     HookConfig::new(
         config_address(&mint, &HOOK).1,
         validation_list_address(&mint, &HOOK).1,
         mint,
-        &50u64.to_le_bytes(),
+        &GOOD_CONFIG_PARAMS,
     )
     .unwrap()
 }
@@ -910,7 +922,7 @@ async fn execute_rejects_corrupt_config_and_list_without_panicking() {
         |_: Pubkey| Some((HOOK, good_list.clone()))
     );
     // Well-formed list whose meta is not the seeds-derived config meta.
-    case!(HookError::AccountOrderMismatch, valid, |_: Pubkey| {
+    case!(HookError::InvalidValidationList, valid, |_: Pubkey| {
         let mut data = vec![0u8; VALIDATION_LIST_LEN];
         ExtraAccountMetaList::init::<ExecuteInstruction>(
             &mut data,
@@ -1143,20 +1155,8 @@ async fn two_mints_under_one_program_enforce_their_own_limits() {
             .await
             .unwrap();
     }
-    assert_eq!(
-        fetch_config(&mut ctx, small)
-            .await
-            .max_transfer_limit()
-            .unwrap(),
-        10
-    );
-    assert_eq!(
-        fetch_config(&mut ctx, large)
-            .await
-            .max_transfer_limit()
-            .unwrap(),
-        100
-    );
+    assert_eq!(fetched_limit(&mut ctx, small).await, 10);
+    assert_eq!(fetched_limit(&mut ctx, large).await, 100);
 
     send(
         &mut ctx,

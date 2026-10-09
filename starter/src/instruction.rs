@@ -1,5 +1,5 @@
-//! Client-side instruction encoding: arguments and builder for the one instruction the hook has
-//! besides `Execute`. The on-chain decoding lives in `processor`.
+//! Instruction encoding: arguments, pack/unpack and the client-side builder for the one
+//! instruction the hook has besides `Execute`. The handlers live in `processor`.
 
 use solana_program::{
     instruction::{AccountMeta, Instruction},
@@ -27,7 +27,10 @@ impl InitializeHookArgs {
     pub fn pack(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(INITIALIZE_HOOK_FIXED_LEN + self.params.len());
         data.extend_from_slice(&INITIALIZE_HOOK_DISCRIMINATOR);
-        data.extend_from_slice(&(self.params.len() as u16).to_le_bytes());
+        // Saturate instead of wrapping: an oversized `params` then fails on-chain with
+        // `ParamsTooLarge` rather than being re-read as a shorter, different instruction.
+        let params_len = u16::try_from(self.params.len()).unwrap_or(u16::MAX);
+        data.extend_from_slice(&params_len.to_le_bytes());
         data.extend_from_slice(&self.params);
         data
     }
@@ -47,17 +50,6 @@ impl InitializeHookArgs {
             params: data[INITIALIZE_HOOK_FIXED_LEN..].to_vec(),
         })
     }
-}
-
-pub(crate) fn ix_array<const N: usize>(
-    data: &[u8],
-    offset: usize,
-) -> Result<[u8; N], ProgramError> {
-    offset
-        .checked_add(N)
-        .and_then(|end| data.get(offset..end))
-        .and_then(|slice| slice.try_into().ok())
-        .ok_or(ProgramError::InvalidInstructionData)
 }
 
 /// Atomically create the config and validation list of `mint`. `authority` must be the mint's

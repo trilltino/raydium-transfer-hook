@@ -9,12 +9,13 @@ use solana_program::{
     entrypoint::ProgramResult,
     program_error::ProgramError,
     pubkey::Pubkey,
-    sysvar,
 };
-use spl_tlv_account_resolution::{account::ExtraAccountMeta, seeds::Seed};
 
 use crate::{
-    config::{config_address, counter_address, Config, Counter, CONFIG_LEN, COUNTER_LEN},
+    config::{
+        config_address, counter_address, Config, Counter, CONFIG_LEN, CONFIG_SEED, COUNTER_LEN,
+        COUNTER_SEED, VALIDATION_LIST, VALIDATION_LIST_WITH_FEE_CHECK,
+    },
     error::FairLaunchError,
     rule::Params,
 };
@@ -62,7 +63,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], params: Params) ->
         system_program,
         program_id,
         CONFIG_LEN,
-        &[b"config", mint.key.as_ref(), &[config_bump]],
+        &[CONFIG_SEED, mint.key.as_ref(), &[config_bump]],
     )?;
     Config::new(config_bump, *mint.key, &venues, params)?
         .encode_into(&mut config_account.try_borrow_mut_data()?)?;
@@ -72,7 +73,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], params: Params) ->
         system_program,
         program_id,
         COUNTER_LEN,
-        &[b"counter", mint.key.as_ref(), &[counter_bump]],
+        &[COUNTER_SEED, mint.key.as_ref(), &[counter_bump]],
     )?;
     Counter {
         bump: counter_bump,
@@ -84,41 +85,17 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], params: Params) ->
     // The extra accounts every transfer carries, in this order (account 1 is the mint): the config,
     // the writable slot counter, and, only if the priority-fee check is on, the instructions sysvar
     // (to read the fee).
-    let mut metas = vec![
-        ExtraAccountMeta::new_with_seeds(
-            &[
-                Seed::Literal {
-                    bytes: b"config".to_vec(),
-                },
-                Seed::AccountKey { index: 1 },
-            ],
-            false,
-            false,
-        )?,
-        ExtraAccountMeta::new_with_seeds(
-            &[
-                Seed::Literal {
-                    bytes: b"counter".to_vec(),
-                },
-                Seed::AccountKey { index: 1 },
-            ],
-            false,
-            true,
-        )?,
-    ];
-    if params.max_priority_micro_lamports > 0 {
-        metas.push(ExtraAccountMeta::new_with_pubkey(
-            &sysvar::instructions::id(),
-            false,
-            false,
-        )?);
-    }
+    let list: &[u8] = if params.max_priority_micro_lamports > 0 {
+        &VALIDATION_LIST_WITH_FEE_CHECK
+    } else {
+        &VALIDATION_LIST
+    };
     create_validation_list(
         payer,
         validation_list,
         system_program,
         mint.key,
         program_id,
-        &metas,
+        list,
     )
 }

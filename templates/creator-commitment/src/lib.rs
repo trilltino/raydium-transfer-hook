@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! # Creator commitment
 //!
 //! A Token-2022 Transfer Hook that makes a creator's allocation vest: the balance of one dedicated

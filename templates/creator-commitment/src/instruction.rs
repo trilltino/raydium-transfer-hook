@@ -20,13 +20,19 @@ pub enum CommitmentInstruction {
 impl CommitmentInstruction {
     pub fn unpack(data: &[u8]) -> Result<Self, CommitmentError> {
         match data.split_first() {
-            Some((&INITIALIZE_TAG, rest)) if rest.len() == 32 => {
-                let word = |i: usize| -> [u8; 8] { rest[i * 8..i * 8 + 8].try_into().unwrap() };
+            Some((&INITIALIZE_TAG, rest)) => {
+                let word =
+                    |i: usize| -> Option<[u8; 8]> { rest.get(i * 8..i * 8 + 8)?.try_into().ok() };
+                let (Some(locked_total), Some(start), Some(cliff), Some(end), true) =
+                    (word(0), word(1), word(2), word(3), rest.len() == 32)
+                else {
+                    return Err(CommitmentError::InvalidInstruction);
+                };
                 Ok(Self::Initialize(Schedule {
-                    locked_total: u64::from_le_bytes(word(0)),
-                    start: i64::from_le_bytes(word(1)),
-                    cliff: i64::from_le_bytes(word(2)),
-                    end: i64::from_le_bytes(word(3)),
+                    locked_total: u64::from_le_bytes(locked_total),
+                    start: i64::from_le_bytes(start),
+                    cliff: i64::from_le_bytes(cliff),
+                    end: i64::from_le_bytes(end),
                 }))
             }
             _ => Err(CommitmentError::InvalidInstruction),

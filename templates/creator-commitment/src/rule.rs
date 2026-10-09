@@ -72,6 +72,7 @@ impl Schedule {
     ///
     /// Rounds in the creator's disfavour: the unlocked amount is rounded down, so the locked
     /// amount is rounded up, and a schedule never unlocks a token early.
+    #[must_use]
     pub fn locked_at(&self, now: i64) -> u64 {
         if now < self.cliff {
             return self.locked_total;
@@ -79,12 +80,14 @@ impl Schedule {
         if now >= self.end {
             return 0;
         }
-        // `start <= cliff <= now < end`, so both differences are positive.
-        let elapsed = (now - self.start) as u128;
-        let duration = (self.end - self.start) as u128;
-        let unlocked = (self.locked_total as u128) * elapsed / duration;
+        // `start <= cliff <= now < end`, so both differences are positive. `abs_diff` computes
+        // them exactly even when the endpoints are `i64::MIN` and `i64::MAX`, where a plain
+        // subtraction would overflow; each fits a `u64`, so the product fits a `u128`.
+        let elapsed = u128::from(now.abs_diff(self.start));
+        let duration = u128::from(self.end.abs_diff(self.start));
+        let unlocked = u128::from(self.locked_total) * elapsed / duration;
         // `unlocked < locked_total` because `elapsed < duration`.
-        self.locked_total - unlocked as u64
+        self.locked_total - u64::try_from(unlocked).unwrap_or(self.locked_total)
     }
 }
 
@@ -172,6 +175,47 @@ mod tests {
         let mid = s.locked_at(0);
         assert!(mid > 0 && mid < u64::MAX);
         assert_eq!(s.locked_at(i64::MAX / 2), 0);
+    }
+
+    #[test]
+    fn a_schedule_spanning_the_whole_i64_range_is_evaluated_exactly() {
+        // `now - start` and `end - start` overflow an `i64` here; the answer is still exact.
+        let s = Schedule {
+            locked_total: 1_000_000,
+            start: i64::MIN,
+            cliff: i64::MIN,
+            end: i64::MAX,
+        };
+        assert_eq!(s.validate(), Ok(()));
+        assert_eq!(s.locked_at(i64::MIN), 1_000_000);
+        // Just under half has elapsed at -1, so one more token than half stays locked.
+        assert_eq!(s.locked_at(-1), 500_001);
+        assert_eq!(s.locked_at(0), 500_000);
+        assert_eq!(s.locked_at(i64::MAX - 1), 1);
+        assert_eq!(s.locked_at(i64::MAX), 0);
+        let big = Schedule {
+            locked_total: u64::MAX,
+            ..s
+        };
+        assert_eq!(big.locked_at(i64::MAX - 1), 1);
+        assert!(big.locked_at(0) > 0 && big.locked_at(0) < u64::MAX);
+        // Never increases, even at the extremes.
+        let mut previous = u64::MAX;
+        for now in [
+            i64::MIN,
+            i64::MIN + 1,
+            -1 << 62,
+            -1,
+            0,
+            1,
+            1 << 62,
+            i64::MAX - 1,
+            i64::MAX,
+        ] {
+            let locked = big.locked_at(now);
+            assert!(locked <= previous, "grew at {now}");
+            previous = locked;
+        }
     }
 
     #[test]

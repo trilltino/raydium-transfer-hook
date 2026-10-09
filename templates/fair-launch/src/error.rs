@@ -30,6 +30,7 @@ pub enum FairLaunchError {
 }
 
 impl FairLaunchError {
+    #[must_use]
     pub const fn code(self) -> u32 {
         self as u32
     }
@@ -40,3 +41,11 @@ impl From<FairLaunchError> for ProgramError {
         ProgramError::Custom(error.code())
     }
 }
+
+impl core::fmt::Display for FairLaunchError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{self:?} (0x{:x})", self.code())
+    }
+}
+
+impl std::error::Error for FairLaunchError {}

@@ -57,13 +57,30 @@
 //! * While `eligible_supply` is zero, the stream's rewards for that time are not paid to anyone;
 //!   they stay in the vault.
 //!
+//! ## Funding
+//!
+//! Anyone may fund. In an ongoing programme a top-up is added to what the running period has not
+//! yet paid and re-timed over the new `duration`, but it may not **lower the rate** while a period
+//! is running ([`HolderRewardsError::FundingLowersRate`]): otherwise a stranger could pay a token
+//! amount and stretch everyone's unpaid rewards over ten years. A top-up that keeps or raises the
+//! rate is always accepted, and so is any funding once the period has ended.
+//!
 //! All arithmetic is integer, `u128` internally, and rounds **down**, so the vault can never owe
 //! more than it was funded with.
 
 use crate::error::HolderRewardsError;
 
 /// Fixed-point scale of the index.
-pub const PRECISION: u128 = 1_000_000_000_000;
+///
+/// Every update rounds the index growth down, losing less than one index unit: at most
+/// `eligible_supply / PRECISION` raw reward units, shared by everyone, which is under 19 even for a
+/// supply of `u64::MAX`. A scale of `1e12` lost the whole stream when the index was advanced every
+/// second against a large supply (`rate x PRECISION < eligible_supply` rounds every update to zero).
+///
+/// `1e18` still fits `u128`: within one funded period `rate x seconds` is at most the amount
+/// funded (below `2^64`), and a balance never exceeds the eligible supply, so no product exceeds
+/// `2^64 x 1e18`. The extreme-value tests below exercise that bound.
+pub const PRECISION: u128 = 1_000_000_000_000_000_000;
 
 /// The longest reward period accepted: about ten years.
 pub const MAX_DURATION: u32 = 315_360_000;
@@ -123,6 +140,11 @@ impl Stream {
             // The reward is too small to pay out even one unit per second.
             return Err(HolderRewardsError::ZeroAmount);
         }
+        // Anyone may fund, so a top-up must not slow a running stream: otherwise a stranger could
+        // pay a token amount and stretch the unpaid remainder over the longest period.
+        if now < self.period_finish && rate < self.rate {
+            return Err(HolderRewardsError::FundingLowersRate);
+        }
         self.rate = rate;
         self.period_finish = now
             .checked_add(duration as i64)
@@ -174,8 +196,12 @@ impl Holder {
         balance_before: u64,
     ) -> Result<(), HolderRewardsError> {
         let earning = self.checkpoint.min(balance_before) as u128;
+        let unpaid = stream
+            .index
+            .checked_sub(self.index_paid)
+            .ok_or(HolderRewardsError::MathOverflow)?;
         let accrued = earning
-            .checked_mul(stream.index - self.index_paid)
+            .checked_mul(unpaid)
             .ok_or(HolderRewardsError::MathOverflow)?
             / PRECISION;
         self.earned = u64::try_from(accrued)
@@ -430,5 +456,94 @@ mod tests {
         let mut holder = Holder::register(&mut stream, 1_000).unwrap();
         stream.advance(500).unwrap();
         assert_eq!(holder.claim(&mut stream, 1_000), Ok(0));
+    }
+
+    #[test]
+    fn frequent_updates_lose_nothing_against_a_large_supply() {
+        // 1,000 USDC (6 decimals) over 30 days against 1e15 raw units, advanced every second.
+        // With a scale of 1e12 every second rounded to zero and the whole stream was lost.
+        let build = || {
+            let mut stream = Stream::default();
+            stream.fund(0, 1_000_000_000, 2_592_000).unwrap();
+            stream.eligible_supply = 1_000_000_000_000_000;
+            stream
+        };
+        let (mut every_second, mut once) = (build(), build());
+        for t in 1..=3600 {
+            every_second.advance(t).unwrap();
+        }
+        once.advance(3600).unwrap();
+        assert!(once.index > 0);
+        assert_eq!(every_second.index, once.index);
+    }
+
+    #[test]
+    fn extreme_supply_can_still_round_a_small_rate_to_zero() {
+        // At the largest possible supply, a one-unit-per-second stream can still round every
+        // update to zero. This is the documented extreme-supply limit of a 1e18 index.
+        let mut stream = Stream::default();
+        stream.fund(0, 1_000_000, 1_000_000).unwrap();
+        assert_eq!(stream.rate, 1);
+        stream.eligible_supply = u64::MAX;
+        let mut holder = Holder::register(&mut stream, 0).unwrap();
+        holder.checkpoint = u64::MAX;
+        for t in 1..=1_000_000 {
+            stream.advance(t).unwrap();
+        }
+        let paid = holder.claim(&mut stream, u64::MAX).unwrap();
+        assert_eq!(paid, 0);
+    }
+
+    #[test]
+    fn a_stranger_cannot_slow_a_running_stream_but_can_still_top_it_up() {
+        let mut stream = Stream::default();
+        stream.fund(0, 1_000_000_000_000, 100).unwrap();
+        let honest = stream;
+        // A token amount over the longest period would stretch the stream to ten years.
+        assert_eq!(
+            stream.fund(10, 1_000_000_000, MAX_DURATION),
+            Err(HolderRewardsError::FundingLowersRate)
+        );
+        // The refusal changes nothing it was not already going to (the index is brought up to date).
+        assert_eq!(stream.rate, honest.rate);
+        assert_eq!(stream.period_finish, honest.period_finish);
+        // A top-up that keeps the rate is accepted, and so is shortening the period.
+        stream.fund(10, 900_000_000_000, 90).unwrap();
+        assert!(stream.rate >= honest.rate);
+        // Once the period has ended, any new period may start, at any rate.
+        let finished = stream.period_finish;
+        stream
+            .fund(finished, 1_000_000_000_000, MAX_DURATION)
+            .unwrap();
+        assert_eq!(stream.period_finish, finished + i64::from(MAX_DURATION));
+    }
+
+    #[test]
+    fn the_largest_funding_and_the_smallest_supply_do_not_overflow() {
+        let mut stream = Stream::default();
+        stream.fund(0, u64::MAX, 1).unwrap();
+        assert_eq!(stream.rate, u64::MAX);
+        let mut holder = Holder::register(&mut stream, 1).unwrap();
+        stream.advance(1).unwrap();
+        // One raw unit of balance earns the whole u64::MAX stream.
+        assert_eq!(holder.claim(&mut stream, 1), Ok(u64::MAX));
+        // The same at the longest period.
+        let mut long = Stream::default();
+        long.fund(0, u64::MAX, MAX_DURATION).unwrap();
+        let mut holder = Holder::register(&mut long, 1).unwrap();
+        long.advance(i64::from(MAX_DURATION)).unwrap();
+        let paid = holder.claim(&mut long, 1).unwrap();
+        assert!(paid > u64::MAX / 2);
+    }
+
+    #[test]
+    fn a_record_ahead_of_the_stream_is_an_error_not_a_wrap() {
+        let mut stream = funded();
+        let mut holder = Holder::register(&mut stream, 10).unwrap();
+        holder.index_paid = stream.index + 1;
+        assert_eq!(
+            holder.settle(&stream, 10),
+            Err(HolderRewardsError::MathOverflow)
+        );
     }
 }

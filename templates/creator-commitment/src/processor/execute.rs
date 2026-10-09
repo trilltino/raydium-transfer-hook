@@ -7,24 +7,25 @@ use solana_program::{
 };
 
 use crate::{
-    config::{config_address, Config},
+    config::{Config, VALIDATION_LIST},
     error::CommitmentError,
     rule::check_outgoing,
 };
 
-/// The hook declares one extra account: the mint's config.
-const EXTRA_ACCOUNTS: usize = 1;
-
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    let ctx = execute_prelude(program_id, accounts, data, EXTRA_ACCOUNTS)?;
+    let ctx = execute_prelude(program_id, accounts, data, &VALIDATION_LIST)?;
 
+    // The only program-owned account `Initialize` ever creates for a mint is its config, at the
+    // address Token-2022 resolved from the validation list, so ownership and the stored mint
+    // identify it; no address needs deriving here.
     let config_account = &ctx.extras[0];
-    if config_account.owner != program_id
-        || config_account.key != &config_address(ctx.mint.key, program_id).0
-    {
+    if config_account.owner != program_id {
         return Err(CommitmentError::InvalidConfig.into());
     }
     let config = Config::decode(&config_account.try_borrow_data()?)?;
+    if config.mint != *ctx.mint.key {
+        return Err(CommitmentError::InvalidConfig.into());
+    }
 
     // The rule only concerns tokens leaving the locked account.
     if ctx.source.key != &config.creator_account {

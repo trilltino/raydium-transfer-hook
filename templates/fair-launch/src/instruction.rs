@@ -25,15 +25,27 @@ impl FairLaunchInstruction {
     pub fn unpack(data: &[u8]) -> Result<Self, FairLaunchError> {
         match data.split_first() {
             Some((&INITIALIZE_TAG, rest)) if rest.len() == PARAMS_LEN => {
-                let array = |at: usize, len: usize| &rest[at..at + len];
-                let int = |at: usize| -> [u8; 8] { array(at, 8).try_into().unwrap() };
+                let int = |at: usize| -> Option<[u8; 8]> { rest.get(at..at + 8)?.try_into().ok() };
+                let slots: Option<[u8; 4]> =
+                    rest.get(32..36).and_then(|bytes| bytes.try_into().ok());
+                let (
+                    Some(start),
+                    Some(end),
+                    Some(max_buy),
+                    Some(max_wallet),
+                    Some(slots),
+                    Some(fee),
+                ) = (int(0), int(8), int(16), int(24), slots, int(36))
+                else {
+                    return Err(FairLaunchError::InvalidInstruction);
+                };
                 Ok(Self::Initialize(Params {
-                    window_start: i64::from_le_bytes(int(0)),
-                    window_end: i64::from_le_bytes(int(8)),
-                    max_buy: u64::from_le_bytes(int(16)),
-                    max_wallet: u64::from_le_bytes(int(24)),
-                    max_buys_per_slot: u32::from_le_bytes(array(32, 4).try_into().unwrap()),
-                    max_priority_micro_lamports: u64::from_le_bytes(int(36)),
+                    window_start: i64::from_le_bytes(start),
+                    window_end: i64::from_le_bytes(end),
+                    max_buy: u64::from_le_bytes(max_buy),
+                    max_wallet: u64::from_le_bytes(max_wallet),
+                    max_buys_per_slot: u32::from_le_bytes(slots),
+                    max_priority_micro_lamports: u64::from_le_bytes(fee),
                 }))
             }
             _ => Err(FairLaunchError::InvalidInstruction),

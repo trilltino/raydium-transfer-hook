@@ -17,6 +17,8 @@ pub struct TokenView {
     pub transferring: bool,
 }
 
+/// # Errors
+/// `IncorrectProgramId` unless the account is a Token-2022 token account, or the unpack error.
 pub fn read_token_account(account: &AccountInfo) -> Result<TokenView, ProgramError> {
     if account.owner != &spl_token_2022::id() {
         return Err(ProgramError::IncorrectProgramId);
@@ -33,4 +35,64 @@ pub fn read_token_account(account: &AccountInfo) -> Result<TokenView, ProgramErr
         amount: state.base.amount,
         transferring,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::{hooked_account, with_account};
+
+    #[test]
+    fn the_transferring_flag_and_post_transfer_balance_are_read() {
+        let (key, mint, owner) = (
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        );
+        for transferring in [false, true] {
+            let mut data = hooked_account(mint, owner, 77, transferring);
+            let view = with_account(
+                &key,
+                &spl_token_2022::id(),
+                false,
+                &mut data,
+                read_token_account,
+            )
+            .unwrap();
+            assert_eq!(
+                view,
+                TokenView {
+                    mint,
+                    owner,
+                    amount: 77,
+                    transferring
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn an_account_of_another_program_or_with_garbage_data_is_refused() {
+        let key = Pubkey::new_unique();
+        let mut data = hooked_account(Pubkey::new_unique(), Pubkey::new_unique(), 1, true);
+        assert_eq!(
+            with_account(
+                &key,
+                &Pubkey::new_unique(),
+                false,
+                &mut data,
+                read_token_account
+            ),
+            Err(ProgramError::IncorrectProgramId)
+        );
+        let mut garbage = vec![7u8; 40];
+        assert!(with_account(
+            &key,
+            &spl_token_2022::id(),
+            false,
+            &mut garbage,
+            read_token_account
+        )
+        .is_err());
+    }
 }

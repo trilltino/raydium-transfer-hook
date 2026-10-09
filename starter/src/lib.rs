@@ -24,7 +24,9 @@
 //! * Config PDA, seeds `["hook-config", mint]`, owned by this program, `45 + params_len` bytes.
 //! * SPL validation list PDA, seeds `["extra-account-metas", mint]`, holding exactly one
 //!   seeds-based `ExtraAccountMeta` (`Literal "hook-config"` + `AccountKey{index: 1}`). The
-//!   list bytes are therefore identical for every mint and never need migration.
+//!   list bytes are therefore identical for every mint and never need migration. `Execute` checks
+//!   the list against [`CANONICAL_VALIDATION_LIST`] byte for byte (cheaper and stricter than
+//!   re-resolving it through the SPL crate).
 //!
 //! Both are created by one atomic `InitializeHook` so a mint can never end up with a config but
 //! no list (or the reverse).

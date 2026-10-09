@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! # Holder rewards
 //!
 //! A Token-2022 Transfer Hook that pays holders a reward stream in another token (for example the

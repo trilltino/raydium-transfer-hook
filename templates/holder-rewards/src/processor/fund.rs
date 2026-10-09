@@ -9,7 +9,7 @@ use solana_program::{
 };
 use spl_token_2022::instruction::transfer_checked;
 
-use super::common::{load_global, mint_decimals, now, require_token_program};
+use super::common::{load_any_global, mint_decimals, now, require_token_program};
 use crate::{error::HolderRewardsError, rule::check_funding};
 
 pub fn process(
@@ -29,12 +29,7 @@ pub fn process(
     if !funder.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
     }
-    // The mint's own address is stored in the global; read it from there.
-    let mint_key = {
-        let data = global_account.try_borrow_data()?;
-        crate::state::Global::decode(&data)?.mint
-    };
-    let mut global = load_global(program_id, &mint_key, global_account)?;
+    let mut global = load_any_global(program_id, global_account)?;
     if reward_vault.key != &global.reward_vault || reward_mint.key != &global.reward_mint {
         return Err(HolderRewardsError::RewardAccountMismatch.into());
     }

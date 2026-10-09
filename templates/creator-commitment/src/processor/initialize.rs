@@ -10,10 +10,9 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };
-use spl_tlv_account_resolution::{account::ExtraAccountMeta, seeds::Seed};
 
 use crate::{
-    config::{config_address, Config, CONFIG_LEN},
+    config::{config_address, Config, CONFIG_LEN, CONFIG_SEED, VALIDATION_LIST},
     error::CommitmentError,
     rule::Schedule,
 };
@@ -59,7 +58,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], schedule: Schedule
         system_program,
         program_id,
         CONFIG_LEN,
-        &[b"config", mint.key.as_ref(), &[bump]],
+        &[CONFIG_SEED, mint.key.as_ref(), &[bump]],
     )?;
     Config {
         bump,
@@ -70,22 +69,12 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], schedule: Schedule
     .encode_into(&mut config_account.try_borrow_mut_data()?)?;
 
     // The one extra account every transfer carries: the config, found from the mint (account 1).
-    let metas = [ExtraAccountMeta::new_with_seeds(
-        &[
-            Seed::Literal {
-                bytes: b"config".to_vec(),
-            },
-            Seed::AccountKey { index: 1 },
-        ],
-        false,
-        false,
-    )?];
     create_validation_list(
         payer,
         validation_list,
         system_program,
         mint.key,
         program_id,
-        &metas,
+        &VALIDATION_LIST,
     )
 }

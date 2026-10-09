@@ -3,7 +3,7 @@
 use solana_program::{program_error::ProgramError, pubkey::Pubkey};
 use spl_tlv_account_resolution::{account::ExtraAccountMeta, seeds::Seed};
 
-use crate::constants::*;
+use crate::{constants::*, error::HookError};
 
 pub fn config_address(mint: &Pubkey, program_id: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[CONFIG_SEED, mint.as_ref()], program_id)
@@ -25,6 +25,15 @@ pub fn config_extra_account_meta() -> Result<ExtraAccountMeta, ProgramError> {
         false,
         false,
     )
+}
+
+/// The validation list must be exactly the canonical one. `Execute` never reads the list's
+/// contents (clients do), so this comparison is what rejects a corrupt list.
+pub(crate) fn validate_list_layout(data: &[u8]) -> Result<(), HookError> {
+    if data != CANONICAL_VALIDATION_LIST {
+        return Err(HookError::InvalidValidationList);
+    }
+    Ok(())
 }
 
 pub fn execute_instruction_data(amount: u64) -> Vec<u8> {

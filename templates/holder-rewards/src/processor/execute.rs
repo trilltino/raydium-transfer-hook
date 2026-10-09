@@ -1,34 +1,38 @@
 //! `Execute`: settle the two holders a transfer touches, using [`crate::rule`].
 
-use hook_kit::execute_prelude;
+use hook_kit::{execute_prelude, KitError};
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
 
-use super::common::{load_global, load_record, now};
+use super::common::{load_global, load_optional_record, now};
 use crate::{
     error::HolderRewardsError,
-    state::{record_address, Record},
+    state::{global_address, record_address, Record, VALIDATION_LIST},
 };
 
-/// The hook declares three extra accounts: the global, the source's record, the destination's.
-const EXTRA_ACCOUNTS: usize = 3;
-
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    let ctx = execute_prelude(program_id, accounts, data, EXTRA_ACCOUNTS)?;
+    let ctx = execute_prelude(program_id, accounts, data, &VALIDATION_LIST)?;
     let [global_account, source_record, destination_record] = ctx.extras else {
-        return Err(HolderRewardsError::InvalidGlobal.into());
+        return Err(KitError::WrongAccountCount.into());
     };
+    // The optional records may still be system-owned. Their contents cannot identify them, so
+    // verify the addresses before treating an empty account as an unregistered holder.
+    if global_account.key != &global_address(ctx.mint.key, program_id).0 {
+        return Err(HolderRewardsError::InvalidGlobal.into());
+    }
+    if source_record.key != &record_address(ctx.source.key, program_id).0
+        || destination_record.key != &record_address(ctx.destination.key, program_id).0
+    {
+        return Err(HolderRewardsError::InvalidRecord.into());
+    }
     // Moving tokens within one account changes nothing.
     if ctx.source.key == ctx.destination.key {
         return Ok(());
     }
 
     // A record exists once the account has registered; an unregistered account is not counted.
-    let registered = |account: &AccountInfo, token_account: &Pubkey| -> bool {
-        account.owner == program_id && account.key == &record_address(token_account, program_id).0
-    };
-    let source_registered = registered(source_record, ctx.source.key);
-    let destination_registered = registered(destination_record, ctx.destination.key);
-    if !source_registered && !destination_registered {
+    let source = load_optional_record(program_id, ctx.source.key, source_record)?;
+    let destination = load_optional_record(program_id, ctx.destination.key, destination_record)?;
+    if source.is_none() && destination.is_none() {
         return Ok(());
     }
 
@@ -37,8 +41,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
 
     // Token-2022 moves the tokens before the hook runs, so the balances read are the ones after.
     let amount = ctx.amount;
-    if source_registered {
-        let mut record = load_record(program_id, ctx.source.key, source_record)?;
+    if let Some(mut record) = source {
         let after = ctx.source_view.amount;
         let before = after
             .checked_add(amount)
@@ -48,8 +51,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
             .on_balance_change(&mut global.stream, before, after)?;
         write_record(&record, source_record)?;
     }
-    if destination_registered {
-        let mut record = load_record(program_id, ctx.destination.key, destination_record)?;
+    if let Some(mut record) = destination {
         let after = ctx.destination_view.amount;
         let before = after
             .checked_sub(amount)

@@ -13,3 +13,9 @@ resolver = "2"
 edition = "2021"
 license = "Apache-2.0"
 rust-version = "1.75"
+
+# Programs must not wrap silently: an overflow becomes a failed transaction, never a wrong value.
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1

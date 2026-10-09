@@ -20,6 +20,18 @@ use spl_token_2022::{
 
 use crate::error::HookError;
 
+/// Read `N` bytes of instruction data at `offset`, or fail with `InvalidInstructionData`.
+pub(crate) fn ix_array<const N: usize>(
+    data: &[u8],
+    offset: usize,
+) -> Result<[u8; N], ProgramError> {
+    offset
+        .checked_add(N)
+        .and_then(|end| data.get(offset..end))
+        .and_then(|slice| slice.try_into().ok())
+        .ok_or(ProgramError::InvalidInstructionData)
+}
+
 pub(crate) struct MintHookInfo {
     pub(crate) hook_program: Option<Pubkey>,
     pub(crate) extension_authority: Option<Pubkey>,
@@ -113,7 +125,8 @@ pub(crate) fn create_pda_account<'a>(
             &[signer_seeds],
         )
     } else {
-        if let Some(missing) = required.checked_sub(current).filter(|missing| *missing > 0) {
+        let missing = required.saturating_sub(current);
+        if missing > 0 {
             invoke(
                 &system_instruction::transfer(payer.key, account.key, missing),
                 &[payer.clone(), account.clone(), system_program.clone()],

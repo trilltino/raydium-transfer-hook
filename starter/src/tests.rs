@@ -4,7 +4,7 @@ use solana_program::{program_error::ProgramError, pubkey::Pubkey};
 use spl_tlv_account_resolution::state::ExtraAccountMetaList as List;
 use spl_transfer_hook_interface::instruction::{ExecuteInstruction, TransferHookInstruction};
 
-use crate::{processor::validate_list_layout, *};
+use crate::{pda::validate_list_layout, *};
 
 #[test]
 fn execute_instruction_data_matches_spl_interface() {
@@ -43,30 +43,49 @@ fn error_codes_are_contiguous_from_0x7001_and_round_trip() {
     }
     assert_eq!(HookError::TransferExceedsLimit.code(), 0x700b);
     assert_eq!(HookError::from_code(1), None);
+    // The code after the last variant is unassigned.
+    let next = 0x7001 + u32::try_from(HookError::ALL.len()).unwrap();
+    assert_eq!(HookError::from_code(next), None);
 }
 
 #[test]
-fn canonical_list_has_the_hand_validated_layout() {
+fn canonical_list_constant_matches_what_the_spl_crate_writes() {
     assert_eq!(List::size_of(1).unwrap(), VALIDATION_LIST_LEN);
     let mut data = vec![0u8; VALIDATION_LIST_LEN];
     List::init::<ExecuteInstruction>(&mut data, &[config_extra_account_meta().unwrap()]).unwrap();
+    assert_eq!(data, CANONICAL_VALIDATION_LIST);
     validate_list_layout(&data).unwrap();
-    // Corrupt variants are rejected without panicking.
+    // Corrupt variants (including a single flipped bit anywhere) are rejected without panicking.
     for mutate in [
         |d: &mut Vec<u8>| d.truncate(10),
+        |d: &mut Vec<u8>| d.clear(),
+        |d: &mut Vec<u8>| d.push(0),
         |d: &mut Vec<u8>| d[0] ^= 1,
         |d: &mut Vec<u8>| d[8] ^= 1,
         |d: &mut Vec<u8>| d[12] = 2,
-        |d: &mut Vec<u8>| d.push(0),
     ] {
         let mut corrupt = data.clone();
         mutate(&mut corrupt);
-        assert!(validate_list_layout(&corrupt).is_err());
+        assert_eq!(
+            validate_list_layout(&corrupt),
+            Err(HookError::InvalidValidationList)
+        );
+    }
+    for index in 0..data.len() {
+        let mut corrupt = data.clone();
+        corrupt[index] ^= 1;
+        assert_eq!(
+            validate_list_layout(&corrupt),
+            Err(HookError::InvalidValidationList),
+            "flipped byte {index}"
+        );
     }
 }
 
-fn sample_config() -> HookConfig {
-    HookConfig::new(254, 253, Pubkey::new_unique(), &max_transfer_params(1_000)).unwrap()
+const SAMPLE_PARAMS: [u8; 8] = 1_000u64.to_le_bytes();
+
+fn sample_config() -> HookConfig<'static> {
+    HookConfig::new(254, 253, Pubkey::new_unique(), &SAMPLE_PARAMS).unwrap()
 }
 
 #[test]
@@ -124,4 +143,36 @@ fn initialize_hook_args_round_trip() {
     let args = InitializeHookArgs::max_transfer(77);
     assert_eq!(InitializeHookArgs::unpack(&args.pack()).unwrap(), args);
     assert!(InitializeHookArgs::unpack(&args.pack()[..5]).is_err());
+}
+
+#[test]
+fn oversized_params_pack_to_a_length_the_program_rejects_instead_of_wrapping() {
+    // 65_536 bytes would wrap to a length of 0 with a plain `as u16` cast.
+    let args = InitializeHookArgs {
+        params: vec![0; usize::from(u16::MAX) + 1],
+    };
+    assert_eq!(
+        InitializeHookArgs::unpack(&args.pack()),
+        Err(ProgramError::Custom(HookError::ParamsTooLarge.code()))
+    );
+}
+
+#[test]
+fn config_params_are_bounded_and_decoded_without_copying() {
+    let mint = Pubkey::new_unique();
+    let max = [7u8; MAX_PARAMS_LEN];
+    let config = HookConfig::new(1, 2, mint, &max).unwrap();
+    let bytes = config.encode();
+    assert_eq!(bytes.len(), CONFIG_HEADER_LEN + MAX_PARAMS_LEN);
+    let decoded = HookConfig::decode(&bytes).unwrap();
+    assert_eq!(decoded, config);
+    // The decoded params are a view into the account data, not a copy.
+    assert_eq!(
+        decoded.params().as_ptr(),
+        bytes[CONFIG_HEADER_LEN..].as_ptr()
+    );
+    assert_eq!(
+        HookConfig::new(1, 2, mint, &[0u8; MAX_PARAMS_LEN + 1]),
+        Err(HookError::ParamsTooLarge)
+    );
 }

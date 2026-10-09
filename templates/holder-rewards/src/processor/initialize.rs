@@ -13,14 +13,20 @@ use solana_program::{
     program_pack::Pack,
     pubkey::Pubkey,
 };
-use spl_tlv_account_resolution::{account::ExtraAccountMeta, seeds::Seed};
-use spl_token_2022::{instruction::initialize_account3, state::Account as TokenAccount};
+use spl_token_2022::{
+    extension::ExtensionType, instruction::initialize_account3, state::Account as TokenAccount,
+};
 
-use super::common::require_token_program;
+use super::common::{
+    is_allowed_on_reward_mint, is_forbidden_on_hooked_mint, mint_extensions, require_token_program,
+};
 use crate::{
     error::HolderRewardsError,
     rule::Stream,
-    state::{global_address, reward_vault_address, Global, GLOBAL_LEN},
+    state::{
+        global_address, reward_vault_address, Global, GLOBAL_LEN, REWARDS_SEED, REWARD_VAULT_SEED,
+        VALIDATION_LIST,
+    },
 };
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], one_time: bool) -> ProgramResult {
@@ -48,15 +54,30 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], one_time: bool) ->
     require_extension_authority(&hook_mint, authority)?;
     // Minting is not a transfer, so the hook would never see it: the rule needs a fixed supply.
     require_mint_authority_revoked(&hook_mint)?;
+    // A transfer fee credits the destination less than `amount`, and confidential balances move
+    // unseen: the accounting would drift or fail, so such a mint is refused up front.
+    if mint_extensions(mint)?
+        .into_iter()
+        .any(is_forbidden_on_hooked_mint)
+    {
+        return Err(HolderRewardsError::UnsupportedMintExtension.into());
+    }
 
     if read_token_account(pool_vault)?.mint != *mint.key {
         return Err(HolderRewardsError::PoolVaultMismatch.into());
     }
 
     require_token_program(token_program, reward_mint)?;
-    // A reward mint with a hook of its own would need extra accounts on every claim and fund.
-    if reward_mint.owner == &spl_token_2022::id() && read_hook_mint(reward_mint).is_ok() {
-        return Err(HolderRewardsError::RewardMintHasHook.into());
+    // The vault must always be able to pay out exactly what it was funded with. A reward mint with
+    // a hook of its own would need extra accounts on every claim and fund; one with a transfer fee,
+    // a permanent delegate, a pause or similar can deliver less than was credited or be drained.
+    for extension in mint_extensions(reward_mint)? {
+        if extension == ExtensionType::TransferHook {
+            return Err(HolderRewardsError::RewardMintHasHook.into());
+        }
+        if !is_allowed_on_reward_mint(extension) {
+            return Err(HolderRewardsError::UnsupportedMintExtension.into());
+        }
     }
 
     let (expected_global, global_bump) = global_address(mint.key, program_id);
@@ -70,7 +91,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], one_time: bool) ->
         system_program,
         program_id,
         GLOBAL_LEN,
-        &[b"rewards", mint.key.as_ref(), &[global_bump]],
+        &[REWARDS_SEED, mint.key.as_ref(), &[global_bump]],
     )?;
     Global {
         bump: global_bump,
@@ -91,7 +112,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], one_time: bool) ->
         system_program,
         token_program.key,
         TokenAccount::LEN,
-        &[b"reward-vault", mint.key.as_ref(), &[vault_bump]],
+        &[REWARD_VAULT_SEED, mint.key.as_ref(), &[vault_bump]],
     )?;
     invoke(
         &initialize_account3(
@@ -105,25 +126,12 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], one_time: bool) ->
 
     // The extra accounts every transfer carries (account 0 is the source, 1 the mint, 2 the
     // destination): the global, the source's record, the destination's record. All writable.
-    let seeds_of = |literal: &[u8], index: u8| {
-        [
-            Seed::Literal {
-                bytes: literal.to_vec(),
-            },
-            Seed::AccountKey { index },
-        ]
-    };
-    let metas = [
-        ExtraAccountMeta::new_with_seeds(&seeds_of(b"rewards", 1), false, true)?,
-        ExtraAccountMeta::new_with_seeds(&seeds_of(b"holder", 0), false, true)?,
-        ExtraAccountMeta::new_with_seeds(&seeds_of(b"holder", 2), false, true)?,
-    ];
     create_validation_list(
         payer,
         validation_list,
         system_program,
         mint.key,
         program_id,
-        &metas,
+        &VALIDATION_LIST,
     )
 }

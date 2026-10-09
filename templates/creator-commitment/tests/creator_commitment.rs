@@ -400,3 +400,27 @@ async fn burning_locked_tokens_is_not_stopped_and_strands_the_creator_until_the_
         .await
         .expect("fully unlocked");
 }
+
+#[tokio::test]
+async fn a_schedule_spanning_the_whole_i64_range_still_enforces_the_floor() {
+    // `now - start` and `end - start` overflow an i64 here. The program is built with overflow
+    // checks, so evaluating this with plain subtraction would abort every transfer; instead the
+    // floor is exact: at the unix time the test bank starts at, just under half is unlocked.
+    let mut world = committed(Schedule {
+        locked_total: 600,
+        start: i64::MIN,
+        cliff: i64::MIN,
+        end: i64::MAX,
+    })
+    .await;
+    world.set_unix_time(0).await;
+    // 1000 held, 300 locked (half of 600 at the midpoint): 700 may leave, not 701.
+    world
+        .transfer(CREATOR, HOLDER, 700, &[])
+        .await
+        .expect("down to the floor");
+    assert_custom_error(
+        world.transfer(CREATOR, HOLDER, 1, &[]).await,
+        CommitmentError::VestingFloorBreached.code(),
+    );
+}

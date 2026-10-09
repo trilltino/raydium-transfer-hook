@@ -933,7 +933,6 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
- "spl-tlv-account-resolution 0.10.0",
  "spl-token-2022",
  "spl-transfer-hook-interface 0.10.0",
  "tokio",
@@ -1421,8 +1420,6 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
- "spl-tlv-account-resolution 0.10.0",
- "spl-token-2022",
  "spl-transfer-hook-interface 0.10.0",
  "tokio",
 ]
@@ -1853,7 +1850,7 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
- "spl-tlv-account-resolution 0.10.0",
+ "spl-pod",
  "spl-token",
  "spl-token-2022",
  "spl-transfer-hook-interface 0.10.0",
@@ -1867,11 +1864,10 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
+ "spl-pod",
  "spl-tlv-account-resolution 0.10.0",
- "spl-token",
  "spl-token-2022",
  "spl-transfer-hook-interface 0.10.0",
- "tokio",
 ]
 
 [[package]]

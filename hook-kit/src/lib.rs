@@ -6,7 +6,7 @@
 //! | [`execute`] | [`execute_prelude`]: every check a hook must make before its own rule |
 //! | [`mint`] | reading the hooked mint, authorising setup |
 //! | [`token`] | reading a token account (post-transfer balance, owner, the `transferring` flag) |
-//! | [`accounts`] | creating PDAs (surviving a pre-funded address) and the canonical validation list |
+//! | [`accounts`] | creating PDAs (surviving a pre-funded address); building and writing the canonical validation list |
 //! | [`error`] | [`KitError`], codes from `0x8001` |
 //!
 //! Two facts a rule depends on, both verified against the Token-2022 source:
@@ -16,7 +16,7 @@
 //! * `Execute` is built with every account read-only and the owner slot non-signer, so a hook
 //!   cannot spend the transfer authority. It can sign for its own PDAs.
 //!
-//! With the `test-support` feature, [`testing`] builds a hooked Token-2022 mint and funded
+//! With the `test-support` feature, `testing` builds a hooked Token-2022 mint and funded
 //! accounts in-process and sends transfers that resolve the hook's accounts the way a wallet does.
 
 /// How many PDA-derived extra accounts a hook can practically declare today. Measured by
@@ -33,12 +33,20 @@ pub mod execute;
 pub mod mint;
 pub mod token;
 
+#[cfg(test)]
+mod test_util;
+
 #[cfg(feature = "test-support")]
 pub mod testing;
 
-pub use accounts::{create_pda, create_validation_list, validation_list_address};
+pub use accounts::{
+    canonical_list, create_pda, create_validation_list, list_len, pubkey_meta, seeded_meta,
+    validation_list_address, LIST_HEADER_LEN, META_LEN,
+};
 pub use error::KitError;
-pub use execute::{execute_prelude, parse_execute_amount, ExecuteCtx, EXECUTE_DISCRIMINATOR};
+pub use execute::{
+    execute_prelude, parse_execute_amount, ExecuteCtx, EXECUTE_DISCRIMINATOR, FIXED_ACCOUNTS,
+};
 pub use mint::{
     read_hook_mint, require_extension_authority, require_hook_program,
     require_mint_authority_revoked, HookMint,

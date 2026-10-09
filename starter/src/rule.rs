@@ -34,7 +34,10 @@
 //! the validation list. Do not move tokens from inside the hook: Token-2022 does not give a
 //! hook authority over the transferred tokens.
 
-use crate::{HookConfig, HookError, TransferContext, MAX_TRANSFER_PARAMS_LEN};
+use crate::{
+    config::HookConfig, constants::MAX_TRANSFER_PARAMS_LEN, context::TransferContext,
+    error::HookError,
+};
 
 /// Validate the rule-specific `params` bytes (called once, at init).
 pub fn validate_params(params: &[u8]) -> Result<(), HookError> {
@@ -58,13 +61,15 @@ pub fn check_transfer(config: &HookConfig, context: &TransferContext) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::max_transfer_params;
+    use crate::config::max_transfer_params;
     use solana_program::pubkey::Pubkey;
 
     const LIMIT: u64 = 500;
 
-    fn config(limit: u64) -> HookConfig {
-        HookConfig::new(255, 255, Pubkey::new_unique(), &max_transfer_params(limit)).unwrap()
+    fn check(limit: u64, amount: u64) -> Result<(), HookError> {
+        let params = max_transfer_params(limit);
+        let config = HookConfig::new(255, 255, Pubkey::new_unique(), &params).unwrap();
+        check_transfer(&config, &transfer(amount))
     }
 
     fn transfer(amount: u64) -> TransferContext {
@@ -79,18 +84,18 @@ mod tests {
 
     #[test]
     fn a_transfer_below_the_limit_is_allowed() {
-        assert_eq!(check_transfer(&config(LIMIT), &transfer(LIMIT - 1)), Ok(()));
+        assert_eq!(check(LIMIT, LIMIT - 1), Ok(()));
     }
 
     #[test]
     fn a_transfer_exactly_at_the_limit_is_allowed() {
-        assert_eq!(check_transfer(&config(LIMIT), &transfer(LIMIT)), Ok(()));
+        assert_eq!(check(LIMIT, LIMIT), Ok(()));
     }
 
     #[test]
     fn a_transfer_one_over_the_limit_is_rejected() {
         assert_eq!(
-            check_transfer(&config(LIMIT), &transfer(LIMIT + 1)),
+            check(LIMIT, LIMIT + 1),
             Err(HookError::TransferExceedsLimit)
         );
     }

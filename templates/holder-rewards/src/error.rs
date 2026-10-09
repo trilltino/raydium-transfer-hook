@@ -33,9 +33,14 @@ pub enum HolderRewardsError {
     PoolVaultMismatch = 0xC00D,
     /// A one-time allocation was already funded: it is funded once.
     AlreadyFunded = 0xC00E,
+    /// A top-up would lower the rate of a stream that is still paying out.
+    FundingLowersRate = 0xC00F,
+    /// A mint carries a Token-2022 extension this rule cannot account for safely.
+    UnsupportedMintExtension = 0xC010,
 }
 
 impl HolderRewardsError {
+    #[must_use]
     pub const fn code(self) -> u32 {
         self as u32
     }
@@ -46,3 +51,11 @@ impl From<HolderRewardsError> for ProgramError {
         ProgramError::Custom(error.code())
     }
 }
+
+impl core::fmt::Display for HolderRewardsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{self:?} (0x{:x})", self.code())
+    }
+}
+
+impl std::error::Error for HolderRewardsError {}

@@ -33,6 +33,8 @@ pub enum HolderRewardsInstruction {
     Claim,
 }
 
+const INVALID: HolderRewardsError = HolderRewardsError::InvalidInstruction;
+
 impl HolderRewardsInstruction {
     pub fn unpack(data: &[u8]) -> Result<Self, HolderRewardsError> {
         match data.split_first() {
@@ -41,10 +43,13 @@ impl HolderRewardsInstruction {
                 one_time: *mode == 1,
             }),
             Some((1, [])) => Ok(Self::Register),
-            Some((2, rest)) if rest.len() == 12 => Ok(Self::Fund {
-                amount: u64::from_le_bytes(rest[..8].try_into().unwrap()),
-                duration: u32::from_le_bytes(rest[8..].try_into().unwrap()),
-            }),
+            Some((2, rest)) if rest.len() == 12 => {
+                let (amount, duration) = rest.split_at(8);
+                Ok(Self::Fund {
+                    amount: u64::from_le_bytes(amount.try_into().map_err(|_| INVALID)?),
+                    duration: u32::from_le_bytes(duration.try_into().map_err(|_| INVALID)?),
+                })
+            }
             Some((3, [])) => Ok(Self::Claim),
             _ => Err(HolderRewardsError::InvalidInstruction),
         }

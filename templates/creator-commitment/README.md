@@ -130,7 +130,7 @@ in `tests/creator_commitment.rs` run inside real Token-2022 transfers.
 | valid transfers | `before_the_cliff_the_creator_can_only_move_what_is_above_the_floor`, `tokens_unlock_linearly_after_the_cliff`, `after_the_end_everything_can_leave` |
 | exact boundary | `selling_down_to_exactly_the_floor_is_allowed_and_one_below_is_not` |
 | rejection with exact code | the same runtime tests (`0xA005`, balances unchanged) |
-| schedule maths | `everything_is_locked_before_the_cliff`, `unlocking_is_linear_from_the_start_once_the_cliff_passes`, `locked_amount_rounds_up_so_no_token_unlocks_early`, `the_locked_amount_never_increases_and_never_exceeds_the_total`, `the_arithmetic_cannot_overflow_at_the_extremes` |
+| schedule maths | `everything_is_locked_before_the_cliff`, `unlocking_is_linear_from_the_start_once_the_cliff_passes`, `locked_amount_rounds_up_so_no_token_unlocks_early`, `the_locked_amount_never_increases_and_never_exceeds_the_total`, `the_arithmetic_cannot_overflow_at_the_extremes`, `a_schedule_spanning_the_whole_i64_range_is_evaluated_exactly` (rule), `a_schedule_spanning_the_whole_i64_range_still_enforces_the_floor` (runtime) |
 | malformed config / schedule | `config_round_trips_and_rejects_bad_shapes`, `validation_rejects_empty_backwards_and_misplaced_cliff_schedules`, `initialize_rejects_bad_schedules_and_balances_with_exact_codes` |
 | unauthorized setup, re-init | `initialize_rejects_bad_schedules_and_balances_with_exact_codes` (`0x8004`, `0x8006`) |
 | irrelevant transfer path | `other_holders_are_unaffected_and_the_creator_can_receive` |

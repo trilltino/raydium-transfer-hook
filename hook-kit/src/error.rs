@@ -31,6 +31,7 @@ pub enum KitError {
 }
 
 impl KitError {
+    #[must_use]
     pub const fn code(self) -> u32 {
         self as u32
     }
@@ -41,3 +42,11 @@ impl From<KitError> for ProgramError {
         ProgramError::Custom(error.code())
     }
 }
+
+impl core::fmt::Display for KitError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{self:?} (0x{:x})", self.code())
+    }
+}
+
+impl std::error::Error for KitError {}

@@ -12,7 +12,7 @@ use super::common::{load_global, now};
 use crate::{
     error::HolderRewardsError,
     rule::Holder,
-    state::{record_address, Record, RECORD_LEN},
+    state::{record_address, Record, HOLDER_SEED, RECORD_LEN},
 };
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
@@ -52,7 +52,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
         system_program,
         program_id,
         RECORD_LEN,
-        &[b"holder", token_account.key.as_ref(), &[bump]],
+        &[HOLDER_SEED, token_account.key.as_ref(), &[bump]],
     )?;
 
     global.stream.advance(now()?)?;

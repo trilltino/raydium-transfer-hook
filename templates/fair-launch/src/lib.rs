@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! # Fair launch
 //!
 //! A Token-2022 Transfer Hook that limits **buys** during a launch window: a per-buy cap, a

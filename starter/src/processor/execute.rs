@@ -4,17 +4,19 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
     pubkey::Pubkey,
 };
-use spl_tlv_account_resolution::state::ExtraAccountMetaList;
 use spl_token_2022::{
     extension::{transfer_hook::TransferHookAccount, BaseStateWithExtensions, StateWithExtensions},
     state::Account as TokenAccount,
 };
-use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 
-use super::common::*;
+use super::common::{ix_array, read_mint, require_hook_program};
 use crate::{
-    config::HookConfig, constants::*, error::HookError, instruction::ix_array, rule,
-    TransferContext,
+    config::HookConfig,
+    constants::{EXECUTE_DATA_LEN, EXECUTE_DISCRIMINATOR, VALIDATION_LIST_SEED},
+    context::TransferContext,
+    error::HookError,
+    pda::validate_list_layout,
+    rule,
 };
 
 /// The token account must belong to `mint` and be mid-transfer (flag set by Token-2022 only).
@@ -37,31 +39,15 @@ fn require_transferring(account: &AccountInfo, mint: &Pubkey) -> ProgramResult {
     Ok(())
 }
 
-/// Validate the list by hand so a corrupt list returns an error instead of panicking inside
-/// `ExtraAccountMetaList::check_account_infos` (which unwraps and subtracts unchecked).
-pub(crate) fn validate_list_layout(data: &[u8]) -> ProgramResult {
-    if data.len() != VALIDATION_LIST_LEN
-        || data[..8] != EXECUTE_DISCRIMINATOR
-        || data[8..12] != ((4 + 35) as u32).to_le_bytes()
-        || data[12..16] != 1u32.to_le_bytes()
-    {
-        return Err(HookError::InvalidValidationList.into());
-    }
-    Ok(())
-}
-
 pub(super) fn process_execute(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    if instruction_data.len() != 16 {
+    if instruction_data.len() != EXECUTE_DATA_LEN {
         return Err(ProgramError::InvalidInstructionData);
     }
-    let amount = u64::from_le_bytes(ix_array(instruction_data, 8)?);
-    if accounts.len() != EXECUTE_ACCOUNT_COUNT {
-        return Err(HookError::WrongAccountCount.into());
-    }
+    let amount = u64::from_le_bytes(ix_array(instruction_data, EXECUTE_DISCRIMINATOR.len())?);
     let [source, mint, destination, owner, validation_list, config] = accounts else {
         return Err(HookError::WrongAccountCount.into());
     };
@@ -85,7 +71,8 @@ pub(super) fn process_execute(
     if config.owner != program_id {
         return Err(HookError::InvalidConfigOwner.into());
     }
-    let state = HookConfig::decode(&config.try_borrow_data()?)?;
+    let config_data = config.try_borrow_data()?;
+    let state = HookConfig::decode(&config_data)?;
     state.verify_address(program_id, mint.key, config.key)?;
 
     let expected_list = Pubkey::create_program_address(
@@ -96,17 +83,7 @@ pub(super) fn process_execute(
     if validation_list.key != &expected_list || validation_list.owner != program_id {
         return Err(HookError::InvalidValidationList.into());
     }
-    {
-        let list_data = validation_list.try_borrow_data()?;
-        validate_list_layout(&list_data)?;
-        ExtraAccountMetaList::check_account_infos::<ExecuteInstruction>(
-            accounts,
-            instruction_data,
-            program_id,
-            &list_data,
-        )
-        .map_err(|_| HookError::AccountOrderMismatch)?;
-    }
+    validate_list_layout(&validation_list.try_borrow_data()?)?;
 
     let context = TransferContext {
         amount,

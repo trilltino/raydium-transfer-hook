@@ -8,7 +8,8 @@
 //!
 //! Counter layout (21 bytes): `b"FLCOUNTR"`, `bump u8`, `slot u64`, `buys u32`.
 
-use solana_program::pubkey::Pubkey;
+use hook_kit::{canonical_list, list_len, pubkey_meta, seeded_meta};
+use solana_program::{pubkey::Pubkey, sysvar};
 
 use crate::{error::FairLaunchError, rule::Params};
 
@@ -18,15 +19,52 @@ pub const MAX_VENUES: usize = 4;
 pub const CONFIG_LEN: usize = 8 + 1 + 32 + 1 + 32 * MAX_VENUES + 8 + 8 + 8 + 8 + 4 + 8;
 pub const COUNTER_DISCRIMINATOR: [u8; 8] = *b"FLCOUNTR";
 pub const COUNTER_LEN: usize = 8 + 1 + 8 + 4;
+/// Seed of the config PDA: `["config", mint]`.
+pub const CONFIG_SEED: &[u8] = b"config";
+/// Seed of the slot-counter PDA: `["counter", mint]`.
+pub const COUNTER_SEED: &[u8] = b"counter";
 
-/// The config PDA of `mint`: seeds `["config", mint]`.
+/// The validation list of a launch without the priority-fee check: the config (read-only) and the
+/// slot counter (writable), both found from the mint (instruction account 1).
+pub const VALIDATION_LIST: [u8; list_len(2)] = canonical_list([
+    seeded_meta(CONFIG_SEED, 1, false),
+    seeded_meta(COUNTER_SEED, 1, true),
+]);
+/// The validation list of a launch with the priority-fee check: the same two accounts, then the
+/// instructions sysvar (to read the declared fee).
+pub const VALIDATION_LIST_WITH_FEE_CHECK: [u8; list_len(3)] = canonical_list([
+    seeded_meta(CONFIG_SEED, 1, false),
+    seeded_meta(COUNTER_SEED, 1, true),
+    pubkey_meta(&sysvar::instructions::ID.to_bytes(), false),
+]);
+
+// Byte offsets of the packed config fields.
+const BUMP: usize = 8;
+const MINT: usize = 9;
+const VENUE_COUNT: usize = 41;
+const VENUES: usize = 42;
+const PARAMS: usize = VENUES + 32 * MAX_VENUES;
+const WINDOW_START: usize = PARAMS;
+const WINDOW_END: usize = PARAMS + 8;
+const MAX_BUY: usize = PARAMS + 16;
+const MAX_WALLET: usize = PARAMS + 24;
+const MAX_BUYS_PER_SLOT: usize = PARAMS + 32;
+const MAX_PRIORITY: usize = PARAMS + 36;
+// Byte offsets of the packed counter fields.
+const COUNTER_BUMP: usize = 8;
+const COUNTER_SLOT: usize = 9;
+const COUNTER_BUYS: usize = 17;
+
+/// The config PDA of `mint`.
+#[must_use]
 pub fn config_address(mint: &Pubkey, program_id: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"config", mint.as_ref()], program_id)
+    Pubkey::find_program_address(&[CONFIG_SEED, mint.as_ref()], program_id)
 }
 
-/// The slot-counter PDA of `mint`: seeds `["counter", mint]`.
+/// The slot-counter PDA of `mint`.
+#[must_use]
 pub fn counter_address(mint: &Pubkey, program_id: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"counter", mint.as_ref()], program_id)
+    Pubkey::find_program_address(&[COUNTER_SEED, mint.as_ref()], program_id)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,13 +77,18 @@ pub struct Config {
 }
 
 fn read<const N: usize>(data: &[u8], offset: usize) -> Result<[u8; N], FairLaunchError> {
-    data.get(offset..offset + N)
+    offset
+        .checked_add(N)
+        .and_then(|end| data.get(offset..end))
         .and_then(|slice| slice.try_into().ok())
         .ok_or(FairLaunchError::InvalidConfig)
 }
 
 impl Config {
     /// A config for `venues`: between one and [`MAX_VENUES`] distinct pool vaults of the hooked token.
+    ///
+    /// # Errors
+    /// `InvalidVenues` unless there are one to [`MAX_VENUES`] distinct venues.
     pub fn new(
         bump: u8,
         mint: Pubkey,
@@ -59,70 +102,80 @@ impl Config {
         if venues.is_empty() || venues.len() > MAX_VENUES || !distinct {
             return Err(FairLaunchError::InvalidVenues);
         }
+        let venue_count = u8::try_from(venues.len()).map_err(|_| FairLaunchError::InvalidVenues)?;
         let mut stored = [Pubkey::default(); MAX_VENUES];
         stored[..venues.len()].copy_from_slice(venues);
         Ok(Self {
             bump,
             mint,
-            venue_count: venues.len() as u8,
+            venue_count,
             venues: stored,
             params,
         })
     }
 
     /// The pool vaults whose outgoing transfers are buys.
+    #[must_use]
     pub fn venues(&self) -> &[Pubkey] {
         &self.venues[..usize::from(self.venue_count)]
     }
 
+    /// Strict parse of a config account's data.
+    ///
+    /// # Errors
+    /// `InvalidConfig` unless the data is exactly a config with one to [`MAX_VENUES`] venues.
     pub fn decode(data: &[u8]) -> Result<Self, FairLaunchError> {
         if data.len() != CONFIG_LEN || data[..8] != CONFIG_DISCRIMINATOR {
             return Err(FairLaunchError::InvalidConfig);
         }
-        let venue_count = data[41];
+        let venue_count = data[VENUE_COUNT];
         if venue_count == 0 || usize::from(venue_count) > MAX_VENUES {
             return Err(FairLaunchError::InvalidConfig);
         }
         let mut venues = [Pubkey::default(); MAX_VENUES];
         for (i, venue) in venues.iter_mut().enumerate() {
-            *venue = Pubkey::new_from_array(read(data, 42 + 32 * i)?);
+            *venue = Pubkey::new_from_array(read(data, VENUES + 32 * i)?);
         }
-        let at = 42 + 32 * MAX_VENUES;
         Ok(Self {
-            bump: data[8],
-            mint: Pubkey::new_from_array(read(data, 9)?),
+            bump: data[BUMP],
+            mint: Pubkey::new_from_array(read(data, MINT)?),
             venue_count,
             venues,
             params: Params {
-                window_start: i64::from_le_bytes(read(data, at)?),
-                window_end: i64::from_le_bytes(read(data, at + 8)?),
-                max_buy: u64::from_le_bytes(read(data, at + 16)?),
-                max_wallet: u64::from_le_bytes(read(data, at + 24)?),
-                max_buys_per_slot: u32::from_le_bytes(read(data, at + 32)?),
-                max_priority_micro_lamports: u64::from_le_bytes(read(data, at + 36)?),
+                window_start: i64::from_le_bytes(read(data, WINDOW_START)?),
+                window_end: i64::from_le_bytes(read(data, WINDOW_END)?),
+                max_buy: u64::from_le_bytes(read(data, MAX_BUY)?),
+                max_wallet: u64::from_le_bytes(read(data, MAX_WALLET)?),
+                max_buys_per_slot: u32::from_le_bytes(read(data, MAX_BUYS_PER_SLOT)?),
+                max_priority_micro_lamports: u64::from_le_bytes(read(data, MAX_PRIORITY)?),
             },
         })
     }
 
+    /// Serialize into `out`, which must be exactly [`CONFIG_LEN`] bytes.
+    ///
+    /// # Errors
+    /// `InvalidConfig` if `out` has the wrong length.
     pub fn encode_into(&self, out: &mut [u8]) -> Result<(), FairLaunchError> {
         if out.len() != CONFIG_LEN {
             return Err(FairLaunchError::InvalidConfig);
         }
         out.fill(0);
         out[..8].copy_from_slice(&CONFIG_DISCRIMINATOR);
-        out[8] = self.bump;
-        out[9..41].copy_from_slice(self.mint.as_ref());
-        out[41] = self.venue_count;
+        out[BUMP] = self.bump;
+        out[MINT..VENUE_COUNT].copy_from_slice(self.mint.as_ref());
+        out[VENUE_COUNT] = self.venue_count;
         for (i, venue) in self.venues.iter().enumerate() {
-            out[42 + 32 * i..74 + 32 * i].copy_from_slice(venue.as_ref());
+            let at = VENUES + 32 * i;
+            out[at..at + 32].copy_from_slice(venue.as_ref());
         }
-        let at = 42 + 32 * MAX_VENUES;
-        out[at..at + 8].copy_from_slice(&self.params.window_start.to_le_bytes());
-        out[at + 8..at + 16].copy_from_slice(&self.params.window_end.to_le_bytes());
-        out[at + 16..at + 24].copy_from_slice(&self.params.max_buy.to_le_bytes());
-        out[at + 24..at + 32].copy_from_slice(&self.params.max_wallet.to_le_bytes());
-        out[at + 32..at + 36].copy_from_slice(&self.params.max_buys_per_slot.to_le_bytes());
-        out[at + 36..at + 44]
+        out[WINDOW_START..WINDOW_END].copy_from_slice(&self.params.window_start.to_le_bytes());
+        out[WINDOW_END..MAX_BUY].copy_from_slice(&self.params.window_end.to_le_bytes());
+        out[MAX_BUY..MAX_WALLET].copy_from_slice(&self.params.max_buy.to_le_bytes());
+        out[MAX_WALLET..MAX_BUYS_PER_SLOT].copy_from_slice(&self.params.max_wallet.to_le_bytes());
+        out[MAX_BUYS_PER_SLOT..MAX_PRIORITY]
+            .copy_from_slice(&self.params.max_buys_per_slot.to_le_bytes());
+        out[MAX_PRIORITY..CONFIG_LEN]
             .copy_from_slice(&self.params.max_priority_micro_lamports.to_le_bytes());
         Ok(())
     }
@@ -138,25 +191,34 @@ pub struct Counter {
 }
 
 impl Counter {
+    /// Strict parse of a counter account's data.
+    ///
+    /// # Errors
+    /// `InvalidCounter` unless the data is exactly a counter.
     pub fn decode(data: &[u8]) -> Result<Self, FairLaunchError> {
+        let bad = |_| FairLaunchError::InvalidCounter;
         if data.len() != COUNTER_LEN || data[..8] != COUNTER_DISCRIMINATOR {
             return Err(FairLaunchError::InvalidCounter);
         }
         Ok(Self {
-            bump: data[8],
-            slot: u64::from_le_bytes(read(data, 9).map_err(|_| FairLaunchError::InvalidCounter)?),
-            buys: u32::from_le_bytes(read(data, 17).map_err(|_| FairLaunchError::InvalidCounter)?),
+            bump: data[COUNTER_BUMP],
+            slot: u64::from_le_bytes(read(data, COUNTER_SLOT).map_err(bad)?),
+            buys: u32::from_le_bytes(read(data, COUNTER_BUYS).map_err(bad)?),
         })
     }
 
+    /// Serialize into `out`, which must be exactly [`COUNTER_LEN`] bytes.
+    ///
+    /// # Errors
+    /// `InvalidCounter` if `out` has the wrong length.
     pub fn encode_into(&self, out: &mut [u8]) -> Result<(), FairLaunchError> {
         if out.len() != COUNTER_LEN {
             return Err(FairLaunchError::InvalidCounter);
         }
         out[..8].copy_from_slice(&COUNTER_DISCRIMINATOR);
-        out[8] = self.bump;
-        out[9..17].copy_from_slice(&self.slot.to_le_bytes());
-        out[17..21].copy_from_slice(&self.buys.to_le_bytes());
+        out[COUNTER_BUMP] = self.bump;
+        out[COUNTER_SLOT..COUNTER_BUYS].copy_from_slice(&self.slot.to_le_bytes());
+        out[COUNTER_BUYS..COUNTER_LEN].copy_from_slice(&self.buys.to_le_bytes());
         Ok(())
     }
 }
@@ -218,6 +280,7 @@ mod tests {
         counter.encode_into(&mut data).unwrap();
         assert_eq!(Counter::decode(&data), Ok(counter));
         assert!(Counter::decode(&data[..COUNTER_LEN - 1]).is_err());
+        assert!(counter.encode_into(&mut data[..COUNTER_LEN - 1]).is_err());
         data[0] ^= 1;
         assert!(Counter::decode(&data).is_err());
     }
@@ -228,14 +291,35 @@ mod tests {
         let mut bytes = vec![0; CONFIG_LEN];
         config.encode_into(&mut bytes).unwrap();
         assert!(Config::decode(&bytes[..CONFIG_LEN - 1]).is_err());
+        assert!(config.encode_into(&mut bytes[..CONFIG_LEN - 1]).is_err());
         let mut no_venues = bytes.clone();
         no_venues[41] = 0;
         assert!(Config::decode(&no_venues).is_err());
         let mut too_many = bytes.clone();
-        too_many[41] = (MAX_VENUES + 1) as u8;
+        too_many[41] = u8::try_from(MAX_VENUES + 1).unwrap();
         assert!(Config::decode(&too_many).is_err());
         let mut wrong_tag = bytes;
         wrong_tag[0] ^= 1;
         assert!(Config::decode(&wrong_tag).is_err());
+    }
+
+    #[test]
+    fn the_validation_lists_declare_the_config_the_counter_and_optionally_the_sysvar() {
+        assert_eq!(VALIDATION_LIST.len(), 86);
+        assert_eq!(VALIDATION_LIST_WITH_FEE_CHECK.len(), 121);
+        // The two lists share the TLV type and the first two entries.
+        assert_eq!(VALIDATION_LIST[..8], VALIDATION_LIST_WITH_FEE_CHECK[..8]);
+        assert_eq!(
+            VALIDATION_LIST[16..],
+            VALIDATION_LIST_WITH_FEE_CHECK[16..86]
+        );
+        // is_writable is the last byte of an entry: the config is read-only, the counter writable.
+        assert_eq!(VALIDATION_LIST[16 + 34], 0);
+        assert_eq!(VALIDATION_LIST[16 + 35 + 34], 1);
+        // The sysvar entry is a plain address and read-only.
+        let third = &VALIDATION_LIST_WITH_FEE_CHECK[86..];
+        assert_eq!(third[0], 0);
+        assert_eq!(third[1..33], sysvar::instructions::ID.to_bytes());
+        assert_eq!(third[33..], [0, 0]);
     }
 }

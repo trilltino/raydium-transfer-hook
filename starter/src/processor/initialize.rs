@@ -7,9 +7,16 @@ use solana_program::{
 use spl_tlv_account_resolution::state::ExtraAccountMetaList;
 use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 
-use super::common::*;
+use super::common::{
+    create_pda_account, read_mint, require_hook_program, require_signer, require_system_program,
+    require_uninitialized, require_writable,
+};
 use crate::{
-    config::HookConfig, constants::*, error::HookError, instruction::InitializeHookArgs, pda::*,
+    config::HookConfig,
+    constants::{CONFIG_SEED, VALIDATION_LIST_LEN, VALIDATION_LIST_SEED},
+    error::HookError,
+    instruction::InitializeHookArgs,
+    pda::{config_address, config_extra_account_meta, validation_list_address},
     rule,
 };
 
@@ -39,9 +46,7 @@ pub(super) fn process_initialize_hook(
     if required_authority != *authority.key {
         return Err(HookError::AuthorityMismatch.into());
     }
-    if args.params.len() > MAX_PARAMS_LEN {
-        return Err(HookError::ParamsTooLarge.into());
-    }
+    // `unpack` already bounded the params length.
     rule::validate_params(&args.params)?;
 
     let (expected_config, bump) = config_address(mint.key, program_id);
@@ -61,10 +66,6 @@ pub(super) fn process_initialize_hook(
 
     let state = HookConfig::new(bump, list_bump, *mint.key, &args.params)?;
     let list_meta = config_extra_account_meta()?;
-    let list_len = ExtraAccountMetaList::size_of(1)?;
-    if list_len != VALIDATION_LIST_LEN {
-        return Err(ProgramError::InvalidAccountData);
-    }
 
     let bump_seed = [bump];
     create_pda_account(
@@ -81,7 +82,7 @@ pub(super) fn process_initialize_hook(
         validation_list,
         system_program,
         program_id,
-        list_len,
+        VALIDATION_LIST_LEN,
         &[VALIDATION_LIST_SEED, mint.key.as_ref(), &list_bump_seed],
     )?;
 

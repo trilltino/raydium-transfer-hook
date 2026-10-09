@@ -11,9 +11,9 @@ use solana_program::{
 use spl_token_2022::instruction::transfer_checked;
 
 use super::common::{
-    load_global, load_record, mint_decimals, now, require_token_program, token_fields,
+    load_any_global, load_record, mint_decimals, now, require_token_program, token_fields,
 };
-use crate::{error::HolderRewardsError, state::Global};
+use crate::{error::HolderRewardsError, state::REWARDS_SEED};
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let accounts_iter = &mut accounts.iter();
@@ -29,8 +29,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     if !owner.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
     }
-    let mint_key = Global::decode(&global_account.try_borrow_data()?)?.mint;
-    let mut global = load_global(program_id, &mint_key, global_account)?;
+    let mut global = load_any_global(program_id, global_account)?;
     if reward_vault.key != &global.reward_vault || reward_mint.key != &global.reward_mint {
         return Err(HolderRewardsError::RewardAccountMismatch.into());
     }
@@ -81,7 +80,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
             owner_reward_account.clone(),
             global_account.clone(),
         ],
-        &[&[b"rewards", global.mint.as_ref(), &[global.bump]]],
+        &[&[REWARDS_SEED, global.mint.as_ref(), &[global.bump]]],
     )?;
 
     record.encode_into(&mut record_account.try_borrow_mut_data()?)?;

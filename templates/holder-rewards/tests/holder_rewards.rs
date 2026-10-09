@@ -22,7 +22,15 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
-use spl_token_2022::state::Account as TokenAccount;
+use spl_pod::optional_keys::OptionalNonZeroPubkey;
+use spl_token_2022::{
+    extension::{
+        permanent_delegate::PermanentDelegate, transfer_fee::TransferFeeConfig,
+        transfer_hook::TransferHook, BaseStateWithExtensionsMut, ExtensionType,
+        StateWithExtensionsMut,
+    },
+    state::{Account as TokenAccount, Mint},
+};
 
 const POOL: usize = 0;
 const A: usize = 1;
@@ -460,4 +468,117 @@ async fn only_the_mints_hook_authority_can_initialize() {
     );
     // Nothing was created: the real authority can still initialize.
     init(&mut world, &reward).await.expect("initialize");
+}
+
+/// Overwrite `key` with a Token-2022 mint carrying `extensions` (all zeroed, so a fee of zero and
+/// no delegate: the extension's presence alone is what the program must refuse).
+async fn set_mint_with_extensions(
+    world: &mut World,
+    key: Pubkey,
+    extensions: &[ExtensionType],
+    hook: Option<(Pubkey, Pubkey)>,
+) {
+    let len = ExtensionType::try_calculate_account_len::<Mint>(extensions).unwrap();
+    let mut data = vec![0u8; len];
+    let mut state = StateWithExtensionsMut::<Mint>::unpack_uninitialized(&mut data).unwrap();
+    for extension in extensions {
+        match extension {
+            ExtensionType::TransferFeeConfig => {
+                state.init_extension::<TransferFeeConfig>(true).unwrap();
+            }
+            ExtensionType::PermanentDelegate => {
+                state.init_extension::<PermanentDelegate>(true).unwrap();
+            }
+            ExtensionType::TransferHook => {
+                let (authority, program) = hook.expect("hook details");
+                let hook = state.init_extension::<TransferHook>(true).unwrap();
+                hook.authority = OptionalNonZeroPubkey::try_from(Some(authority)).unwrap();
+                hook.program_id = OptionalNonZeroPubkey::try_from(Some(program)).unwrap();
+            }
+            other => panic!("not needed by these tests: {other:?}"),
+        }
+    }
+    state.base = Mint {
+        is_initialized: true,
+        ..Mint::default()
+    };
+    state.pack_base();
+    state.init_account_type().unwrap();
+    let rent = world.context.banks_client.get_rent().await.unwrap();
+    let account = solana_sdk::account::Account {
+        lamports: rent.minimum_balance(len),
+        data,
+        owner: spl_token_2022::id(),
+        executable: false,
+        rent_epoch: 0,
+    };
+    world.context.set_account(&key, &account.into());
+}
+
+#[tokio::test]
+async fn a_reward_mint_that_can_pay_out_less_or_be_drained_is_refused() {
+    for extension in [
+        ExtensionType::TransferFeeConfig,
+        ExtensionType::PermanentDelegate,
+    ] {
+        let mut world = world_with_holders(true).await;
+        let reward = create_reward(&mut world, spl_token_2022::id()).await;
+        set_mint_with_extensions(&mut world, reward.mint.pubkey(), &[extension], None).await;
+        assert_custom_error(
+            init(&mut world, &reward).await,
+            HolderRewardsError::UnsupportedMintExtension as u32,
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_hooked_mint_with_a_transfer_fee_is_refused() {
+    let mut world = world_with_holders(true).await;
+    let reward = create_reward(&mut world, spl_token_2022::id()).await;
+    // The same hooked mint, now also carrying a transfer fee, still points at this program and
+    // still has the payer as its hook authority.
+    let (mint, authority) = (world.mint.pubkey(), world.payer());
+    set_mint_with_extensions(
+        &mut world,
+        mint,
+        &[
+            ExtensionType::TransferHook,
+            ExtensionType::TransferFeeConfig,
+        ],
+        Some((authority, program_id())),
+    )
+    .await;
+    assert_custom_error(
+        init(&mut world, &reward).await,
+        HolderRewardsError::UnsupportedMintExtension as u32,
+    );
+}
+
+#[tokio::test]
+async fn a_stranger_cannot_stretch_a_running_stream_with_a_token_top_up() {
+    let mut world = world_with_holders(true).await;
+    let reward = create_reward(&mut world, spl_token_2022::id()).await;
+    init(&mut world, &reward).await.expect("initialize");
+    register_holder(&mut world, A).await.expect("register");
+    fund_rewards(&mut world, &reward, 500_000, 100)
+        .await
+        .expect("fund");
+    let honest = global(&mut world).await.stream;
+    assert_eq!(honest.rate, 5_000);
+
+    // Ten seconds in, 450,000 is unpaid. A token top-up over twice the time would halve the rate.
+    world.set_unix_time(T0 + 10).await;
+    assert_custom_error(
+        fund_rewards(&mut world, &reward, 1_000, 200).await,
+        HolderRewardsError::FundingLowersRate as u32,
+    );
+    let after = global(&mut world).await.stream;
+    assert_eq!(after.rate, honest.rate);
+    assert_eq!(after.period_finish, honest.period_finish);
+
+    // A top-up that keeps the rate is accepted: 450,000 unpaid plus 50,000 over 100 s is 5,000/s.
+    fund_rewards(&mut world, &reward, 50_000, 100)
+        .await
+        .expect("a top-up that keeps the rate");
+    assert_eq!(global(&mut world).await.stream.rate, 5_000);
 }

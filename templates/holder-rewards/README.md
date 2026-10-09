@@ -26,7 +26,7 @@ Two modes, chosen at `Initialize`:
 
 | Mode | Funding | Use |
 |---|---|---|
-| **ongoing** (default) | can be topped up; the unpaid part rolls into the new period | a loyalty programme paid from fees or a treasury |
+| **ongoing** (default) | can be topped up if the new period does not lower the current rate; the unpaid part rolls into the new period | a loyalty programme paid from fees or a treasury |
 | **one-time** | funded **once**; a second funding is refused with `AlreadyFunded` (`0xC00E`) | a parent token spinning a child token off to its holders: "these tokens, over this window" cannot be extended or diluted |
 
 ## WHY
@@ -65,13 +65,16 @@ A claims 450 whenever they like, even though they sold half their balance at t =
 * `Initialize` (the mint's hook authority): picks the mode; creates the global, the **reward vault**
   (a token account at a program-derived address, owned by the global PDA so only this program can
   move rewards out) and the validation list. The hooked mint must have **no mint authority**, and the
-  reward mint must have no Transfer Hook of its own. The reward token can be any plain Token-2022 or
-  classic SPL Token mint.
+  reward mint must have no Transfer Hook of its own. The hooked mint must not carry a transfer fee or
+  confidential balance extension. The reward token can be a classic SPL Token mint or a Token-2022
+  mint with descriptive extensions only. Transfer fees, permanent delegates and other extensions
+  that affect vault safety or payout amounts are refused.
 * `Register` (anyone, who pays the record's rent): starts counting a token account. The pool vault is
   refused.
-* `Fund` (anyone): pays reward tokens into the vault and starts or extends the stream. Rejects a zero
-  amount, less than one unit per second, a zero duration, or one longer than `MAX_DURATION`
-  (315,360,000 s, about ten years).
+* `Fund` (anyone): pays reward tokens into the vault and starts or extends the stream. An ongoing
+  top-up during a running period must keep or raise the current reward rate. Rejects a zero amount,
+  less than one unit per second, a zero duration, or one longer than `MAX_DURATION` (315,360,000 s,
+  about ten years).
 * `Claim` (the token account's owner): pays what the account has earned to an account of the reward
   mint.
 * Rounding goes down: the vault never owes more than it was funded with.
@@ -92,6 +95,8 @@ A claims 450 whenever they like, even though they sold half their balance at t =
 | `0xC00C` | `NothingToClaim` | no earnings yet |
 | `0xC00D` | `PoolVaultMismatch` | the pool vault is for another mint |
 | `0xC00E` | `AlreadyFunded` | a one-time allocation was already funded |
+| `0xC00F` | `FundingLowersRate` | an ongoing top-up would slow a running stream |
+| `0xC010` | `UnsupportedMintExtension` | a mint extension breaks accounting or vault safety |
 | `0x8001..` | `hook_kit::KitError` | shared checks: wrong authority, mint authority not revoked, direct `Execute`, already initialised, ... |
 
 ## LIMITATIONS
@@ -113,12 +118,15 @@ A claims 450 whenever they like, even though they sold half their balance at t =
 * **A one-time child token must already exist and be a plain token** (a child with a Transfer Hook
   of its own is refused: its claims would need extra accounts this program does not forward). This
   program does not create it.
-* Rounding leaves a few units of dust in the vault.
+* The index uses a scale of 10^18. Each update rounds down by less than one index unit; at the
+  largest possible eligible supply this can leave up to 18 raw reward units per update in the
+  vault. Very small rates against an extreme supply can still round to zero on every update.
 
 ## TRUST
 
 * **Config authority:** `Initialize` is signed by the mint's live Transfer Hook authority, once.
-  There is no update instruction. Funding is open to anyone: in ongoing mode anyone can top up; in
+  There is no update instruction. Funding is open to anyone: in ongoing mode anyone can top up
+  without reducing the current rate; in
   one-time mode the *first* funder fixes the amount and the window.
 * **Program upgrade authority:** can replace this rule, including how the vault pays out, for every
   mint that uses the program. Disclose it or revoke it
@@ -148,8 +156,8 @@ payouts.
 | valid, exact payouts | `earnings_follow_balance_and_time_with_exact_payouts`, `rewards_split_in_proportion_to_balance`, `a_lone_holder_earns_the_whole_stream` |
 | loyal vs latecomer | `the_loyal_holder_earns_more_than_the_latecomer`, `buying_just_before_the_end_earns_almost_nothing` |
 | state update correctness | `a_transfer_settles_both_sides_and_moves_the_eligible_supply`, `history_stays_with_the_seller_and_the_future_follows_the_buyer` (rule and runtime) |
-| boundaries | `invalid_funding_is_rejected`, `funding_validates_amount_and_duration_and_rolls_over`, `the_arithmetic_cannot_overflow_at_the_extremes`, `payouts_never_exceed_the_funded_amount_even_with_awkward_numbers` |
-| rejections, exact codes | `claims_are_guarded`, `the_allocation_can_only_be_funded_once`, `a_child_token_with_a_hook_of_its_own_is_refused`, `initialize_creates_the_vault_and_validates_its_inputs` |
+| boundaries | `invalid_funding_is_rejected`, `funding_validates_amount_and_duration_and_rolls_over`, `frequent_updates_lose_nothing_against_a_large_supply`, `a_stranger_cannot_slow_a_running_stream_but_can_still_top_it_up`, `the_arithmetic_cannot_overflow_at_the_extremes`, `payouts_never_exceed_the_funded_amount_even_with_awkward_numbers` |
+| rejections, exact codes | `a_reward_mint_that_can_pay_out_less_or_be_drained_is_refused`, `a_hooked_mint_with_a_transfer_fee_is_refused`, `a_stranger_cannot_stretch_a_running_stream_with_a_token_top_up`, `claims_are_guarded`, `the_allocation_can_only_be_funded_once`, `a_child_token_with_a_hook_of_its_own_is_refused`, `initialize_creates_the_vault_and_validates_its_inputs` |
 | malformed state | `global_and_record_round_trip_and_reject_bad_shapes`, `instructions_round_trip` |
 | unauthorized | `only_the_mints_hook_authority_can_initialize`, `claims_are_guarded` (`WrongOwner`) |
 | irrelevant path | `an_unregistered_account_earns_nothing`, `nothing_is_paid_to_a_holder_who_never_registered_or_to_the_pool`, `registering_counts_a_balance_once_and_never_the_pool` |

@@ -1,6 +1,6 @@
 //! `Execute`: the shared checks, then the rule from [`crate::rule`].
 
-use hook_kit::execute_prelude;
+use hook_kit::{execute_prelude, KitError, FIXED_ACCOUNTS};
 use solana_program::{
     account_info::AccountInfo,
     clock::Clock,
@@ -12,34 +12,39 @@ use solana_program::{
 };
 
 use crate::{
-    config::{config_address, counter_address, Config, Counter},
+    config::{Config, Counter, COUNTER_SEED, VALIDATION_LIST, VALIDATION_LIST_WITH_FEE_CHECK},
     error::FairLaunchError,
     rule::{buys_in_slot_after, check_buy, is_buy, priority_price, Buy},
 };
-
-/// Accounts of `Execute` before the extras: source, mint, destination, owner, validation list.
-const FIXED_ACCOUNTS: usize = 5;
 
 const COMPUTE_BUDGET_PROGRAM: Pubkey = pubkey!("ComputeBudget111111111111111111111111111111");
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     // The hook declares two extra accounts, the config and the slot counter, and a third, the
-    // instructions sysvar, only when the priority-fee check is on (`Initialize` builds the list from
-    // the same parameters). A launch without the fee check does not pay for the account.
-    let extras = accounts.len().saturating_sub(FIXED_ACCOUNTS);
-    let ctx = execute_prelude(program_id, accounts, data, extras)?;
+    // instructions sysvar, only when the priority-fee check is on (`Initialize` writes the list
+    // for the same parameters). A launch without the fee check does not pay for the account. The
+    // prelude compares the list account with the one that matches the account count.
+    let list: &[u8] = match accounts.len().checked_sub(FIXED_ACCOUNTS) {
+        Some(2) => &VALIDATION_LIST,
+        Some(3) => &VALIDATION_LIST_WITH_FEE_CHECK,
+        _ => return Err(KitError::WrongAccountCount.into()),
+    };
+    let ctx = execute_prelude(program_id, accounts, data, list)?;
     let (config_account, counter_account, instructions_sysvar) = match ctx.extras {
         [config, counter] => (config, counter, None),
         [config, counter, sysvar] => (config, counter, Some(sysvar)),
-        _ => return Err(FairLaunchError::InvalidConfig.into()),
+        _ => return Err(KitError::WrongAccountCount.into()),
     };
 
-    if config_account.owner != program_id
-        || config_account.key != &config_address(ctx.mint.key, program_id).0
-    {
+    // `Initialize` creates exactly one program-owned config per mint, so ownership and the stored
+    // mint identify it; no address needs deriving here.
+    if config_account.owner != program_id {
         return Err(FairLaunchError::InvalidConfig.into());
     }
     let config = Config::decode(&config_account.try_borrow_data()?)?;
+    if config.mint != *ctx.mint.key {
+        return Err(FairLaunchError::InvalidConfig.into());
+    }
 
     let clock = Clock::get()?;
     // Outside the window, and for anything that is not a buy, there is nothing to check.
@@ -47,13 +52,20 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
         return Ok(());
     }
 
-    if counter_account.owner != program_id
-        || !counter_account.is_writable
-        || counter_account.key != &counter_address(ctx.mint.key, program_id).0
-    {
+    // The counter carries no mint, so its address is checked against its stored bump (one cheap
+    // derivation, only on buys).
+    if counter_account.owner != program_id || !counter_account.is_writable {
         return Err(FairLaunchError::InvalidCounter.into());
     }
     let counter = Counter::decode(&counter_account.try_borrow_data()?)?;
+    let expected_counter = Pubkey::create_program_address(
+        &[COUNTER_SEED, ctx.mint.key.as_ref(), &[counter.bump]],
+        program_id,
+    )
+    .map_err(|_| FairLaunchError::InvalidCounter)?;
+    if counter_account.key != &expected_counter {
+        return Err(FairLaunchError::InvalidCounter.into());
+    }
     let updated = Counter {
         slot: clock.slot,
         buys: buys_in_slot_after(counter.slot, counter.buys, clock.slot),
