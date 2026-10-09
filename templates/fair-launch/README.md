@@ -7,7 +7,9 @@ declare, all inside a launch window.
 **The rule is [`src/rule.rs`](src/rule.rs). It is pure: no accounts, no Solana types.** The rest of
 the folder is plumbing.
 
-**Status:** reference implementation, not audited. Read LIMITATIONS and TRUST before using it.
+**Status:** reference implementation, maturity **reference** (complete and tested; the venue ordering
+question under DEPLOY / INITIALIZE is open and there is no devnet evidence yet). Not audited. Read
+LIMITATIONS and TRUST before using it.
 
 ## WHAT
 

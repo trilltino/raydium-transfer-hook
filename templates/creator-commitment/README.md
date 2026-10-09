@@ -6,7 +6,8 @@ vesting floor.
 **The rule is [`src/rule.rs`](src/rule.rs). It is short and pure: no accounts, no Solana types.** The
 rest of the folder is plumbing.
 
-**Status:** reference implementation, not audited. Read LIMITATIONS and TRUST before using it.
+**Status:** reference implementation, maturity **stable** (small surface, exercised on devnet). Not
+audited. Read LIMITATIONS and TRUST before using it.
 
 ```text
 locked
@@ -151,16 +152,22 @@ cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy ca
 | `src/rule.rs` | **The rule**: `Schedule`, `locked_at`, `check_outgoing` |
 | `src/config.rs` | the per-mint config account (creator account + schedule) |
 | `src/instruction.rs`, `src/processor/` | the one setup instruction and `Execute`, on [`hook-kit`](../../hook-kit) |
+| `examples/devnet.rs` | creates a hooked mint, commits a creator account and proves the floor on a cluster (run by `scripts/deploy.sh`) |
 | `src/error.rs` | error codes from `0xA001` |
 
 ## DEPLOY / INITIALIZE
 
-**Evidence so far:** in-process and SBF in-process tests (CI runs both). This template ships no
-`examples/devnet.rs`, so this repository has not initialised or exercised it on devnet.
+**Evidence:** in-process and SBF in-process tests (CI runs both), and **devnet**: a run of
+`scripts/deploy.sh templates/creator-commitment` on 2026-10-09 deployed the program, created a
+hooked mint, committed a creator account (600 of 1,000 locked), allowed a transfer of 400 down to
+the floor and saw the hook refuse one more token with `0xa005`. The addresses of that run were
+throwaway (program `5p1SK56r4UXW1JhPdEW7Xa2M6pga3KLNzwvJyxz7p7CK`, mint
+`4KYf5anrfw8rYw4LAA8RDZ5P5RqSsH8DMvDGCRvJYsAo` on devnet); they are a record, not something to reuse.
 
-1. **Build and deploy.** `scripts/deploy.sh templates/creator-commitment` builds with
-   `cargo build-sbf` and deploys to devnet, then stops: it does not create a mint or initialise
-   anything.
+1. **Build, deploy and prove it.** `scripts/deploy.sh templates/creator-commitment` builds with
+   `cargo build-sbf`, deploys to devnet, then runs [`examples/devnet.rs`](examples/devnet.rs), which
+   does steps 2 to 5 below for a fresh mint (`-- --locked N` changes the locked amount). To set up
+   your own mint by hand, follow the steps.
 2. **Create the mint and the creator account.** A Token-2022 mint whose Transfer Hook extension
    points at the program id, and the creator's token account of that mint holding at least
    `locked_total`.

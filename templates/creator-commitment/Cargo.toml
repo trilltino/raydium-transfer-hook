@@ -22,6 +22,7 @@ spl-token-2022 = { version = "=7.0.0", features = ["no-entrypoint"] }
 [dev-dependencies]
 hook-kit = { path = "../../hook-kit", features = ["test-support"] }
 solana-program-test = "=2.2.7"
+solana-rpc-client = "=2.2.7"
 solana-sdk = "=2.2.2"
 spl-transfer-hook-interface = "=0.10.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

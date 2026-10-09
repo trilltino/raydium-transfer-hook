@@ -1,0 +1,39 @@
+name: Template idea
+description: Propose a new hook template (start here before opening a template pull request).
+labels: ["template idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Templates are curated. Answer what you can; CONTRIBUTING.md and AGENTS.md have the full bar.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who has this problem, and why is a Transfer Hook (rather than a program or an off-chain check) the right tool?
+    validations:
+      required: true
+  - type: textarea
+    id: rule
+    attributes:
+      label: The rule
+      description: Which transfers trigger it, which do not, and what it refuses.
+    validations:
+      required: true
+  - type: textarea
+    id: accounts
+    attributes:
+      label: State and accounts
+      description: Extra accounts, which are writable, and the contention they cause.
+  - type: textarea
+    id: bypass
+    attributes:
+      label: Bypasses and limitations
+      description: How can it be bypassed? What does it not solve?
+    validations:
+      required: true
+  - type: textarea
+    id: trust
+    attributes:
+      label: Trust
+      description: Who configures it, can the config change, who holds the program's upgrade authority and the mint's Transfer Hook authority?

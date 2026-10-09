@@ -9,11 +9,20 @@ write it in `rule.rs`, test it, deploy it, contribute it. [`starter/`](../starte
 version you copy. These folders are finished examples of the same shape, so you can see a real rule,
 its tests, and an honest README before writing your own. A good one of yours can be added here.
 
-| Template | Class of hook | What it enforces |
-|---|---|---|
-| [`fair-launch`](fair-launch) | allow / reject policy | launch participation controls: caps on buy size, balance and buys per slot, and a priority-fee limit, inside a launch window. Basic bundle and snipe resistance, **not** complete bundle detection |
-| [`creator-commitment`](creator-commitment) | time-dependent restriction | a creator account cannot fall below its current vesting floor |
-| [`holder-rewards`](holder-rewards) | stateful economic accounting | holders earn a reward token by balance x time, using a global reward index (no loop over holders) |
+| Template | Maturity | Class of hook | What it enforces |
+|---|---|---|---|
+| [`fair-launch`](fair-launch) | reference | allow / reject policy | launch participation controls: caps on buy size, balance and buys per slot, and a priority-fee limit, inside a launch window. Basic bundle and snipe resistance, **not** complete bundle detection |
+| [`creator-commitment`](creator-commitment) | stable | time-dependent restriction | a creator account cannot fall below its current vesting floor |
+| [`holder-rewards`](holder-rewards) | experimental | stateful economic accounting | holders earn a reward token by balance x time, using a global reward index (no loop over holders) |
+
+Maturity (none of these means audited or production-ready):
+
+* **stable**: small surface, no open design questions, exercised on devnet; its interface is not
+  expected to change. The [starter](../starter) is also stable.
+* **reference**: complete and tested in-process and against the SBF build, with an open integration
+  question or no devnet evidence yet.
+* **experimental**: works and is tested, but its design changed recently or it carries operational
+  costs (keepers, contention) you must plan for. Expect changes.
 
 ## Every template has the same layout
 
@@ -32,8 +41,9 @@ Run one: `cd templates/fair-launch && cargo test --locked`. Run all of them:
 
 How a template differs from the starter: it builds on [`hook-kit`](../hook-kit) instead of carrying
 its own plumbing, it has its own setup instruction (a launch window, a schedule, a reward vault), and
-it ships no `examples/devnet.rs`. `scripts/deploy.sh` deploys a template but does not initialise or
-exercise it on the cluster; each README's DEPLOY / INITIALIZE section covers the setup.
+only Creator Commitment ships an `examples/devnet.rs` so far. For the others `scripts/deploy.sh`
+deploys the program but does not initialise or exercise it on the cluster; each README's
+DEPLOY / INITIALIZE section covers the setup.
 
 ## Adding one
 

@@ -4,6 +4,7 @@ This repository **curates** templates. A working piece of Rust is not enough; a 
 understandable, tested, and honest about what it cannot do.
 
 Contributions accepted into this repository are provided under its [MIT license](LICENSE).
+Security issues: report them privately, see [`SECURITY.md`](SECURITY.md).
 
 ## Every pull request
 

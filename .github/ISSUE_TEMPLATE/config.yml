@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/trilltino/raydium-transfer-hook/security/advisories/new
+    about: Please do not report security issues in public issues.
+  - name: Raydium documentation (canonical, for Raydium's own programs and SDK)
+    url: https://docs.raydium.io
+    about: This repository is not affiliated with Raydium and cannot answer for its programs.

@@ -7,9 +7,9 @@ it fully before generating code. `CLAUDE.md` only points here.
 ## What this repository is
 
 A starter kit for **Token-2022 Transfer Hooks**: you design a rule, test it, deploy it to Solana and
-optionally contribute it as a template. It is not a Raydium integration and contains no Raydium
-program code. The prototype that had some is in git history (tag `pre-community-hook-kit`); do not
-resurrect it.
+optionally contribute it as a template. It is an independent project, not affiliated with Raydium,
+and contains no Raydium program code. The prototype that had some is in git history (tag
+`pre-community-hook-kit`); do not resurrect it.
 
 | Path | What | Edit it? |
 |---|---|---|
@@ -122,8 +122,9 @@ cargo build-sbf --sbf-out-dir target/deploy && SBF_OUT_DIR=$PWD/target/deploy ca
   cluster is devnet. The script refuses mainnet without `--allow-mainnet`; that flag does not change
   this rule: **never deploy to mainnet, spend real funds or touch a keypair that is not a throwaway
   devnet key without the human's explicit say-so.**
-* Only hooks with `examples/devnet.rs` (today: the starter) are set up and exercised on the cluster
-  by the script. For the templates it deploys and stops; say so rather than implying more.
+* Only hooks with `examples/devnet.rs` (today: the starter and Creator Commitment) are set up and
+  exercised on the cluster by the script. For the others it deploys and stops; say so rather than
+  implying more.
 * Never commit keypairs, `.env` files, RPC credentials or `target/`.
 * After a deploy, report: cluster, program id, mint, config and validation-list addresses, and who
   holds the upgrade authority and the mint's Transfer Hook authority.

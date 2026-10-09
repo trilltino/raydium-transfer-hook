@@ -23,7 +23,9 @@ way, because nothing in Token-2022 checks where a hook came from.
 * Typed error codes (`HookError`, from `0x7001`) so callers can tell your hook caused a refusal.
 * Tests that run against the real Token-2022 processor.
 * `examples/devnet.rs`: creates a hooked mint, initialises the hook and proves allow/reject on a
-  real cluster. `scripts/deploy.sh` runs it after deploying.
+  real cluster. `scripts/deploy.sh` runs it after deploying. Last run on devnet on 2026-10-09 through
+  the current `deploy.sh` (500 allowed, 501 refused with `0x700b`; throwaway program
+  `AgmGjmBg1amaH2TncHtEQqbCk4mTXVumBZfrwYB6khVN`).
 
 ## The flow
 

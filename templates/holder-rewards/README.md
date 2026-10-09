@@ -6,7 +6,9 @@ inside the transfer, with no loop over holders.
 **The rule is [`src/rule.rs`](src/rule.rs). It is pure: no accounts, no Solana types.** The rest of
 the folder is plumbing.
 
-**Status:** reference implementation, not audited. Read LIMITATIONS and TRUST before using it.
+**Status:** reference implementation, maturity **experimental**: its lifecycle handling (`Reconcile`)
+is new, every transfer of the mint serialises on one account, and it needs someone to reconcile
+burned or closed accounts. Not audited. Read LIMITATIONS and TRUST before using it.
 
 ## WHAT
 

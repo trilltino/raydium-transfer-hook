@@ -1,11 +1,12 @@
-# Raydium Transfer Hook Kit
+# Community Transfer Hook Kit
 
-A minimal, AI-friendly starter kit for designing, testing and deploying Token-2022 Transfer Hooks
-that can be used with Raydium.
+A minimal, AI-friendly starter kit for designing, testing and deploying Token-2022 Transfer Hooks,
+including hooks meant to be used with Raydium pools.
 
-**Status:** community / reference starter kit. Not an official Raydium release, not audited. Check
-[Raydium's canonical documentation](#8-canonical-solana-and-raydium-resources) for current deployed
-Transfer Hook support.
+**Status:** independent community project, maintained in a personal capacity. **Not affiliated with,
+endorsed by or maintained by Raydium**, not an official Raydium release, and not audited. See the
+[Disclaimer](#disclaimer). Check [Raydium's canonical documentation](#8-canonical-solana-and-raydium-resources)
+for current deployed Transfer Hook support.
 
 You have an idea for token business logic. You start in one file, `rule.rs`, test it, deploy it to
 devnet and, if it is good, contribute it back as a template.
@@ -106,7 +107,7 @@ Devnet and `~/.config/solana/id.json` by default; `scripts/deploy.sh --help` lis
 
 * **Every hook:** checks the tools and keypair, builds the SBF program and deploys it under the
   program id `cargo build-sbf` generated.
-* **Hooks with `examples/devnet.rs` (the starter):** also creates a Token-2022 mint whose Transfer
+* **Hooks with `examples/devnet.rs` (the starter and Creator Commitment):** also creates a Token-2022 mint whose Transfer
   Hook points at your program, initialises the hook (config and validation list), and sends one
   transfer that must pass and one that must be refused. Example options go after `--`:
   `scripts/deploy.sh my-hook -- --limit 1000`.
@@ -125,18 +126,19 @@ The addresses are new on every run. Read them before you trust the hook: the dep
 program's **upgrade authority** and can replace your rule for every mint. Revoke it with
 `solana program set-upgrade-authority <PROGRAM_ID> --final`, or say publicly who holds it.
 
-The templates have no `examples/devnet.rs`: the script deploys them and stops. Each template
-README's `DEPLOY / INITIALIZE` section says what its initialise instruction needs, and its tests
-show a working call.
+Fair Launch and Holder Rewards have no `examples/devnet.rs` yet: the script deploys them and stops.
+Each template README's `DEPLOY / INITIALIZE` section says what its initialise instruction needs, and
+its tests show a working call.
 
 ## 5. Included templates
 
-| Template | One line | Rule file |
-|---|---|---|
-| [Fair Launch](templates/fair-launch) | Launch participation controls (basic bundle and snipe resistance): caps on buy size, balance and buys per slot, and a priority-fee limit, inside a launch window | [`rule.rs`](templates/fair-launch/src/rule.rs) |
-| [Creator Commitment](templates/creator-commitment) | A creator account cannot fall below its current vesting floor; everything above it moves freely | [`rule.rs`](templates/creator-commitment/src/rule.rs) |
-| [Holder Rewards](templates/holder-rewards) | Holders earn a reward token by balance x time, using a global reward index (no loop over holders) | [`rule.rs`](templates/holder-rewards/src/rule.rs) |
+| Template | Maturity | One line | Rule file |
+|---|---|---|---|
+| [Fair Launch](templates/fair-launch) | reference | Launch participation controls (basic bundle and snipe resistance): caps on buy size, balance and buys per slot, and a priority-fee limit, inside a launch window | [`rule.rs`](templates/fair-launch/src/rule.rs) |
+| [Creator Commitment](templates/creator-commitment) | stable | A creator account cannot fall below its current vesting floor; everything above it moves freely | [`rule.rs`](templates/creator-commitment/src/rule.rs) |
+| [Holder Rewards](templates/holder-rewards) | experimental | Holders earn a reward token by balance x time, using a global reward index (no loop over holders) | [`rule.rs`](templates/holder-rewards/src/rule.rs) |
 
+Maturity labels are defined in [`templates/README.md`](templates/README.md); none means audited.
 Every template README answers the same questions: what, why, trigger, example, rules, **limitations**,
 **trust**, state and cost, tests, and how to deploy and initialise it. A template that cannot say
 what it fails to stop is not accepted.
@@ -176,6 +178,19 @@ History: this repository began as a prototype that ran arbitrary hooks through m
 and CLMM programs, to show the architecture works. That prototype is preserved in git (tag
 `pre-community-hook-kit`), including the Raydium-specific adapters, SDK and TypeScript client. It is
 not part of this kit.
+
+## Disclaimer
+
+* This software is provided **"as is", without warranty of any kind**, under the [MIT License](LICENSE).
+  The authors and contributors are not liable for any claim, damages or loss arising from its use.
+* It is **not audited** and is not financial, investment or legal advice. Nothing here recommends
+  deploying a program or creating, buying or selling any token.
+* **You are solely responsible** for any program you deploy from it, for who holds its upgrade,
+  Transfer Hook and config authorities, for the keys you use, and for complying with the laws that
+  apply to you and your token.
+* This is an independent project maintained in a personal capacity. It does not represent Raydium
+  or any employer. "Raydium" names a third-party protocol; no affiliation or endorsement is implied.
+* To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
 
 ## License
 

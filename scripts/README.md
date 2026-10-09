@@ -26,14 +26,15 @@ The script owns only the common options. Anything after `--` is passed unchanged
 5. Deploys it under the program id `cargo build-sbf` generated (re-running upgrades the same id) and
    prints the program id and its upgrade authority.
 
-**Only for hooks that ship `examples/devnet.rs` (today: the [`starter`](../starter)):**
+**Only for hooks that ship `examples/devnet.rs` (today: the [`starter`](../starter) and [`creator-commitment`](../templates/creator-commitment)):**
 
 6. Runs the example: creates a Token-2022 mint whose Transfer Hook points at the program,
    initialises the hook for that mint, sends one transfer that must pass and one the hook must
    refuse, and prints the mint, config and validation-list addresses.
 
-For the templates the script stops after step 5: the program is deployed but **no mint is created,
-nothing is initialised and the rule is not exercised on the cluster**. Each template README has a
+For hooks without the example (today: Fair Launch and Holder Rewards) the script stops after
+step 5: the program is deployed but **no mint is created, nothing is initialised and the rule is not
+exercised on the cluster**. Each template README has a
 `DEPLOY / INITIALIZE` section for the setup, and its tests show the same accounts in-process.
 
 Requires Rust and the [Solana CLI tools](https://solana.com/docs/intro/installation); on Windows run

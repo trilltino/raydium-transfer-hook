@@ -20,7 +20,7 @@ usage: scripts/deploy.sh HOOK_DIR [--cluster CLUSTER] [--keypair FILE] [--allow-
 
 Every hook:   check tools and keypair, pick the cluster, check the balance (faucet on devnet/localnet),
               cargo build-sbf into HOOK_DIR/target/deploy, deploy under the generated program id.
-Hooks with examples/devnet.rs (today: the starter): also create a hooked mint, initialise the hook
+Hooks with examples/devnet.rs (today: starter, creator-commitment): also create a hooked mint, initialise the hook
               and send one transfer that must pass and one the hook must refuse.
 
 examples:
