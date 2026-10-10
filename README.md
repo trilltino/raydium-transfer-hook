@@ -97,13 +97,19 @@ A simple rule that fits the starter's existing configuration may only require ch
 
 The starter tests cover allowed transfers, exact boundaries, rejection, configuration validation, authority checks and direct `Execute` attempts.
 
-## Reference templates
+## Included templates
 
-| Template | Maturity | Purpose | Main trade-off |
-|---|---|---|---|
-| [`creator-commitment`](templates/creator-commitment) | stable | Keeps one committed token account above a time-dependent vesting floor | Account-level commitment; burns are not transfers |
-| [`fair-launch`](templates/fair-launch) | reference | Launch controls for buy size, account balance, buys per slot and optional priority-fee limits | Basic snipe/bundle resistance, not identity or complete bundle detection |
-| [`holder-rewards`](templates/holder-rewards) | experimental | Balance × time reward accounting using a global index | Explicit registration, additional state and global writable-account contention |
+The repository includes three complete reference hooks showing different kinds of Transfer Hook design:
+
+| Template | What it demonstrates |
+|---|---|
+| [`creator-commitment`](templates/creator-commitment) | A creator account that cannot fall below a time-dependent vesting floor |
+| [`fair-launch`](templates/fair-launch) | Launch participation controls including buy caps, account limits, per-slot throttling and optional priority-fee limits |
+| [`holder-rewards`](templates/holder-rewards) | Balance × time holder rewards using a global reward index, without iterating over every holder |
+
+Each template includes its rule, state model, runtime tests, account requirements, trust assumptions and known limitations.
+
+They are reference implementations, not audited production contracts. Read each template's `LIMITATIONS` and `TRUST` sections before adapting it.
 
 Each template documents:
 
